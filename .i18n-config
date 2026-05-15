@@ -1,0 +1,29 @@
+# .i18n-config — project-level i18n declarations (v0.9.12 Sprint A)
+#
+# Consumed by scripts/i18n-config-loader.sh. Release pipeline uses this to
+# decide which files must be translated (strict vs warn) and which are locked
+# (LICENSE and CODE_OF_CONDUCT.md are always locked regardless of declaration).
+
+primary-language: zh
+target-languages: en
+
+# Strict: release.sh FAILs if translation missing or stale
+strict:
+  README.md
+  CHANGELOG.md
+  ROADMAP.md
+
+# Strict-glob: references/ markdown files all required
+strict-glob:
+  references/*.md
+
+# Warn: missing/stale → warning but release proceeds
+warn:
+  CONTRIBUTING.md
+  SECURITY.md
+  INSTALL.md
+  TEST-SCENARIOS.md
+
+# Lock: never translate (on top of hardcoded LICENSE + CODE_OF_CONDUCT.md)
+lock:
+  HANDOFF.md
