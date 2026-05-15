@@ -1,0 +1,86 @@
+# ── Syncthing conflict artifacts (Gotcha #34, v1.1.7) ───────────────────
+# Syncthing emits *.sync-conflict-<timestamp>-<peerid> when two machines
+# edit the same file before sync converges. They must NOT enter git or be
+# scanned by dual-source / sanitize gates. Inspect manually then delete.
+*.sync-conflict-*
+.syncthing-quarantine-*/
+# v1.4.0 explicit (Gotcha #35): Syncthing chunked-transfer staging files.
+# These are also caught by the generic `*.tmp` rule lower in this file, but
+# listing the pattern here explicitly makes intent obvious to maintainers and
+# lets audit tooling enforce "no .syncthing.*.tmp may persist" without relying
+# on the generic *.tmp catch-all.
+.syncthing.*.tmp
+
+# ── Build artifacts ──────────────────────────────────────────────────────
+# Per-version release directories (e.g. Release/git_release_skill-v0.9.11/)
+Release/*/
+# Top-level release artifacts
+Release/*.skill
+Release/*-source.tar.gz
+Release/checksums.txt
+Release/latest
+Release/sbom.cyclonedx.json
+Release/TOKEN_USAGE.md
+Release/README.md
+Release/INSTALL.md
+Release/TEST-SCENARIOS.md
+Release/LICENSE
+Release/CONTRIBUTING.md
+Release/CODE_OF_CONDUCT.md
+Release/SECURITY.md
+Release/ROADMAP.md
+Release/SKILL.md
+Release/RELEASE_NOTES.md
+Release/install.sh
+Release/scripts/
+Release/references/
+Release/assets/
+Release/.sanitize-ignore
+# NOTE: Release/CHANGELOG.md is NOT excluded — it's the accumulate changelog
+*.skill
+*.tar.gz
+checksums.txt
+
+# ── Self-release mirror ──────────────────────────────────────────────────
+# The release pipeline enforces root scripts/ against this tracked bundle
+# mirror. Other generated skill workspaces remain local-only.
+skills/*
+!skills/gitx-release/
+!skills/gitx-release/**
+
+# ── Private / dev working memory (not for public) ────────────────────────
+# HANDOFF.md is user-level project memory per the handoff skill convention.
+# Kept locally for Claude Code to read; never pushed to public remote.
+HANDOFF.md
+HANDOFF.archive.md
+HANDOFF.md.bak
+
+# Internal review / research docs (not for public)
+REVIEW.md
+GitHub_STANDARD_ANALYSIS.md
+
+# ── Claude Code / editor local state ─────────────────────────────────────
+.claude/
+memory/
+.cursor/
+.vscode/
+.idea/
+
+# ── OS / editor noise ────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+*.bak
+*.tmp
+
+# ── Shell / test scratch ─────────────────────────────────────────────────
+tests/.tmp/
+*.log
+
+# i18n translation cache (per-file content-hash keyed; regenerated on demand)
+.i18n-cache/
+
+# ── OMC working memory ──────────────────────────────────────────────────
+.omc/
