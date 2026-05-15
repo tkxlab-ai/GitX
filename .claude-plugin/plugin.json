@@ -1,0 +1,9 @@
+{
+  "name": "gitx-release",
+  "description": "GitX — cross-project release pipeline: one-command release with fail-closed gates, secret scanning, reproducible tarballs, CycloneDX SBOM, Deep Audit, plus /gitx-init and /gitx-sop subcommands.",
+  "version": "1.8.0",
+  "author": { "name": "TKXLAB.AI", "url": "https://github.com/tkxlab-ai" },
+  "homepage": "https://github.com/tkxlab-ai/GitX",
+  "repository": "https://github.com/tkxlab-ai/GitX",
+  "license": "MIT"
+}

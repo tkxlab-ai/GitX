@@ -1,0 +1,13 @@
+{
+  "name": "GitX",
+  "owner": { "name": "TKXLAB.AI", "url": "https://github.com/tkxlab-ai" },
+  "plugins": [
+    {
+      "name": "gitx-release",
+      "source": ".",
+      "description": "GitX — cross-project release pipeline (release / audit / scan / gitx-init / gitx-sop). Install: /plugin marketplace add tkxlab-ai/GitX then /plugin install gitx-release@GitX.",
+      "version": "1.8.0",
+      "author": { "name": "TKXLAB.AI" }
+    }
+  ]
+}
