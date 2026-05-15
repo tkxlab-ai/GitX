@@ -1,0 +1,79 @@
+# .i18n-glossary — TKX Git Release Pipeline term mappings (v0.9.12 Sprint A)
+#
+# Consumed by scripts/glossary-loader.sh, injected as few-shot prompt prefix
+# into translate-file.sh's LLM call to enforce term consistency across all
+# translated docs.
+#
+# format: <zh>|<en>|<context/note (optional)>
+# Comments start with #; blank lines OK.
+# [NO_TRANSLATE] section lists glob patterns / literal tokens to preserve verbatim.
+
+# ── Core release pipeline terms ─────────────────────────────────────────
+发版|release|verb action; prefer over "publish" in release.sh context
+打包|packaging|noun: the act; for noun "package" use 包
+脱敏|sanitize|verb; scanning for secrets/PII
+平摊|flatten|verb; spreading docs into Release dir
+审计|audit|both noun and verb (per release-audit.sh)
+回归|regression|test regression / change-detection sense
+门控|gate|policy gate / pre-push gate
+软警告|soft warning|warn() in audit, vs check() FAIL
+硬阻断|hard block|abort with non-zero exit
+版本|version|
+签名|signing|GPG/sigstore signing
+契约|contract|interface contract (e.g. install.sh §6.10)
+幂等|idempotent|same input → same output regardless of run count
+可复现|reproducible|byte-identical builds
+
+# ── Skill / Claude Code ecosystem terms ─────────────────────────────────
+技能|skill|Claude Code skill (file at SKILL.md)
+触发词|trigger keyword|frontmatter description tokens
+上下文|context|context window
+基线|baseline|always-loaded portion (e.g. SKILL.md)
+按需加载|on-demand load|references/* loaded when SKILL.md instructs
+
+# ── TKX policy terms ────────────────────────────────────────────────────
+政策|policy|TKX_Git_Release_policy_and_process.md
+条款|clause|policy clause (e.g. §10.10)
+
+# ── NO_TRANSLATE — preserve these verbatim ──────────────────────────────
+[NO_TRANSLATE]
+  scripts/*
+  tests/*
+  references/*
+  Release/*
+  *.sh
+  *.md
+  *.json
+  *.toml
+  *.yaml
+  *.yml
+  $SOURCE_DATE_EPOCH
+  $VERSION
+  $PROJECT_NAME
+  $SKILL_NAME
+  $PROJECT_ROOT
+  $RELEASE_DIR
+  $CACHE_DIR
+  $CLAUDE_CMD
+  $GLOSSARY_PATH
+  --force
+  --dry-run
+  --inline
+  --help
+  --version
+  TKX
+  CycloneDX
+  SBOM
+  SLSA
+  GPG
+  CI/CD
+  GitHub
+  README
+  CHANGELOG
+  ROADMAP
+  LICENSE
+  HANDOFF
+  TOKEN_USAGE
+  CODE_OF_CONDUCT
+  SECURITY
+  CONTRIBUTING

@@ -1,0 +1,4 @@
+$gitx-release
+$gitx-init
+$git-release-pipeline
+$gitx-sop
