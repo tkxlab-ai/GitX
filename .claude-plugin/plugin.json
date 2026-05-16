@@ -1,0 +1,15 @@
+{
+  "name": "gitx",
+  "description": "GitX \u2014 cross-project release pipeline. Commands: /gitx:release /gitx:audit /gitx:scan /gitx:init /gitx:sop.",
+  "version": "1.9.3",
+  "commands": [
+    "./gitx-plugin-commands/"
+  ],
+  "author": {
+    "name": "TKXLAB.AI",
+    "url": "https://github.com/tkxlab-ai"
+  },
+  "homepage": "https://github.com/tkxlab-ai/GitX",
+  "repository": "https://github.com/tkxlab-ai/GitX",
+  "license": "MIT"
+}

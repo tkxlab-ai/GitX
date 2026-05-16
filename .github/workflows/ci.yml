@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  lint:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: Run shellcheck on all scripts
+        run: |
+          set -e
+          shellcheck -S warning install.sh
+          shellcheck -S warning scripts/*.sh
+          shellcheck -S warning tests/*.sh
+
+      - name: Dual-source consistency check
+        run: |
+          set -e
+          if [ ! -d "skills/gitx-release/scripts" ]; then
+            echo "❌ skills/gitx-release/scripts is required for dual-source consistency"
+            exit 1
+          fi
+          drift=$(diff -rq scripts/ skills/gitx-release/scripts/ 2>&1 \
+            | grep -v "^Only in.*scripts: release-" || true)
+          if [ -n "$drift" ]; then
+            echo "❌ Dual-source drift detected:"
+            echo "$drift"
+            exit 1
+          fi
+          echo "✅ Dual-source consistent"
+
+  test:
+    name: test-suite
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify bash version
+        run: bash --version
+      - name: Run full test suite
+        run: bash tests/run_all.sh
+
+  audit-dry:
+    name: release.sh self-audit (dry)
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - name: install.sh --dry-run
+        run: bash install.sh --dry-run
+      - name: install.sh --help
+        run: bash install.sh --help
