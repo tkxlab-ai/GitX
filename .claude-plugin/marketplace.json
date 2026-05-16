@@ -9,7 +9,7 @@
       "name": "gitx",
       "source": "./",
       "description": "GitX \u2014 cross-project release pipeline (release / audit / scan / gitx-init / gitx-sop).",
-      "version": "1.9.7",
+      "version": "1.9.8",
       "author": {
         "name": "TKXLAB.AI"
       },

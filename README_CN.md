@@ -8,7 +8,7 @@
 
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-95%2B%20suites%20%2F%200%20fail-brightgreen.svg)](tests/run_all.sh)
-[![Deep Audit](https://img.shields.io/badge/deep%20audit-227%2F0%2F1-brightgreen.svg)](scripts/release-audit.sh)
+[![Deep Audit](https://img.shields.io/badge/deep%20audit-230%2F0%2F1-brightgreen.svg)](scripts/release-audit.sh)
 [![CLIs](https://img.shields.io/badge/CLI-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20OpenCode%20%C2%B7%20Gemini-blue.svg)](#快速开始)
 [![Shell](https://img.shields.io/badge/bash-3.2%2B%20POSIX-orange.svg)](SKILL.md)
 
@@ -28,7 +28,9 @@
 
 | 版本 | 要点 |
 |------|------|
-| v1.9.x | `/gitx:*` plugin namespace + central `tkxlab-ai/marketplace` + gitx-init auto-provision |
+| v1.9.8 | README 语义数字陈腐根治 + `§0f` 审计闸 + 单仓 README 精确性闸 |
+| v1.9.6–1.9.7 | superpowers 11 轮 loop + codex 迭代审计：`.python-version` 公开 tarball 泄漏根治、`gitx-sop` 凭证门系统性修复、bootstrap-safe 安装闸、`.github-publish-wt` 防御纵深、handoff-v2 五面一致 |
+| v1.9.0–1.9.5 | `/gitx:*` plugin namespace + central `tkxlab-ai/marketplace` + gitx-init auto-provision + codex 审计加固 |
 | v1.8.x | Claude Code plugin distribution + community-file standard |
 | v1.7.5 | slash shim 装入 `~/.claude/commands/`（Claude Code 命令发现修复）|
 | v1.7.4 | `gitx-sop` 加固为可对*其他*技能用（可移植脱敏 + 完整性闸）|
@@ -41,7 +43,7 @@
 
 ## 📊 实时构建指标
 
-**版本**：v1.9.7 · **发版日期**：2026-05-16 · **所用模型**：Claude / Codex（开发 + 对抗式评审）· **累计 AI token 消耗（项目至今，估算）**：约 5 亿+ 输入/输出 + 约 60 亿+ 缓存，跨数百个会话 · **数据一览**：90+ BDD 套件 / 0 失败 · Deep Audit 全绿 · 20+ 次发版 · 每个 tag 一个 GitHub Release。
+**版本**：v1.9.8 · **发版日期**：2026-05-16 · **所用模型**：Claude / Codex（开发 + 对抗式评审）· **累计 AI token 消耗（项目至今，估算）**：约 5 亿+ 输入/输出 + 约 60 亿+ 缓存，跨数百个会话 · **数据一览**：95+ BDD 套件 / 0 失败 · Deep Audit 全绿 · 20+ 次发版 · 每个 tag 一个 GitHub Release。
 
 > **安装任意 TKX 技能** —— 添加一次中心 marketplace，按名安装：
 > ```
@@ -179,7 +181,7 @@ checksums.txt` 离线验证。遵循 **SLSA** 构建 provenance 模型
 
 ### 深度审计 Deep Audit
 
-`release-audit.sh` 跑约 14 节 / 227 项纯静态分析（无网络）：spec 合规、
+`release-audit.sh` 跑约 14 节 / 230 项纯静态分析（无网络）：spec 合规、
 安装标准、`gitx-init`/`gitx-sop` 模板完整性（`§0c`/`§0d`）、doc 版本陈腐
 （`§0e`）、双源一致、CHANGELOG 真实性、可复现性、脱敏复扫。三态输出
 （`✅ PASS / ❌ FAIL / ➖ SKIP`）——Norman 原则的落地。
@@ -253,7 +255,7 @@ gitx-release/
 │   └── vendored/skill-creator/  # Anthropic skill-creator（Apache-2.0，pin）
 ├── commands/                 # slash shim（双源）→ ~/.claude/commands/
 ├── references/               # TKX 政策 v2.3、gitx-init/、gitx-sop/ 模板
-├── tests/                    # 94 BDD 套件（run_all.sh）
+├── tests/                    # 97 BDD 套件（run_all.sh）
 └── Release/                  # 生成产物 + CHANGELOG（不入 git）
 ```
 
@@ -267,8 +269,8 @@ gitx-release/
 
 | 层 | 内容 | 数量 |
 |----|------|------|
-| BDD 套件 | `tests/run_all.sh`（red→green TDD，每 cycle 一断言）| **94 / 0 fail** |
-| 深度审计 | `release-audit.sh` 静态闸（离线）| **227 PASS / 0 FAIL / 1 SKIP / ⚠️0** |
+| BDD 套件 | `tests/run_all.sh`（red→green TDD，每 cycle 一断言）| **97 / 0 fail** |
+| 深度审计 | `release-audit.sh` 静态闸（离线）| **230 PASS / 0 FAIL / 1 SKIP / ⚠️0** |
 | 可复现性 | 跨次运行逐字节相同 tarball | 强制（`§5` + 专测）|
 | 双源 | 根 ≡ bundle | 强制（`§9` + `check_dual_source`）|
 | 独立审查 | Codex 对抗式 + review gate（authoring/review 分离）| clean |

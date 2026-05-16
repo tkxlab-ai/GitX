@@ -8,7 +8,7 @@
 
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-95%2B%20suites%20%2F%200%20fail-brightgreen.svg)](tests/run_all.sh)
-[![Deep Audit](https://img.shields.io/badge/deep%20audit-227%2F0%2F1-brightgreen.svg)](scripts/release-audit.sh)
+[![Deep Audit](https://img.shields.io/badge/deep%20audit-230%2F0%2F1-brightgreen.svg)](scripts/release-audit.sh)
 [![CLIs](https://img.shields.io/badge/CLI-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20OpenCode%20%C2%B7%20Gemini-blue.svg)](#quick-start)
 [![Shell](https://img.shields.io/badge/bash-3.2%2B%20POSIX-orange.svg)](SKILL.md)
 
@@ -29,7 +29,9 @@
 
 | Version | Highlight |
 |---------|-----------|
-| v1.9.x | `/gitx:*` plugin namespace + central `tkxlab-ai/marketplace` + gitx-init auto-provision |
+| v1.9.8 | README numeric-rot killed + `§0f` audit guard + per-repo README-accuracy guard |
+| v1.9.6–1.9.7 | superpowers 11-round loop + codex iterative audit: `.python-version` public-tarball leak closed, `gitx-sop` credential-gate systemic fix, bootstrap-safe install guard, `.github-publish-wt` defense-in-depth, handoff-v2 five-facet |
+| v1.9.0–1.9.5 | `/gitx:*` plugin namespace + central `tkxlab-ai/marketplace` + gitx-init auto-provision + codex-audit hardening |
 | v1.8.x | Claude Code plugin distribution + community-file standard |
 | v1.7.5 | Slash shims install to `~/.claude/commands/` (Claude Code discovery fix) |
 | v1.7.4 | `gitx-sop` hardened for use by *other* skills (portable redaction + completeness gate) |
@@ -42,7 +44,7 @@
 
 ## 📊 Live build metrics
 
-**Version**: v1.9.7 · **Released**: 2026-05-16 · **Models**: Claude / Codex (development + adversarial review) · **Cumulative AI tokens (project to date, est.)**: ~500M+ I/O + ~6B+ cache, across hundreds of sessions · **By the numbers**: 95+ BDD suites / 0 fail · Deep Audit all-green · 20+ shipped releases · one GitHub Release per tag.
+**Version**: v1.9.8 · **Released**: 2026-05-16 · **Models**: Claude / Codex (development + adversarial review) · **Cumulative AI tokens (project to date, est.)**: ~500M+ I/O + ~6B+ cache, across hundreds of sessions · **By the numbers**: 95+ BDD suites / 0 fail · Deep Audit all-green · 20+ shipped releases · one GitHub Release per tag.
 
 > **Install any TKX skill** — one marketplace add, then any skill by name:
 > ```
@@ -189,7 +191,7 @@ their copy offline. This follows the **SLSA** build-provenance model
 
 ### Deep Audit
 
-`release-audit.sh` runs ~14 sections / 227 checks as pure static analysis
+`release-audit.sh` runs ~14 sections / 230 checks as pure static analysis
 (network-free): spec conformance, install standard, `gitx-init`/`gitx-sop`
 template integrity (`§0c`/`§0d`), doc version-rot (`§0e`), dual-source
 identity, CHANGELOG authenticity, reproducibility, sanitize re-scan. Output
@@ -265,7 +267,7 @@ gitx-release/
 │   └── vendored/skill-creator/  # Anthropic skill-creator (Apache-2.0, pinned)
 ├── commands/                 # slash shims (dual-sourced) → ~/.claude/commands/
 ├── references/               # TKX policy v2.3, gitx-init/, gitx-sop/ templates
-├── tests/                    # 94 BDD suites (run_all.sh)
+├── tests/                    # 97 BDD suites (run_all.sh)
 └── Release/                  # generated artifacts + CHANGELOG (not in git)
 ```
 
@@ -280,8 +282,8 @@ what packages into `.skill`.
 
 | Layer | What | Count |
 |-------|------|-------|
-| BDD suites | `tests/run_all.sh` (red→green TDD, one assertion per cycle) | **94 / 0 fail** |
-| Deep Audit | `release-audit.sh` static gates (offline) | **227 PASS / 0 FAIL / 1 SKIP / ⚠️0** |
+| BDD suites | `tests/run_all.sh` (red→green TDD, one assertion per cycle) | **97 / 0 fail** |
+| Deep Audit | `release-audit.sh` static gates (offline) | **230 PASS / 0 FAIL / 1 SKIP / ⚠️0** |
 | Reproducibility | byte-identical tarball across runs | enforced (`§5` + dedicated tests) |
 | Dual-source | root ≡ bundle | enforced (`§9` + `check_dual_source`) |
 | Independent review | Codex adversarial + review gate (authoring/review separation) | clean |

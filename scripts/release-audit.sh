@@ -427,6 +427,55 @@ audit_section_0_doc_version_rot
 _track_end "§0e_doc_rot"
 echo ""
 
+# --- §0f doc numeric-rot guard (v1.9.8) ---
+# Root cause: README cited the Deep-Audit count in THREE places (shields
+# badge `deep audit-N/0/1`, prose `~N checks`, status table `N PASS`); a
+# release bumped one and not the others (badge said 227 while reality was
+# 228) — §0e only catches version *strings*, not these semantic numbers,
+# so it rotted silently. Generic invariant for ANY project releasing via
+# gitx-release: all README Deep-Audit citations MUST agree, and a public
+# README must never advertise a non-green audit (FAIL must be 0). Exact
+# == live-total is enforced per-repo at release time (a stronger local
+# test); §0f is the always-on cross-project consistency floor.
+audit_section_0_doc_numeric_rot() {
+echo "§0f. doc numeric-rot guard (v1.9.8)"
+local rf="$DIR/README.md"
+# Generic-safe: a project with no README, or a README that does not
+# advertise a Deep-Audit count, has nothing to numeric-rot → SKIP, never
+# FAIL. (A FAIL here would break every minimal/fixture project that
+# releases via gitx-release — exactly what this guard must not do.)
+if [ ! -f "$rf" ]; then
+    echo "  ➖ no README.md — numeric-rot guard not applicable"; SKIP=$((SKIP+1)); return
+fi
+# errexit/pipefail-safe: under `set -euo pipefail` a grep with zero
+# matches exits 1 and would abort the WHOLE audit (this exact bug failed
+# the smoke fixture, which has no Deep-Audit citations). Each grep is
+# `|| true`-guarded so the brace group always exits 0 — same robustness
+# idiom §0e uses (`bash -c "! grep ..."`).
+local nums
+nums=$( {
+    grep -oE 'deep%20audit-[0-9]+%2F[0-9]+%2F[0-9]+' "$rf" 2>/dev/null \
+        | grep -oE '^deep%20audit-[0-9]+' | grep -oE '[0-9]+$' || true
+    grep -oE '[0-9]+ checks' "$rf" 2>/dev/null | grep -oE '^[0-9]+' || true
+    grep -oE '[0-9]+ PASS' "$rf" 2>/dev/null | grep -oE '^[0-9]+' || true
+} | sort -u || true )
+if [ -z "$nums" ]; then
+    echo "  ➖ README cites no Deep-Audit count — numeric-rot guard not applicable"; SKIP=$((SKIP+1)); return
+fi
+# README DOES advertise an audit count → enforce the invariants.
+if [ "$(printf '%s\n' "$nums" | grep -c .)" -le 1 ]; then
+    check "README Deep-Audit citations agree (badge=prose=table)" true
+else
+    check "README Deep-Audit citations agree (badge=prose=table) — got: $(printf '%s' "$nums" | tr '\n' ' ')" false
+fi
+check "README does not advertise a non-green Deep Audit (0 FAIL)" \
+    bash -c "! grep -qE '[1-9][0-9]* FAIL' '$rf'"
+}
+_track_start "§0f_doc_numeric_rot"
+audit_section_0_doc_numeric_rot
+_track_end "§0f_doc_numeric_rot"
+echo ""
+
 # --- §1 基础存在性 ---
 audit_section_1_basics() {
 echo "§1. 基础存在性"

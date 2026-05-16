@@ -1,7 +1,7 @@
 {
   "name": "gitx",
   "description": "GitX \u2014 cross-project release pipeline. Commands: /gitx:release /gitx:audit /gitx:scan /gitx:init /gitx:sop.",
-  "version": "1.9.7",
+  "version": "1.9.8",
   "commands": [
     "./gitx-plugin-commands/"
   ],
