@@ -45,8 +45,12 @@ is_allowed_legacy_path() {
         ./HANDOFF.md.pre-v2-backup|./HANDOFF.md.bak) return 0 ;;
         ./GOTCHAS.md|./Handoff_Logs/*|./Handoff_Decisions/*|./Handoff_Logs.archive/*) return 0 ;;
         ./tests/test_rebrand_single_canonical_name.sh) return 0 ;;
-        # gitignored cache / private dirs — never tracked, never shipped
-        ./.i18n-cache/*|./.omc/*|./.cache/*|./memory/*) return 0 ;;
+        # gitignored cache / private dirs — never tracked, never shipped.
+        # .github-publish-wt: the gitx-sop per-release publish worktree
+        # (own .git → public mirror only); it holds an extracted source
+        # snapshot that legitimately carries the project name. Transient,
+        # gitignored, never in the private repo nor any tarball.
+        ./.i18n-cache/*|./.omc/*|./.cache/*|./memory/*|./.github-publish-wt/*) return 0 ;;
         # gitignored Syncthing conflict quarantine — pre-3e55e14 snapshots
         # of CHANGELOG.md / VERSION / release.sh that may legitimately
         # reference the legacy name in their preserved historical content.

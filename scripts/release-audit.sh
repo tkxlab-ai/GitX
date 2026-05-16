@@ -629,7 +629,7 @@ if [ -f "$DIR/$TAR_FILE" ]; then
     check_not "不含 handoff v2 工作记忆" \
         grep -qE "^${PROJECT_NAME}-${VERSION}/(GOTCHAS\.md$|Handoff_Logs/|Handoff_Logs\.archive/|Handoff_Decisions/|HANDOFF\.md\.bak$|HANDOFF\.md\.pre-v2-backup$)" "$LIST"
     check_not "不含 private local state dotdirs" \
-        grep -qE "^${PROJECT_NAME}-${VERSION}/(\.1by1/|\.i18n-cache/|\.cache/|\.ssh/|\.aws/|\.env[^/]*|\.python-version)" "$LIST"
+        grep -qE "^${PROJECT_NAME}-${VERSION}/(\.1by1/|\.i18n-cache/|\.cache/|\.ssh/|\.aws/|\.env[^/]*|\.python-version|\.github-publish-wt/)" "$LIST"
     rm -f "$LIST"
     trap - RETURN   # clear the §5-scoped RETURN trap before leaving the function
 fi

@@ -305,6 +305,49 @@ if [ -x "$WRAPPER" ]; then
     rm -rf "$fx"
 fi
 
+# === BEHAVIOR 14: credential gates are .sanitize-ignore-aware ===
+# v1.9.6 (self-publish session): the SOP's Phase 1.4 / 4.4 / 5 credential
+# gates called `scan-credentials.sh <dir>` (that scanner only takes ONE
+# file/stdin → bare-dir arg is a broken/no-op gate) and Phase 5 used a raw
+# `git diff --staged | grep` that does NOT honor .sanitize-ignore, so it
+# false-FAILED on the project's own intentional sanitizer self-test
+# fixtures. Gate must prefer the .sanitize-ignore-aware dir sanitizer
+# (release-sanitize.sh — the same gate release.sh/release-audit.sh use).
+if [ -x "$WRAPPER" ]; then
+    fx="$(mktemp -d)"
+    ( cd "$fx" && "$WRAPPER" --repo=acme/Foo --project=foo \
+        --private-host=git.example.internal </dev/null >/dev/null 2>&1 )
+    sop="$fx/.gitx/GITHUB_RELEASE_SOP.md"
+    s=""
+    # the broken bare-dir scan-credentials.sh gate must be gone
+    grep -qF 'scan-credentials.sh "$RELEASE_DIR"' "$sop" && s="$s 1.4-broken-dirarg"
+    grep -qF 'scan-credentials.sh "$PUBLISH_WT"' "$sop"  && s="$s 4.4-broken-dirarg"
+    # the .sanitize-ignore-aware authoritative sanitizer must be the gate
+    grep -qF 'release-sanitize.sh' "$sop"                || s="$s no-authoritative-sanitizer"
+    grep -qF '.sanitize-ignore-aware' "$sop"             || s="$s no-sanitize-ignore-sentinel"
+    # codex P2: release-sanitize.sh reads the whitelist from $DIR/.sanitize-
+    # ignore only. Scanning the artifact dir (no .sanitize-ignore there)
+    # would false-FAIL SECURITY.md / fixtures. SOP must seed the root
+    # whitelist into the scanned dir, then clean it up.
+    grep -qF 'cp .sanitize-ignore "$RELEASE_DIR' "$sop"  || s="$s 1.4-no-whitelist-seed"
+    grep -qF 'cp .sanitize-ignore "$PUBLISH_WT' "$sop"   || s="$s 4.4-no-whitelist-seed"
+    # Phase 5 must not rely solely on the whitelist-blind broad grep
+    grep -qE 'password\[\[:space:\]\]\*=\|api\[_-\]\?key' "$sop" \
+        && s="$s 5-whitelist-blind-grep-still-sole"
+    # Phase 4.5 post-redaction MANDATORY verification must also be
+    # .sanitize-ignore-aware — the raw `/Users/[a-z]+/|/home/[a-z]+/`
+    # residual-marker grep false-FAILed on the sanitizer self-test
+    # fixtures' planted dev paths (v1.9.7).
+    grep -qF '/Users/[a-z]+/|/home/[a-z]+/' "$sop" \
+        && s="$s 4.5-whitelist-blind-verify"
+    if [ -z "$s" ]; then
+        ok "SOP credential gates are .sanitize-ignore-aware (no broken dir-arg / whitelist-blind grep)"
+    else
+        fail "SOP credential-gate defects:$s"
+    fi
+    rm -rf "$fx"
+fi
+
 # === BEHAVIOR 8: install.sh actually propagates commands/gitx-sop.md ===
 # Functional (not grep): v1.7.1 — install.sh line 249 guarded on
 # $SELF_DIR/commands but commands/ was bundle-only (no root commands/),

@@ -534,6 +534,7 @@ build_source_tarball() {
         --exclude='.i18n-cache' \
         --exclude='.cache' \
         --exclude='.gitx' \
+        --exclude='.github-publish-wt' \
         --exclude='.env*' \
         --exclude='.ssh' \
         --exclude='.aws' \

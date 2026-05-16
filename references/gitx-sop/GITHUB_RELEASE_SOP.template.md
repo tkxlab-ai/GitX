@@ -80,10 +80,34 @@ else
     echo "❌ tests not green (runner exited non-zero) — aborting"; exit 1
 fi
 
-# 1.4 credential scan (guardrail 1)
-bash scripts/scan-credentials.sh "$RELEASE_DIR" \
-    && echo "✅ credential scan clean" \
-    || { echo "❌ credential leak, aborting"; exit 1; }
+# 1.4 credential scan (guardrail 1) — .sanitize-ignore-aware.
+# v1.9.6 fix: prefer the project's authoritative DIR sanitizer
+# release-sanitize.sh (the SAME gate release.sh/release-audit.sh use; it
+# honors .sanitize-ignore, so it does NOT false-FAIL on intentional
+# sanitizer self-test fixtures). scan-credentials.sh takes ONE file/stdin
+# only — passing a bare dir was a broken/no-op gate. Recursive per-file
+# scan-credentials.sh is the portable fallback when no release-sanitize.sh.
+if [ -x scripts/release-sanitize.sh ]; then
+    # codex P2: release-sanitize.sh reads the whitelist from
+    # <scanned-dir>/.sanitize-ignore ONLY. The artifact dir has none, so
+    # seed the project-root whitelist in (only if absent), scan, then
+    # remove the seeded copy — artifact dir unchanged, no false-FAIL on
+    # whitelisted SECURITY.md / sanitizer fixtures.
+    _seed=0
+    [ -f "$RELEASE_DIR/.sanitize-ignore" ] || \
+        { cp .sanitize-ignore "$RELEASE_DIR/.sanitize-ignore" 2>/dev/null && _seed=1; }
+    if bash scripts/release-sanitize.sh "$RELEASE_DIR"; then _ok=1; else _ok=0; fi
+    [ "$_seed" -eq 1 ] && rm -f "$RELEASE_DIR/.sanitize-ignore"
+    [ "$_ok" -eq 1 ] && echo "✅ credential scan clean (.sanitize-ignore-aware)" \
+        || { echo "❌ credential leak, aborting"; exit 1; }
+else
+    _cl=0
+    while IFS= read -r _f; do
+        bash scripts/scan-credentials.sh "$_f" >/dev/null 2>&1 || _cl=1
+    done < <(find "$RELEASE_DIR" -type f 2>/dev/null)
+    [ "$_cl" -eq 0 ] && echo "✅ credential scan clean (per-file fallback)" \
+        || { echo "❌ credential leak, aborting"; exit 1; }
+fi
 
 # 1.5 push auth available — gh auth OR GH_TOKEN. (v1.7.8 codex stop-gate:
 # do NOT hard-require gh here, or Phase 6's no-gh token-in-URL fallback
@@ -163,10 +187,29 @@ done
 [ "$missing" -eq 0 ] || { echo "❌ extraction incomplete — aborting"; exit 1; }
 cd ..
 
-# 4.4 defensive credential re-scan (worktree composed)
-bash scripts/scan-credentials.sh "$PUBLISH_WT" \
-    && echo "✅ worktree scan clean" \
-    || { echo "❌ worktree credential leak"; exit 1; }
+# 4.4 defensive credential re-scan (worktree composed) — .sanitize-ignore-aware.
+# Same v1.9.6 fix as 1.4: prefer release-sanitize.sh (authoritative,
+# honors .sanitize-ignore); per-file scan-credentials.sh fallback.
+if [ -x scripts/release-sanitize.sh ]; then
+    # Same codex-P2 whitelist-seed as 1.4. The extracted source usually
+    # already ships .sanitize-ignore (then _seed stays 0, its own is used);
+    # seed only if absent so a project whose tarball omits it still scans
+    # with the correct whitelist instead of false-FAILing.
+    _seed=0
+    [ -f "$PUBLISH_WT/.sanitize-ignore" ] || \
+        { cp .sanitize-ignore "$PUBLISH_WT/.sanitize-ignore" 2>/dev/null && _seed=1; }
+    if bash scripts/release-sanitize.sh "$PUBLISH_WT"; then _ok=1; else _ok=0; fi
+    [ "$_seed" -eq 1 ] && rm -f "$PUBLISH_WT/.sanitize-ignore"
+    [ "$_ok" -eq 1 ] && echo "✅ worktree scan clean (.sanitize-ignore-aware)" \
+        || { echo "❌ worktree credential leak"; exit 1; }
+else
+    _wl=0
+    while IFS= read -r _f; do
+        bash scripts/scan-credentials.sh "$_f" >/dev/null 2>&1 || _wl=1
+    done < <(find "$PUBLISH_WT" -type f 2>/dev/null)
+    [ "$_wl" -eq 0 ] && echo "✅ worktree scan clean (per-file fallback)" \
+        || { echo "❌ worktree credential leak"; exit 1; }
+fi
 
 # 4.5 🔴 public redaction (project-specific — fill the table below)
 #   Delete dev-only files (transfer guides / session notes / pre-vN backups)
@@ -191,12 +234,25 @@ else
       | xargs -0 -r sed -i.bak "s#{{PRIVATE_GIT_HOST}}#<private-git-host>#g" 2>/dev/null || true
     find "$PUBLISH_WT" -name '*.bak' -delete 2>/dev/null || true
 fi
-# MANDATORY verification grep — runs after EITHER path; any residual
-# private marker (host / dev-home / private-org slug) aborts the publish.
-if grep -rIqE '{{PRIVATE_GIT_HOST}}|/Users/[a-z]+/|/home/[a-z]+/|<private-(port|org|ssh-key)>' "$PUBLISH_WT" 2>/dev/null; then
-    echo "❌ residual private marker after redaction — aborting publish"; exit 1
+# MANDATORY post-redaction verification — runs after EITHER path,
+# fail-closed. v1.9.7: the old raw grep was .sanitize-ignore-BLIND and
+# false-FAILed on the project's own sanitizer self-test fixtures' planted
+# dev paths. Authoritative gate = release-sanitize.sh (honors the
+# whitelist; reads it from <dir>/.sanitize-ignore so seed the root one in
+# only if absent, then remove). PLUS a tight raw grep for the ONE thing
+# that is NEVER whitelisted and is exactly what redaction must remove:
+# the raw private git host literal. (FIX #5: never scan for the
+# <private-port> placeholder names — Phase 4.5 deliberately writes those.)
+_rseed=0
+[ -f "$PUBLISH_WT/.sanitize-ignore" ] || \
+    { cp .sanitize-ignore "$PUBLISH_WT/.sanitize-ignore" 2>/dev/null && _rseed=1; }
+if bash scripts/release-sanitize.sh "$PUBLISH_WT"; then _rok=1; else _rok=0; fi
+[ "$_rseed" -eq 1 ] && rm -f "$PUBLISH_WT/.sanitize-ignore"
+[ "$_rok" -eq 1 ] || { echo "❌ residual private marker after redaction (.sanitize-ignore-aware) — aborting publish"; exit 1; }
+if grep -rIqF '{{PRIVATE_GIT_HOST}}' "$PUBLISH_WT" 2>/dev/null; then
+    echo "❌ raw private git host survived redaction — aborting publish"; exit 1
 fi
-echo "✅ redaction verified clean"
+echo "✅ redaction verified clean (.sanitize-ignore-aware + raw-host residual)"
 ```
 
 > **Redaction table to customize** (the dev fills these before first publish):
@@ -276,17 +332,21 @@ cd ..
 cd "$PUBLISH_WT"
 git add -A
 
-# 5.2 staged-diff scan (guardrail 3) — FIX #5: scan for the ORIGINAL private
-# values + secrets + dev paths. (codex audit: never scan for the redaction
-# *placeholder* names like <private-port> — Phase 4.5 deliberately writes
-# those, so matching them aborts a correctly-redacted publish. Add your
-# project's real private port/org/ssh-key literals here if you want them
-# caught too — but never the angle-bracket placeholders.)
+# 5.2 staged-diff residual scan (guardrail 3) — v1.9.6 fix: the old broad
+# `password=|api_key=|/Users/|/home/` patterns were .sanitize-ignore-BLIND
+# and false-FAILED on the project's own intentional sanitizer self-test
+# fixtures (which legitimately ship). The authoritative .sanitize-ignore-
+# aware sweep already ran in Phase 4.4 (release-sanitize.sh on the composed
+# worktree). Keep ONLY a tight residual grep for things that are NEVER
+# whitelisted: real tokens + the private git host literal. FIX #5 still
+# holds (codex audit): never scan for the redaction *placeholder* names
+# like <private-port> — Phase 4.5 writes those, matching them aborts a
+# correct publish.
 LEAK=$(git diff --staged | grep -icE \
-  'ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{82,}|password[[:space:]]*=|api[_-]?key[[:space:]]*=|{{PRIVATE_GIT_HOST}}|/Users/[a-z]+/|/home/[a-z]+/' \
+  'ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{82,}|gho_[A-Za-z0-9]{36}|{{PRIVATE_GIT_HOST}}' \
   2>/dev/null || true)
-[ "$LEAK" -eq 0 ] && echo "✅ staged diff clean" \
-    || { echo "❌ staged diff has $LEAK leak suspicions, stop"; exit 1; }
+[ "$LEAK" -eq 0 ] && echo "✅ staged diff residual-clean (token+host)" \
+    || { echo "❌ staged diff has $LEAK real-token/host hits, stop"; exit 1; }
 
 git commit -m "release: {{PROJECT}} ${VER}
 

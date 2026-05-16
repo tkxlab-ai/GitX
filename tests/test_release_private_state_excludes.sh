@@ -27,7 +27,7 @@ echo "══ test_release_private_state_excludes.sh ══"
 # shippable input; rsync staging ignores .gitignore so it must be on the
 # explicit --exclude list or it leaks into the public source tarball
 # (codex P2, v1.9.6). Dual-source byte-identity covers the bundle copy.
-for pat in ".omc" ".1by1" ".i18n-cache" ".cache" ".env*" ".ssh" ".aws" ".python-version"; do
+for pat in ".omc" ".1by1" ".i18n-cache" ".cache" ".env*" ".ssh" ".aws" ".python-version" ".github-publish-wt"; do
     if grep -Fq -- "--exclude='$pat'" "$RELEASE_SH" || grep -Fq -- "--exclude=\"$pat\"" "$RELEASE_SH"; then
         ok "release.sh excludes $pat"
     else
@@ -68,6 +68,16 @@ if grep -qF '不含 handoff v2 工作记忆' "$AUDIT_SH" \
     ok "release-audit.sh fail-closed net rejects handoff v2 working-memory files"
 else
     fail "release-audit.sh omits handoff v2 files (GOTCHAS/Handoff_Logs/Handoff_Decisions/pre-v2-backup) — fail-closed gap"
+fi
+
+# ── Test 2d: fail-closed net must ALSO reject .github-publish-wt ──────────
+# codex P2 (v1.9.6): the gitx-sop publish worktree is now staging-excluded
+# (prevention) — a stale/external tarball carrying it must independently
+# FAIL audit too (detection), same defense-in-depth as .python-version.
+if grep -qF 'github-publish-wt' "$AUDIT_SH"; then
+    ok "release-audit.sh fail-closed net rejects .github-publish-wt"
+else
+    fail "release-audit.sh omits .github-publish-wt — fail-closed gap"
 fi
 
 echo ""

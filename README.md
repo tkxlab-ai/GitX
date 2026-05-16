@@ -42,7 +42,7 @@
 
 ## 📊 Live build metrics
 
-**Version**: v1.9.6 · **Released**: 2026-05-16 · **Models**: Claude / Codex (development + adversarial review) · **Cumulative AI tokens (project to date, est.)**: ~500M+ I/O + ~6B+ cache, across hundreds of sessions · **By the numbers**: 95+ BDD suites / 0 fail · Deep Audit all-green · 20+ shipped releases · one GitHub Release per tag.
+**Version**: v1.9.7 · **Released**: 2026-05-16 · **Models**: Claude / Codex (development + adversarial review) · **Cumulative AI tokens (project to date, est.)**: ~500M+ I/O + ~6B+ cache, across hundreds of sessions · **By the numbers**: 95+ BDD suites / 0 fail · Deep Audit all-green · 20+ shipped releases · one GitHub Release per tag.
 
 > **Install any TKX skill** — one marketplace add, then any skill by name:
 > ```

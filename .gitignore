@@ -95,6 +95,11 @@ tests/.tmp/
 # gitx-init/gitx-sop generate project-local .gitx/ — never ship it
 .gitx/
 
+# gitx-sop per-release GitHub publish worktree — has its OWN .git (public
+# mirror only). Transient, rebuilt every publish; must never be tracked by
+# the private repo, scanned by repo guards, or staged into a tarball.
+.github-publish-wt/
+
 # pyenv local pin — machine-local toolchain state, never a shippable input.
 # release.sh rsync staging ignores .gitignore, so it is ALSO on release.sh's
 # explicit --exclude list + .sanitize-ignore (codex P2, v1.9.6 five-facet).

@@ -35,6 +35,10 @@ GOTCHAS.md
 Handoff_Logs/*
 Handoff_Decisions/*
 Handoff_Logs.archive/*
+# gitx-sop per-release publish worktree (own .git, public-mirror only):
+# gitignored + release.sh --exclude'd; whitelisted so a whole-repo
+# self-check stays clean while the worktree transiently exists.
+.github-publish-wt/*
 # pyenv local pin (codex P2, v1.9.6): gitignored + release.sh --exclude'd;
 # listed here so the whole-repo self-check stays clean (five-facet parity).
 .python-version
