@@ -1,0 +1,54 @@
+# .sanitize-ignore — explicit whitelist for release-sanitize.sh (S3-1)
+#
+# Format: one path (relative to scanned root) per line; '#' starts comment; blank OK.
+# Paths are matched via case glob against the relative file path.
+#
+# Rule of thumb: only add entries you can defend in a security review.
+# Prefer fixing the source over adding a line here.
+
+# ── Intentional test fixtures ────────────────────────────────────────────
+# These files carry planted patterns so the scanner's detectors can be tested.
+# They are self-documenting test data; the strings are not real credentials.
+tests/test_sanitize.sh
+tests/test_no_force_bypass.sh
+tests/test_credential_patterns.sh
+tests/test_sanitize_ignore_hardening.sh
+tests/test_sanitize_output_format.sh
+
+# ── Business contact (by design, not a leak) ─────────────────────────────
+# SECURITY.md intentionally exposes a real contact email so reporters can
+# reach maintainers. Not a secret.
+SECURITY.md
+
+# ── Internal dev docs (gitignored, never shipped) ────────────────────────
+# These files are listed in .gitignore and excluded by release.sh rsync —
+# they never enter a release artifact. Whitelisted here only so that
+# `release-sanitize.sh .` (local self-check on repo root) exits clean.
+.omc/*
+REVIEW.md
+GitHub_STANDARD_ANALYSIS.md
+HANDOFF.md
+HANDOFF.archive.md
+
+# ── superpowers spec/plan docs (internal design records) ─────────────────
+# Tracked by git for cross-machine sync (Syncthing) but never enter the
+# source tarball or .skill bundle (release.sh rsync excludes docs/super-).
+# Contain placeholder emails (security@tkxlab.ai) and Co-Authored-By
+# noreply@anthropic.com signatures that are documentation, not real PII.
+docs/superpowers/specs/*
+docs/superpowers/plans/*
+
+# ── Syncthing conflict quarantine (.gitignored) ──────────────────────────
+.syncthing-quarantine-*/*
+
+# ── gitx-sop SOP template (intentional git-identity literal) ─────────────
+# noreply@github.com is GitHub's reserved non-routable identity used in the
+# generated SOP's `git config user.email` step — documentation, not PII.
+# Template is de-hardcoded (placeholders only), TDD-guarded, reviewed.
+references/gitx-sop/*
+skills/gitx-release/references/gitx-sop/*
+
+# ── Generated release artifacts (not source input) ───────────────────────
+# release.sh scans the staged source and the fresh .skill bundle separately.
+# Historical Release/* outputs are ignored for whole-repo local self-checks.
+Release/*
