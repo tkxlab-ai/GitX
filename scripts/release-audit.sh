@@ -476,6 +476,81 @@ audit_section_0_doc_numeric_rot
 _track_end "§0f_doc_numeric_rot"
 echo ""
 
+# --- §0g readme-sync guard (v1.10.0) ---
+# Defense-in-depth partner of gitx-readme (Gotcha #46): generation alone
+# can ship a stale README if a release forgot to re-run it. No
+# gitx-readme.sh in the bundle (legacy/fixture) → warn advisory (mirrors
+# §0d, non-FAIL). A source README without gitx:managed markers → SKIP
+# (Gotcha #51). errexit-safe: grep is guarded inside if-conditions (errexit-exempt).
+audit_section_0_readme_sync() {
+echo "§0g. readme-sync guard (v1.10.0)"
+# Static "shipped" checks target $DIR (these ARE in the public bundle:
+# scripts/ + references/ are staged by release.sh).
+local gr="$DIR/scripts/gitx-readme.sh"
+if [ ! -f "$gr" ]; then
+    warn "gitx-readme present in release bundle (v1.10.0+ feature)" test -f "$gr"
+    return 0
+fi
+check "gitx-readme wrapper is executable" test -x "$gr"
+check "gitx-readme wrapper has bash shebang" \
+    bash -c 'head -1 "$1" | grep -qE "^#!.*/bash$"' _ "$gr"
+# Satisfied via the dual-tree skill-side copy: release.sh:704-705 does
+# cp -R skills/gitx-release/references → $DIR/references (codex-HIGH fix;
+# root references/ is the dev copy, skill tree is what ships).
+check "references/readme/ template propagated to release bundle" \
+    test -s "$DIR/references/readme/README.template.md"
+# Tacit#3 DECLARED DEVIATION from the §0d/§0f $DIR convention: gitx-readme's
+# ground truths (tests/ → suite-count, Release/CHANGELOG.md → whats-new,
+# .claude-plugin/ → install) are SOURCE-TREE artifacts deliberately
+# excluded from the public bundle (release.sh rsync --exclude='Release';
+# tests/ & .claude-plugin/ not staged — verified on disk). Running --check
+# inside $DIR resolves suite-count→0 / whats-new→empty → deterministic
+# false-FAIL (round-2 NEW-C1). The ghostwriter's subject IS the source
+# README; the bundle copy is byte-derived. So verify the SOURCE tree.
+local rf="$PROJECT_ROOT/README.md"
+if [ ! -f "$rf" ] || ! grep -qF '<!-- gitx:managed:' "$rf" 2>/dev/null; then
+    echo "  ➖ source README has no gitx:managed regions — readme-sync not applicable"
+    SKIP=$((SKIP+1)); return 0
+fi
+if ( cd "$PROJECT_ROOT" && bash "$PROJECT_ROOT/scripts/gitx-readme.sh" --check >/dev/null 2>&1 ); then
+    check "source README managed regions in sync (gitx-readme --check)" true
+else
+    check "source README managed regions in sync (gitx-readme --check) — run: gitx-readme" false
+fi
+}
+_track_start "§0g_readme_sync"
+audit_section_0_readme_sync
+_track_end "§0g_readme_sync"
+echo ""
+
+# --- §0h central-install guard (v1.10.0) ---
+# Boss requirement: every gitx-released skill advertises the central
+# marketplace so users have one canonical install. Generic-safe: a
+# non-plugin project (no .claude-plugin/plugin.json) or no README cannot
+# use it → SKIP, never FAIL (Gotcha #51). errexit-safe greps.
+audit_section_0_central_install() {
+echo "§0h. central-install guard (v1.10.0)"
+# Tacit#3 DECLARED DEVIATION (same root cause as §0g, round-2 NEW-C1):
+# .claude-plugin/ is NOT staged into the public bundle (verified absent in
+# Release/<name>-<ver>/). The central-install advertisement is a property
+# of the SOURCE README + source manifest; verify the source tree.
+local pj="$PROJECT_ROOT/.claude-plugin/plugin.json" rf="$PROJECT_ROOT/README.md"
+if [ ! -f "$pj" ] || [ ! -f "$rf" ]; then
+    echo "  ➖ no plugin.json or README — central-install not applicable"
+    SKIP=$((SKIP+1)); return 0
+fi
+local name
+name="$(grep -m1 '"name"' "$pj" 2>/dev/null | sed -E 's/.*"name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/' || true)"
+check "README advertises central marketplace add" \
+    grep -qF '/plugin marketplace add tkxlab-ai/marketplace' "$rf"
+check "README advertises central plugin install (${name}@tkx-skills)" \
+    grep -qF "/plugin install ${name}@tkx-skills" "$rf"
+}
+_track_start "§0h_central_install"
+audit_section_0_central_install
+_track_end "§0h_central_install"
+echo ""
+
 # --- §1 基础存在性 ---
 audit_section_1_basics() {
 echo "§1. 基础存在性"
@@ -1180,6 +1255,59 @@ echo ""
 # --- Summary ---
 TOTAL=$((PASS + FAIL + SKIP))
 
+# --- §0i deep-audit-exactness (v1.10.0) — NON-COUNTING meta-gate ---
+# I1/Decision 0019: §0f only proves the 3 README citations AGREE; it does
+# not prove they equal the LIVE total, so a stale-but-consistent count
+# (badge 227 vs real 230) ships undetected on dependent skills. §0i closes
+# that generically and non-circularly: the audit is the authority on its
+# OWN count, so AFTER totals are final it compares the README-cited
+# Deep-Audit number to $TOTAL. To avoid the Gotcha #26 self-counting
+# paradox it is NON-COUNTING — it never calls check()/_track (which would
+# mutate the very TOTAL it validates); on mismatch it sets EXACTNESS_FAIL=1
+# which the final decision honors (same spirit as warn/ADVISORY: can fail
+# the build without being a counted check). Generic-safe: no README or no
+# cited count → ➖ SKIP, no flag (Gotcha #51). errexit-safe greps.
+EXACTNESS_FAIL=0
+echo ""
+echo "§0i. deep-audit-exactness (v1.10.0, non-counting)"
+# Unlike §0g/§0h, §0i CORRECTLY targets $DIR: README.md IS flattened into
+# the public bundle (verified present), and §0i's job is to ensure the
+# SHIPPED README's advertised Deep-Audit count equals what this audit
+# actually computed. Not the NEW-C1 class — no source-only truth involved.
+_dai_rf="$DIR/README.md"
+if [ ! -f "$_dai_rf" ]; then
+    echo "  ➖ no README.md — deep-audit exactness not applicable"
+else
+    # Mirror §0f's full extraction set: badge + N checks + N PASS.
+    # Gotcha #52 (closure): badge-only missed a dependent skill that cited the
+    # count only in prose/table — §0f's consistency floor agreed but §0i never
+    # set EXACTNESS_FAIL. Now ANY cited number that != TOTAL triggers failure.
+    # errexit-safe: every grep is `|| true`-guarded; sort-u deduplicates.
+    _dai_nums=$( {
+        grep -oE 'deep%20audit-[0-9]+%2F[0-9]+%2F[0-9]+' "$_dai_rf" 2>/dev/null \
+            | grep -oE '^deep%20audit-[0-9]+' | grep -oE '[0-9]+$' || true
+        grep -oE '[0-9]+ checks' "$_dai_rf" 2>/dev/null | grep -oE '^[0-9]+' || true
+        grep -oE '[0-9]+ PASS' "$_dai_rf" 2>/dev/null | grep -oE '^[0-9]+' || true
+    } | sort -u || true )
+    if [ -z "$_dai_nums" ]; then
+        echo "  ➖ README cites no Deep-Audit count — deep-audit exactness not applicable"
+    else
+        _dai_bad=""
+        while IFS= read -r _n; do
+            [ -n "$_n" ] || continue
+            [ "$_n" = "$TOTAL" ] || _dai_bad="$_dai_bad $_n"
+        done <<EOF_DAI
+$_dai_nums
+EOF_DAI
+        if [ -z "$_dai_bad" ]; then
+            echo "  ✅ README Deep-Audit citations all == live total ($TOTAL)"
+        else
+            echo "  ❌ README Deep-Audit citation(s)$_dai_bad != live total ($TOTAL) — update README (gitx-readme manages other facts; this count is §0f/§0i-owned)"
+            EXACTNESS_FAIL=1
+        fi
+    fi
+fi
+
 # Per-section summary (P3-2)
 echo ""
 echo "═══ Per-Section Summary ═══"
@@ -1200,7 +1328,7 @@ rm -f "$_SEC_LOG"
 
 echo ""
 echo "═══════════════════════════════════════════"
-if [ "$FAIL" -eq 0 ]; then
+if [ "$FAIL" -eq 0 ] && [ "${EXACTNESS_FAIL:-0}" -eq 0 ]; then
     echo "🎉 Deep Audit PASS  (✅$PASS / ❌$FAIL / ➖$SKIP / ⚠️$ADVISORY total $TOTAL)"
     echo "   上游发布未自动执行；如需发布，请人工复核产物、CHANGELOG 和仓库状态后再操作。"
     exit 0

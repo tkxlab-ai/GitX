@@ -1,3 +1,4 @@
+<!-- Deep-Audit N/0/1 count is NOT gitx-managed — §0f consistency + §0i exactness + per-repo test (Decision 0018/0019). -->
 <div align="center">
 
 # 🚀 GitX
@@ -8,7 +9,7 @@
 
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-95%2B%20suites%20%2F%200%20fail-brightgreen.svg)](tests/run_all.sh)
-[![Deep Audit](https://img.shields.io/badge/deep%20audit-230%2F0%2F1-brightgreen.svg)](scripts/release-audit.sh)
+[![Deep Audit](https://img.shields.io/badge/deep%20audit-240%2F0%2F1-brightgreen.svg)](scripts/release-audit.sh)
 [![CLIs](https://img.shields.io/badge/CLI-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20OpenCode%20%C2%B7%20Gemini-blue.svg)](#quick-start)
 [![Shell](https://img.shields.io/badge/bash-3.2%2B%20POSIX-orange.svg)](SKILL.md)
 
@@ -27,6 +28,11 @@
 
 ## What's New
 
+**Latest**:
+<!-- gitx:managed:whats-new -->
+v1.10.0 — 2026-05-16
+<!-- /gitx:managed:whats-new -->
+
 | Version | Highlight |
 |---------|-----------|
 | v1.9.8 | README numeric-rot killed + `§0f` audit guard + per-repo README-accuracy guard |
@@ -44,7 +50,12 @@
 
 ## 📊 Live build metrics
 
-**Version**: v1.9.8 · **Released**: 2026-05-16 · **Models**: Claude / Codex (development + adversarial review) · **Cumulative AI tokens (project to date, est.)**: ~500M+ I/O + ~6B+ cache, across hundreds of sessions · **By the numbers**: 95+ BDD suites / 0 fail · Deep Audit all-green · 20+ shipped releases · one GitHub Release per tag.
+**Version**:
+<!-- gitx:managed:version -->
+v1.10.0
+<!-- /gitx:managed:version -->
+
+**Released**: 2026-05-16 · **Models**: Claude / Codex (development + adversarial review) · **Cumulative AI tokens (project to date, est.)**: ~500M+ I/O + ~6B+ cache, across hundreds of sessions · **By the numbers**: 95+ BDD suites / 0 fail · Deep Audit all-green · 20+ shipped releases · one GitHub Release per tag.
 
 > **Install any TKX skill** — one marketplace add, then any skill by name:
 > ```
@@ -191,7 +202,7 @@ their copy offline. This follows the **SLSA** build-provenance model
 
 ### Deep Audit
 
-`release-audit.sh` runs ~14 sections / 230 checks as pure static analysis
+`release-audit.sh` runs ~14 sections / 240 checks as pure static analysis
 (network-free): spec conformance, install standard, `gitx-init`/`gitx-sop`
 template integrity (`§0c`/`§0d`), doc version-rot (`§0e`), dual-source
 identity, CHANGELOG authenticity, reproducibility, sanitize re-scan. Output
@@ -210,10 +221,12 @@ of which redaction path executed.
 
 ### Option A — Claude Code plugin (recommended for Claude Code users)
 
-```text
+<!-- gitx:managed:install -->
+```bash
 /plugin marketplace add tkxlab-ai/marketplace
 /plugin install gitx@tkx-skills
 ```
+<!-- /gitx:managed:install -->
 
 Plugin commands are **namespaced** (Claude Code policy) under the `gitx`
 plugin: `/gitx:release` `/gitx:sop` `/gitx:init` `/gitx:audit` `/gitx:scan`
@@ -267,7 +280,7 @@ gitx-release/
 │   └── vendored/skill-creator/  # Anthropic skill-creator (Apache-2.0, pinned)
 ├── commands/                 # slash shims (dual-sourced) → ~/.claude/commands/
 ├── references/               # TKX policy v2.3, gitx-init/, gitx-sop/ templates
-├── tests/                    # 97 BDD suites (run_all.sh)
+├── tests/                    # 95+ BDD suites (run_all.sh)
 └── Release/                  # generated artifacts + CHANGELOG (not in git)
 ```
 
@@ -280,10 +293,14 @@ what packages into `.skill`.
 
 ## Testing
 
+<!-- gitx:managed:suite-count -->
+102
+<!-- /gitx:managed:suite-count -->
+
 | Layer | What | Count |
 |-------|------|-------|
-| BDD suites | `tests/run_all.sh` (red→green TDD, one assertion per cycle) | **97 / 0 fail** |
-| Deep Audit | `release-audit.sh` static gates (offline) | **230 PASS / 0 FAIL / 1 SKIP / ⚠️0** |
+| BDD suites | `tests/run_all.sh` (red→green TDD, one assertion per cycle) | **102 / 0 fail** |
+| Deep Audit | `release-audit.sh` static gates (offline) | **240 PASS / 0 FAIL / 1 SKIP / ⚠️0** |
 | Reproducibility | byte-identical tarball across runs | enforced (`§5` + dedicated tests) |
 | Dual-source | root ≡ bundle | enforced (`§9` + `check_dual_source`) |
 | Independent review | Codex adversarial + review gate (authoring/review separation) | clean |

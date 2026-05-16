@@ -1,3 +1,4 @@
+<!-- Deep-Audit N/0/1 count is NOT gitx-managed — §0f consistency + §0i exactness + per-repo test (Decision 0018/0019). -->
 <div align="center">
 
 # 🚀 GitX
@@ -8,7 +9,7 @@
 
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-95%2B%20suites%20%2F%200%20fail-brightgreen.svg)](tests/run_all.sh)
-[![Deep Audit](https://img.shields.io/badge/deep%20audit-230%2F0%2F1-brightgreen.svg)](scripts/release-audit.sh)
+[![Deep Audit](https://img.shields.io/badge/deep%20audit-240%2F0%2F1-brightgreen.svg)](scripts/release-audit.sh)
 [![CLIs](https://img.shields.io/badge/CLI-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20OpenCode%20%C2%B7%20Gemini-blue.svg)](#快速开始)
 [![Shell](https://img.shields.io/badge/bash-3.2%2B%20POSIX-orange.svg)](SKILL.md)
 
@@ -25,6 +26,11 @@
 ---
 
 ## 更新摘要 What's New
+
+**最新**：
+<!-- gitx:managed:whats-new -->
+v1.10.0 — 2026-05-16
+<!-- /gitx:managed:whats-new -->
 
 | 版本 | 要点 |
 |------|------|
@@ -43,7 +49,12 @@
 
 ## 📊 实时构建指标
 
-**版本**：v1.9.8 · **发版日期**：2026-05-16 · **所用模型**：Claude / Codex（开发 + 对抗式评审）· **累计 AI token 消耗（项目至今，估算）**：约 5 亿+ 输入/输出 + 约 60 亿+ 缓存，跨数百个会话 · **数据一览**：95+ BDD 套件 / 0 失败 · Deep Audit 全绿 · 20+ 次发版 · 每个 tag 一个 GitHub Release。
+**版本**：
+<!-- gitx:managed:version -->
+v1.10.0
+<!-- /gitx:managed:version -->
+
+**发版日期**：2026-05-16 · **所用模型**：Claude / Codex（开发 + 对抗式评审）· **累计 AI token 消耗（项目至今，估算）**：约 5 亿+ 输入/输出 + 约 60 亿+ 缓存，跨数百个会话 · **数据一览**：95+ BDD 套件 / 0 失败 · Deep Audit 全绿 · 20+ 次发版 · 每个 tag 一个 GitHub Release。
 
 > **安装任意 TKX 技能** —— 添加一次中心 marketplace，按名安装：
 > ```
@@ -181,7 +192,7 @@ checksums.txt` 离线验证。遵循 **SLSA** 构建 provenance 模型
 
 ### 深度审计 Deep Audit
 
-`release-audit.sh` 跑约 14 节 / 230 项纯静态分析（无网络）：spec 合规、
+`release-audit.sh` 跑约 14 节 / 240 项纯静态分析（无网络）：spec 合规、
 安装标准、`gitx-init`/`gitx-sop` 模板完整性（`§0c`/`§0d`）、doc 版本陈腐
 （`§0e`）、双源一致、CHANGELOG 真实性、可复现性、脱敏复扫。三态输出
 （`✅ PASS / ❌ FAIL / ➖ SKIP`）——Norman 原则的落地。
@@ -198,10 +209,12 @@ bundle、以及（`/gitx-sop`）公开 worktree——含一道*强制 post-redac
 
 ### 方式 A —— Claude Code 插件（Claude Code 用户推荐）
 
-```text
+<!-- gitx:managed:install -->
+```bash
 /plugin marketplace add tkxlab-ai/marketplace
 /plugin install gitx@tkx-skills
 ```
+<!-- /gitx:managed:install -->
 
 插件命令在 `gitx` 插件下**强制命名空间化**（Claude Code 官方策略）：
 `/gitx:release` `/gitx:sop` `/gitx:init` `/gitx:audit` `/gitx:scan`（不是扁平的
@@ -255,7 +268,7 @@ gitx-release/
 │   └── vendored/skill-creator/  # Anthropic skill-creator（Apache-2.0，pin）
 ├── commands/                 # slash shim（双源）→ ~/.claude/commands/
 ├── references/               # TKX 政策 v2.3、gitx-init/、gitx-sop/ 模板
-├── tests/                    # 97 BDD 套件（run_all.sh）
+├── tests/                    # 95+ BDD 套件（run_all.sh）
 └── Release/                  # 生成产物 + CHANGELOG（不入 git）
 ```
 
@@ -267,10 +280,14 @@ gitx-release/
 
 ## 测试
 
+<!-- gitx:managed:suite-count -->
+102
+<!-- /gitx:managed:suite-count -->
+
 | 层 | 内容 | 数量 |
 |----|------|------|
-| BDD 套件 | `tests/run_all.sh`（red→green TDD，每 cycle 一断言）| **97 / 0 fail** |
-| 深度审计 | `release-audit.sh` 静态闸（离线）| **230 PASS / 0 FAIL / 1 SKIP / ⚠️0** |
+| BDD 套件 | `tests/run_all.sh`（red→green TDD，每 cycle 一断言）| **102 / 0 fail** |
+| 深度审计 | `release-audit.sh` 静态闸（离线）| **240 PASS / 0 FAIL / 1 SKIP / ⚠️0** |
 | 可复现性 | 跨次运行逐字节相同 tarball | 强制（`§5` + 专测）|
 | 双源 | 根 ≡ bundle | 强制（`§9` + `check_dual_source`）|
 | 独立审查 | Codex 对抗式 + review gate（authoring/review 分离）| clean |

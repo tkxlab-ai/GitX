@@ -180,7 +180,7 @@ fi
 # the post-rebrand contract. Reject anything earlier than v1.1.0.
 ver=$(cat "$ROOT/VERSION")
 case "$ver" in
-    v1.1.[0-9]*|v1.[2-9].*|v[2-9].*)
+    v1.1.[0-9]*|v1.1[0-9].*|v1.[2-9].*|v[2-9].*)
         ok "VERSION is $ver (>= v1.1.0 post-rebrand baseline)"
         ;;
     *)
