@@ -1,0 +1,27 @@
+{
+  "name": "tkx-skills",
+  "owner": {
+    "name": "TKXLAB.AI"
+  },
+  "description": "TKX skills marketplace. Add once: /plugin marketplace add tkxlab-ai/marketplace",
+  "plugins": [
+    {
+      "name": "gitx",
+      "source": "./",
+      "description": "GitX \u2014 cross-project release pipeline (release / audit / scan / gitx-init / gitx-sop).",
+      "version": "1.9.4",
+      "author": {
+        "name": "TKXLAB.AI"
+      },
+      "homepage": "https://github.com/tkxlab-ai/GitX",
+      "license": "MIT",
+      "keywords": [
+        "release",
+        "ci",
+        "skill",
+        "audit",
+        "sbom"
+      ]
+    }
+  ]
+}
