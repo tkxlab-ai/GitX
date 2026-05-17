@@ -35,6 +35,12 @@ vX.Y.Z
 pending
 <!-- /gitx:managed:whats-new -->
 
+## Commands
+
+<!-- gitx:managed:command-surface -->
+pending
+<!-- /gitx:managed:command-surface -->
+
 ## License
 
 Hand-written — edit freely.

@@ -27,7 +27,7 @@ echo "══ test_release_private_state_excludes.sh ══"
 # shippable input; rsync staging ignores .gitignore so it must be on the
 # explicit --exclude list or it leaks into the public source tarball
 # (codex P2, v1.9.6). Dual-source byte-identity covers the bundle copy.
-for pat in ".omc" ".1by1" ".i18n-cache" ".cache" ".env*" ".ssh" ".aws" ".python-version" ".github-publish-wt"; do
+for pat in ".omc" ".1by1" ".i18n-cache" ".cache" ".env*" ".ssh" ".aws" ".python-version" ".github-publish-wt" "graphify-out" "CLAUDE.md"; do
     if grep -Fq -- "--exclude='$pat'" "$RELEASE_SH" || grep -Fq -- "--exclude=\"$pat\"" "$RELEASE_SH"; then
         ok "release.sh excludes $pat"
     else
@@ -78,6 +78,46 @@ if grep -qF 'github-publish-wt' "$AUDIT_SH"; then
     ok "release-audit.sh fail-closed net rejects .github-publish-wt"
 else
     fail "release-audit.sh omits .github-publish-wt — fail-closed gap"
+fi
+
+# ── Test 2e: fail-closed net must ALSO reject graphify-out/ + CLAUDE.md ───
+# graphify-out/ is a knowledge graph BUILT FROM the private-memory set
+# (HANDOFF / Handoff_* / GOTCHAS / .omc); CLAUDE.md is local Claude
+# instruction. release.sh now staging-excludes both (prevention, Test 1) —
+# a stale/external tarball carrying either must independently FAIL audit
+# (detection), same defense-in-depth + dual-source contract as the
+# .python-version / .github-publish-wt precedents. Folded into the existing
+# "private local state" regex so the audit count stays constant (no §0f rot).
+if grep -qF 'graphify-out/' "$AUDIT_SH" && grep -qF 'CLAUDE\.md$' "$AUDIT_SH"; then
+    ok "release-audit.sh fail-closed net rejects graphify-out/ + CLAUDE.md"
+else
+    fail "release-audit.sh omits graphify-out/ or CLAUDE.md — fail-closed gap"
+fi
+
+# ── Test 2f: detection MUST be path-depth-agnostic for CLAUDE.md/graphify-out ─
+# codex round-3 [high]: the cd843dd regex was root-anchored
+# (^${P}-${V}/(...|graphify-out/|CLAUDE\.md$)) so a stale/external tarball
+# carrying NESTED skills/<skill>/CLAUDE.md or docs/.../graphify-out/ would
+# PASS the fail-closed net. The detection half must catch these at ANY depth
+# under the release root (pre-existing dotdir entries stay root-anchored —
+# unchanged, Karpathy#3). Still ONE check_not (Gotcha #62, TOTAL constant).
+if grep -qF '.*graphify-out/' "$AUDIT_SH" && grep -qF '(.*/)?CLAUDE\.md$' "$AUDIT_SH"; then
+    ok "release-audit.sh private-state regex is depth-agnostic for graphify-out/ + CLAUDE.md"
+else
+    fail "release-audit.sh private-state regex still root-anchored (codex r3 [high] gap)"
+fi
+# Behavioral non-vacuity: the depth-agnostic pattern MUST match nested +
+# top-level private-state and MISS a benign nested path.
+_psf_re='^demo-1.0.0/(\.1by1/|\.i18n-cache/|\.cache/|\.ssh/|\.aws/|\.env[^/]*|\.python-version|\.github-publish-wt/)|^demo-1.0.0/.*graphify-out/|^demo-1.0.0/(.*/)?CLAUDE\.md$'
+_psf_hits=$(printf '%s\n' \
+  'demo-1.0.0/scripts/ok.sh' \
+  'demo-1.0.0/skills/demo/CLAUDE.md' \
+  'demo-1.0.0/docs/a/graphify-out/g.json' \
+  'demo-1.0.0/CLAUDE.md' | grep -cE "$_psf_re" || true)
+if [ "$_psf_hits" = 3 ] && ! printf '%s\n' 'demo-1.0.0/scripts/ok.sh' | grep -qE "$_psf_re"; then
+    ok "private-state detection: nested skills/.../CLAUDE.md + docs/.../graphify-out/ + top-level caught (3), benign missed"
+else
+    fail "private-state depth-agnostic detection wrong (hits=$_psf_hits, expected 3 + benign miss)"
 fi
 
 echo ""

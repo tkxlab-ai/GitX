@@ -29,21 +29,13 @@
 
 **最新**：
 <!-- gitx:managed:whats-new -->
-v1.10.0 — 2026-05-16
-<!-- /gitx:managed:whats-new -->
+**v1.10.1 — 2026-05-16**
 
-| 版本 | 要点 |
-|------|------|
-| v1.9.8 | README 语义数字陈腐根治 + `§0f` 审计闸 + 单仓 README 精确性闸 |
-| v1.9.6–1.9.7 | superpowers 11 轮 loop + codex 迭代审计：`.python-version` 公开 tarball 泄漏根治、`gitx-sop` 凭证门系统性修复、bootstrap-safe 安装闸、`.github-publish-wt` 防御纵深、handoff-v2 五面一致 |
-| v1.9.0–1.9.5 | `/gitx:*` plugin namespace + central `tkxlab-ai/marketplace` + gitx-init auto-provision + codex 审计加固 |
-| v1.8.x | Claude Code plugin distribution + community-file standard |
-| v1.7.5 | slash shim 装入 `~/.claude/commands/`（Claude Code 命令发现修复）|
-| v1.7.4 | `gitx-sop` 加固为可对*其他*技能用（可移植脱敏 + 完整性闸）|
-| v1.7.2–1.7.3 | doc 版本陈腐根治 + `§0e` 审计闸 + README 命令完整性闸 |
-| v1.7.0–1.7.1 | `gitx-sop` 子命令（GitHub 发布 runbook）+ `commands/` 分发修复 |
-| v1.6.0 | `gitx-init` 子命令——项目自我教会发版 |
-| v1.0–1.5 | 内嵌 Anthropic skill-creator、可复现构建、5-skill 安装标准 |
+- What's-New rot: `gr_whats_new` now machine-derives version + date + top-entry highlights from `Release/CHANGELOG.md` (v1.10.0 shipped a bare version line + an unguarded hand-maintained Highlight table that missed its own release — Boss-found). Stale hand table removed.
+- `gr_command_surface` + `<!-- gitx:managed:command-surface -->` region: deterministically documents the install.sh-flat vs marketplace-`/gitx:*` command surfaces (the colon namespace is plugin-only — official Claude Code docs). Both regions are guarded by the existing generic §0g (`gitx-readme --check`, no new audit section) for GitX and for skills released through gitx ≥ v1.10.1 that adopt these managed regions; new `gitx-readme --init` scaffolds inherit them.
+- graphify-out/ + CLAUDE.md private-state leak surface closed to the documented five-facet symmetric-parity standard (.gitignore + .sanitize-ignore + release.sh rsync --exclude + release-audit.sh fail-closed regex (extended in place, no new check — no §0f/§0i count rot) + rebrand allow-list + TDD-lock), dual-source byte-identical (commit cd843dd, Decision 0021).
+<!-- /gitx:managed:whats-new -->
+历史版本见 [`Release/CHANGELOG.md`](Release/CHANGELOG.md)。
 
 ---
 
@@ -51,7 +43,7 @@ v1.10.0 — 2026-05-16
 
 **版本**：
 <!-- gitx:managed:version -->
-v1.10.0
+v1.10.1
 <!-- /gitx:managed:version -->
 
 **发版日期**：2026-05-16 · **所用模型**：Claude / Codex（开发 + 对抗式评审）· **累计 AI token 消耗（项目至今，估算）**：约 5 亿+ 输入/输出 + 约 60 亿+ 缓存，跨数百个会话 · **数据一览**：95+ BDD 套件 / 0 失败 · Deep Audit 全绿 · 20+ 次发版 · 每个 tag 一个 GitHub Release。
@@ -72,6 +64,7 @@ v1.10.0
 - [命令矩阵 Commands](#命令矩阵-commands)
 - [方法论](#方法论)
 - [快速开始](#快速开始)
+- [命令（安装入口）](#命令)
 - [架构](#架构)
 - [测试](#测试)
 - [安全模型](#安全模型)
@@ -248,6 +241,30 @@ Codex CLI：`/skills` 打开技能列表，或输 `$` 选 **GitX**（选择器
 `$gitx-release`）。OpenCode / Gemini：说 "gitx release"。slash 子命令
 （`/gitx-init`、`/gitx-sop`）在 install 后需 **新开 Claude Code 会话**
 （命令在启动时加载）。
+
+---
+
+## 命令
+
+<!-- gitx:managed:command-surface -->
+Two install paths.
+
+**A. install.sh** — run `bash install.sh` (skill + flat commands; no plugin needed)
+
+- `/gitx-release` — the skill itself
+- `/gitx-init`
+- `/gitx-sop`
+
+**B. Plugin marketplace** — `/plugin marketplace add tkxlab-ai/marketplace` then `/plugin install gitx@tkx-skills` (`/gitx` colon namespace)
+
+- `/gitx:audit`
+- `/gitx:init`
+- `/gitx:release`
+- `/gitx:scan`
+- `/gitx:sop`
+
+> The `/gitx` colon-prefixed commands are plugin-only (a plugin-namespacing design, per official docs). install.sh gives flat `/gitx-release` + `/<cmd>`; the colon form requires this plugin install and is NEVER synthesized from flat commands.
+<!-- /gitx:managed:command-surface -->
 
 ---
 

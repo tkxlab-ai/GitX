@@ -551,6 +551,8 @@ build_source_tarball() {
         --exclude='HANDOFF.md.bak' \
         --exclude='REVIEW.md' \
         --exclude='GitHub_STANDARD_ANALYSIS.md' \
+        --exclude='CLAUDE.md' \
+        --exclude='graphify-out' \
         --exclude='.DS_Store' \
         --exclude='*.bak' \
         --exclude='*.pyc' \

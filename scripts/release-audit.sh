@@ -752,8 +752,21 @@ if [ -f "$DIR/$TAR_FILE" ]; then
     # these must fail-closed here, same contract as HANDOFF.md above.
     check_not "不含 handoff v2 工作记忆" \
         grep -qE "^${PROJECT_NAME}-${VERSION}/(GOTCHAS\.md$|Handoff_Logs/|Handoff_Logs\.archive/|Handoff_Decisions/|HANDOFF\.md\.bak$|HANDOFF\.md\.pre-v2-backup$)" "$LIST"
+    # graphify knowledge graph (built FROM the private-memory set above) +
+    # local Claude instruction file: prevention is release.sh rsync
+    # --exclude (graphify-out, CLAUDE.md); this is the detection half —
+    # a stale/external tarball carrying either must fail-closed here too,
+    # same defense-in-depth + dual-source contract as .github-publish-wt.
+    # codex round-3 [high]: graphify-out/ and CLAUDE.md are matched
+    # PATH-DEPTH-AGNOSTIC (any nesting under the release root, e.g.
+    # skills/<skill>/CLAUDE.md, docs/.../graphify-out/) — a root-anchored
+    # match let a nested private file pass the detection net. The
+    # pre-existing dotdir entries stay root-anchored exactly as-is
+    # (unchanged, Karpathy#3). Folded into THIS one regex / one check_not
+    # so the audit PASS/FAIL count stays constant (Gotcha #62 — adding a
+    # check would rot the README/§0f/§0i count).
     check_not "不含 private local state dotdirs" \
-        grep -qE "^${PROJECT_NAME}-${VERSION}/(\.1by1/|\.i18n-cache/|\.cache/|\.ssh/|\.aws/|\.env[^/]*|\.python-version|\.github-publish-wt/)" "$LIST"
+        grep -qE "^${PROJECT_NAME}-${VERSION}/(\.1by1/|\.i18n-cache/|\.cache/|\.ssh/|\.aws/|\.env[^/]*|\.python-version|\.github-publish-wt/)|^${PROJECT_NAME}-${VERSION}/.*graphify-out/|^${PROJECT_NAME}-${VERSION}/(.*/)?CLAUDE\.md$" "$LIST"
     rm -f "$LIST"
     trap - RETURN   # clear the §5-scoped RETURN trap before leaving the function
 fi

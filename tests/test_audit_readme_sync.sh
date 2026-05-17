@@ -35,11 +35,18 @@ D2="$(mktemp -d)"; mk "$D2"; ( cd "$D2" && bash "$GR" --init --force >/dev/null 
 ( cd "$D2" && bash "$GR" --check >/dev/null 2>&1; [ $? -eq 1 ] ) && ok "stale managed region → --check 1 (§0g would FAIL)" || fail "managed drift not caught"
 D2b="$(mktemp -d)"; mk "$D2b"; ( cd "$D2b" && bash "$GR" --init --force >/dev/null 2>&1 && printf '\nunmanaged prose edit\n' >> README.md )
 ( cd "$D2b" && bash "$GR" --check >/dev/null 2>&1 ) && ok "unmanaged-prose edit → --check 0 (§0g PASS, projen contract)" || fail "§0g false-FAIL on unmanaged prose"
+D2c="$(mktemp -d)"; mk "$D2c"; ( cd "$D2c" && bash "$GR" --init --force >/dev/null 2>&1 )
+# stale whats-new (simulate CHANGELOG advanced but README not regenerated)
+( cd "$D2c" && perl -0pi -e 's{(<!-- gitx:managed:whats-new -->\n).*?(\n<!-- /gitx:managed:whats-new -->)}{${1}STALE-WN${2}}s' README.md )
+( cd "$D2c" && bash "$GR" --check >/dev/null 2>&1; [ $? -eq 1 ] ) && ok "stale whats-new → --check 1 (§0g would FAIL, generic for dependent skills)" || fail "whats-new drift not caught"
+D2d="$(mktemp -d)"; mk "$D2d"; ( cd "$D2d" && bash "$GR" --init --force >/dev/null 2>&1 )
+( cd "$D2d" && perl -0pi -e 's{(<!-- gitx:managed:command-surface -->\n).*?(\n<!-- /gitx:managed:command-surface -->)}{${1}STALE-CS${2}}s' README.md )
+( cd "$D2d" && bash "$GR" --check >/dev/null 2>&1; [ $? -eq 1 ] ) && ok "stale command-surface → --check 1 (§0g would FAIL)" || fail "command-surface drift not caught"
 D3="$(mktemp -d)"; mk "$D3"; echo '# no markers' > "$D3/README.md"
 ( cd "$D3" && bash "$GR" --check >/dev/null 2>&1 ) && ok "no-marker README → --check 0 (§0g SKIPs, generic-safe)" || fail "no-marker false-fail"
 grep -qF 'source README has no gitx:managed regions — readme-sync not applicable' "$A" && ok "§0g generic-safe SKIP phrase present" || fail "§0g missing SKIP phrase"
 grep -qF 'cd "$PROJECT_ROOT" && bash "$PROJECT_ROOT/scripts/gitx-readme.sh" --check' "$A" && ok "§0g checks source tree not \$DIR (NEW-C1 fix)" || fail "§0g still targets \$DIR — NEW-C1 regressed"
-rm -rf "$D1" "$D2" "$D2b" "$D3"
+rm -rf "$D1" "$D2" "$D2b" "$D2c" "$D2d" "$D3"
 # STATIC: §0g shebang check must NOT string-interpolate $gr into bash -c
 # (FIX C: path-quote injection risk in newly added code; §0c-§0e are
 # out-of-scope pre-existing; only this §0g instance is targeted).

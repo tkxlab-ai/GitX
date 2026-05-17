@@ -42,6 +42,12 @@ Handoff_Logs.archive/*
 # pyenv local pin (codex P2, v1.9.6): gitignored + release.sh --exclude'd;
 # listed here so the whole-repo self-check stays clean (five-facet parity).
 .python-version
+# graphify knowledge graph + local Claude instruction: gitignored +
+# release.sh --exclude'd. graphify-out/ is built from the private
+# working-memory set above; CLAUDE.md is local Claude Code instruction.
+# Whitelisted so a whole-repo self-check stays clean (same parity).
+CLAUDE.md
+graphify-out/*
 
 # ── superpowers spec/plan docs (internal design records) ─────────────────
 # Tracked by git for cross-machine sync (Syncthing) but never enter the

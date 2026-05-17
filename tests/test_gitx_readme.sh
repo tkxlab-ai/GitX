@@ -101,6 +101,175 @@ cmp -s "$U/README.md" "$U/README.md.bak" \
   || no "unknown name → file was mutated (should be untouched)"
 rm -rf "$U"
 
+echo "§ v1.10.1 whats-new(rich) + command-surface"
+WX="$(mktemp -d)"  # NEW-2: do NOT add a 2nd EXIT trap (would shadow the file's existing $W trap); clean WX explicitly at section end instead
+mkdir -p "$WX/tests" "$WX/.claude-plugin" "$WX/commands" "$WX/gitx-plugin-commands"
+: > "$WX/tests/test_suite_structure.sh"; echo v9.9.9 > "$WX/VERSION"
+# REAL GitX case: skill name (SKILL.md) != plugin name (plugin.json) — C2/HIGH-1
+printf -- '---\nname: demo-skill\n---\n' > "$WX/SKILL.md"
+printf '{\n  "name": "demoP",\n  "commands": ["./gitx-plugin-commands/"]\n}\n' > "$WX/.claude-plugin/plugin.json"
+: > "$WX/commands/demo-skill-init.md"; : > "$WX/commands/demo-skill-sop.md"
+: > "$WX/gitx-plugin-commands/release.md"; : > "$WX/gitx-plugin-commands/audit.md"
+# wrapped CHANGELOG bullets (continuation indented) — MEDIUM finding
+printf '## v9.9.9 — 2026-09-09\n\n### Added\n- alpha bullet that wraps\n  onto a second line with the core detail\n- beta thing\n\n### Changed\n- gamma thing\n\n## v9.9.8 — 2026-08-08\n- old\n' > "$WX/CHANGELOG.md"
+( cd "$WX" && GITX_README_LIB=1 . "$SH" \
+  && gr_whats_new | head -1 | grep -q 'v9.9.9 — 2026-09-09' \
+  && gr_whats_new | grep -q 'alpha bullet that wraps onto a second line with the core detail' \
+  && gr_whats_new | grep -q 'gamma thing' \
+  && ! gr_whats_new | grep -q '## v9.9.8' && ! gr_whats_new | grep -q '^old$' ) \
+  && ok "whats_new rich: complete wrapped items, not next entry" || no "whats_new rich"
+# spec-review regression: top entry with >=7 bullets must cap at EXACTLY 6
+# (the 6th present, the 7th/8th + next entry excluded). Locks the off-by-one
+# where the deferred-print awk emitted only 5 and destroyed the 6th bullet.
+W7="$(mktemp -d)"; printf '## v9.9.9 — 2026-09-09\n- one\n- two\n- three\n- four\n- five\n- six\n- seven\n- eight\n\n## v9.9.8 — 2026-08-08\n- nextentry\n' > "$W7/CHANGELOG.md"
+( cd "$W7" && GITX_README_LIB=1 . "$SH" \
+  && [ "$(gr_whats_new | grep -c '^- ')" -eq 6 ] \
+  && gr_whats_new | grep -qxF -- '- six' \
+  && ! gr_whats_new | grep -qxF -- '- seven' \
+  && ! gr_whats_new | grep -qxF -- '- eight' \
+  && ! gr_whats_new | grep -q 'nextentry' && ! gr_whats_new | grep -q '## v9.9.8' ) \
+  && ok "whats_new >=7 bullets: caps at exactly 6 (6th in, 7th/8th + next entry out)" || no "whats_new >=7 cap off-by-one"
+# I-1: a CRLF CHANGELOG must NOT leak literal \r into the bullets. The header
+# path strips CR (head -1 | sed) and sibling gr_skill_name does tr -d '\r',
+# but the bullet awk had no CR handling → dependent skills with a CRLF
+# CHANGELOG got '- bullet\r' written verbatim, corrupting diff/grep + --check.
+WR="$(mktemp -d)"; printf '## v9.9.9 — 2026-09-09\r\n\r\n- crlf bullet one\r\n- crlf bullet two\r\n' > "$WR/CHANGELOG.md"
+( cd "$WR" && GITX_README_LIB=1 . "$SH" \
+  && ! gr_whats_new | LC_ALL=C grep -q $'\r' \
+  && gr_whats_new | grep -qxF -- '- crlf bullet one' \
+  && gr_whats_new | grep -qxF -- '- crlf bullet two' ) \
+  && ok "whats_new CRLF CHANGELOG: zero \\r in output, bullets clean" || no "whats_new CRLF \\r leak"
+( cd "$WX" && GITX_README_LIB=1 . "$SH" \
+  && gr_command_surface | grep -qF '/demo-skill` — the skill' \
+  && gr_command_surface | grep -qF '/demo-skill-init' \
+  && gr_command_surface | grep -qF '/demoP:release' \
+  && ! gr_command_surface | grep -qF '/demoP:demo-skill-init' \
+  && gr_command_surface | grep -qi 'plugin-only' ) \
+  && ok "command_surface: skill(/demo-skill) vs plugin(/demoP:release) NOT conflated, no fabrication" || no "command_surface name-split"
+# C2/HIGH-2 (round-2 codex-HIGH): no .claude-plugin → ZERO colon-token, ZERO
+# 'marketplace' word anywhere (footer also gated), explicit N/A.
+( cd "$WX" && rm -rf .claude-plugin && GITX_README_LIB=1 . "$SH" \
+  && gr_command_surface >/dev/null 2>&1 \
+  && gr_command_surface | grep -q '/demo-skill' \
+  && ! gr_command_surface | grep -qiE 'marketplace' \
+  && ! gr_command_surface | grep -qE ':[^[:space:]]' \
+  && gr_command_surface | grep -qi 'no .claude-plugin\|N/A' ) \
+  && ok "command_surface non-plugin: install.sh-only, no fabricated colon/marketplace" || no "command_surface non-plugin"
+# generic-safe: no commands/ either → still renders skill line, exit 0
+( cd "$WX" && rm -rf commands gitx-plugin-commands && GITX_README_LIB=1 . "$SH" \
+  && gr_command_surface >/dev/null 2>&1 && gr_command_surface | grep -q '/demo-skill' ) \
+  && ok "command_surface generic-safe (no dirs)" || no "command_surface generic-safe"
+# codex round-4 [medium]: the plugin command dir is DECLARED in
+# .claude-plugin/plugin.json `commands[]` (GitX uses ./gitx-plugin-commands/;
+# a dependent plugin may declare a different path). gr_command_surface MUST
+# enumerate the manifest-declared dir(s), not a hard-coded gitx-plugin-commands/
+# — else a dependent plugin's README omits/misstates its /<plug>:* commands
+# while --check stays green (deterministic-blind, section-B analog of r1/r2).
+WPC="$(mktemp -d)"; mkdir -p "$WPC/.claude-plugin" "$WPC/plugcmds"
+printf -- '---\nname: depskill\n---\n' > "$WPC/SKILL.md"
+printf '{\n  "name": "depplug",\n  "commands": ["./plugcmds/"]\n}\n' > "$WPC/.claude-plugin/plugin.json"
+: > "$WPC/plugcmds/depplug-foo.md"; : > "$WPC/plugcmds/depplug-bar.md"
+( cd "$WPC" && GITX_README_LIB=1 . "$SH" \
+  && gr_command_surface | grep -qF '/depplug:depplug-foo' \
+  && gr_command_surface | grep -qF '/depplug:depplug-bar' \
+  && ! gr_command_surface | grep -qiE 'gitx-plugin-commands' \
+  && gr_command_surface | grep -qi 'plugin-only' ) \
+  && ok "command_surface: plugin cmds from plugin.json commands[] (non-gitx-plugin-commands path) (codex r4 [medium] fixed)" \
+  || no "command_surface hard-codes gitx-plugin-commands/ ignoring plugin.json commands[]"
+rm -rf "$WPC"
+# manifest-authoritative: plugin.json with NO commands[] → MUST NOT fabricate
+# /<plug>:* from an undeclared dir (footer still states colon cmds plugin-only).
+WPN="$(mktemp -d)"; mkdir -p "$WPN/.claude-plugin" "$WPN/gitx-plugin-commands"
+printf -- '---\nname: nplug-skill\n---\n' > "$WPN/SKILL.md"
+printf '{\n  "name": "nplug"\n}\n' > "$WPN/.claude-plugin/plugin.json"
+: > "$WPN/gitx-plugin-commands/should-not-appear.md"
+( cd "$WPN" && GITX_README_LIB=1 . "$SH" \
+  && ! gr_command_surface | grep -qF '/nplug:should-not-appear' \
+  && gr_command_surface | grep -qi 'plugin-only' ) \
+  && ok "command_surface: plugin.json without commands[] → no fabricated colon cmds (manifest-authoritative)" \
+  || no "command_surface fabricates colon cmds when plugin.json has no commands[]"
+rm -rf "$WPN"
+# round-3 N-2: gr_skill_name MUST read ONLY frontmatter — a body `name:` line
+# (common: SKILL.md body prose) must be IGNORED (locks the codex-MEDIUM-r2 fix)
+WF="$(mktemp -d)"; printf -- '---\nname: fm-name\n---\n# heading\nname: body-name should be ignored\n' > "$WF/SKILL.md"
+( cd "$WF" && GITX_README_LIB=1 . "$SH" && [ "$(gr_skill_name)" = "fm-name" ] ) \
+  && ok "gr_skill_name: frontmatter only, body name: ignored" || no "gr_skill_name body-leak"
+# round-3 codex-MEDIUM: missing frontmatter + hostile basename → NEVER empty/invalid
+for b in '!!!' '.bad' 'Git_Release_Skill'; do
+  HB="$(mktemp -d)/$b"; mkdir -p "$HB"   # no SKILL.md → fallback path
+  nm=$( cd "$HB" && GITX_README_LIB=1 . "$SH" && gr_skill_name )
+  printf '%s' "$nm" | grep -qE '^[a-z0-9][a-z0-9._-]*$' \
+    && ok "gr_skill_name fallback valid+nonempty for basename '$b' → '$nm'" \
+    || no "gr_skill_name fallback invalid/empty for '$b' → '$nm'"
+  rm -rf "$(dirname "$HB")"
+done
+# v1.10.1 closure (codex adversarial [high]): gr_skill_name MUST resolve the
+# STANDARD GitX layout (skills/<name>/SKILL.md) + honor SKILL_NAME env, exactly
+# like the release pipeline's detect-project.sh _detect_skill_name — else a
+# standard-layout dependent skill (no root SKILL.md) gets the WRONG primary
+# command in command-surface while --check deterministically passes (§0g blind).
+WSL="$(mktemp -d)"; mkdir -p "$WSL/skills/demo-skill"
+printf -- '---\nname: ignored-frontmatter\n---\n' > "$WSL/skills/demo-skill/SKILL.md"
+( cd "$WSL" && GITX_README_LIB=1 . "$SH" \
+  && [ "$(gr_skill_name)" = "demo-skill" ] \
+  && gr_command_surface | grep -qF '/demo-skill` — the skill' ) \
+  && ok "gr_skill_name: standard layout skills/<name>/ → /demo-skill (codex [high] fixed)" \
+  || no "gr_skill_name standard-layout regression (root-only resolver)"
+rm -rf "$WSL"
+WEN="$(mktemp -d)"; mkdir -p "$WEN/skills/otherdir"
+printf -- '---\nname: x\n---\n' > "$WEN/skills/otherdir/SKILL.md"
+printf -- '---\nname: rootname\n---\n' > "$WEN/SKILL.md"
+( cd "$WEN" && export SKILL_NAME=envskill && GITX_README_LIB=1 . "$SH" \
+  && [ "$(gr_skill_name)" = "envskill" ] ) \
+  && ok "gr_skill_name: SKILL_NAME env wins over skills/ + root SKILL.md (pipeline precedence)" \
+  || no "gr_skill_name ignores SKILL_NAME env"
+rm -rf "$WEN"
+WPX="$(mktemp -d)"; mkdir -p "$WPX/skills/realskill" "$WPX/skills/foo-workspace"
+printf -- '---\nname: a\n---\n' > "$WPX/skills/realskill/SKILL.md"
+printf -- '---\nname: b\n---\n' > "$WPX/skills/foo-workspace/SKILL.md"
+( cd "$WPX" && GITX_README_LIB=1 . "$SH" && [ "$(gr_skill_name)" = "realskill" ] ) \
+  && ok "gr_skill_name: skills/ exclude (*-workspace) honored → realskill" \
+  || no "gr_skill_name exclude-pattern not honored"
+rm -rf "$WPX"
+WAMB="$(mktemp -d)"; mkdir -p "$WAMB/skills/aa" "$WAMB/skills/bb"
+printf -- '---\nname: a\n---\n' > "$WAMB/skills/aa/SKILL.md"
+printf -- '---\nname: b\n---\n' > "$WAMB/skills/bb/SKILL.md"
+amb=$( cd "$WAMB" && GITX_README_LIB=1 . "$SH" && gr_skill_name )
+( printf '%s' "$amb" | grep -qE '^[a-z0-9][a-z0-9._-]*$' \
+  && [ ! -f "$WAMB/GitX_Upgrade_Guideline.md" ] ) \
+  && ok "gr_skill_name: ambiguous >1 skills/ → safe deterministic fallback, NO guideline written (generate-safe) → '$amb'" \
+  || no "gr_skill_name ambiguous-skills unsafe (invalid name or wrote GitX_Upgrade_Guideline.md)"
+rm -rf "$WAMB"
+# v1.10.1 closure round-2 (codex adversarial [medium]): gr_command_surface
+# must enumerate the STANDARD-LAYOUT commands dir (skills/<skill>/commands/,
+# the release.sh $SKILL_SRC_DIR/commands flatten source) when there is no
+# root commands/ — else a standard-layout dependent skill publishes a
+# command surface that omits its actual installed shims (--check blind).
+WCS="$(mktemp -d)"; mkdir -p "$WCS/skills/demo-skill/commands"
+printf -- '---\nname: ignored\n---\n' > "$WCS/skills/demo-skill/SKILL.md"
+: > "$WCS/skills/demo-skill/commands/demo-skill-init.md"
+: > "$WCS/skills/demo-skill/commands/demo-skill-sop.md"
+( cd "$WCS" && GITX_README_LIB=1 . "$SH" \
+  && gr_command_surface | grep -qF '/demo-skill` — the skill' \
+  && gr_command_surface | grep -qF '/demo-skill-init' \
+  && gr_command_surface | grep -qF '/demo-skill-sop' ) \
+  && ok "gr_command_surface: standard-layout skills/<skill>/commands/ shims listed (codex r2 [medium] fixed)" \
+  || no "gr_command_surface omits standard-layout command shims"
+rm -rf "$WCS"
+# Task 2: a scaffold (--init from the dual-tree template) MUST inherit BOTH
+# own-line managed regions (whats-new + command-surface), and --check must
+# pass on it — so every dependent skill (Decision 0019) gets the §0g guard.
+# grep -qx below is INTENTIONALLY stricter than gr_validate_regions' whitespace-tolerant marker match — the §0g/scaffold guard wants zero marker rot; do not relax to a tolerant grep.
+SC="$(mktemp -d)"
+( cd "$SC" && bash "$SH" --init --force >/dev/null 2>&1 ) \
+  && grep -qx '<!-- gitx:managed:whats-new -->' "$SC/README.md" \
+  && grep -qx '<!-- gitx:managed:command-surface -->' "$SC/README.md" \
+  && ( cd "$SC" && bash "$SH" --check >/dev/null 2>&1 ) \
+  && ok "scaffold inherits own-line whats-new + command-surface, --check exit 0" \
+  || no "scaffold missing whats-new/command-surface region or --check drift"
+rm -rf "$SC"
+rm -rf "$WX" "$WF" "$W7" "$WR"   # NEW-2: explicit cleanup (no EXIT-trap shadowing of the file's $W trap)
+
 echo ""
 echo "Results: ✅$PASS / ❌$FAIL"
 [ "$FAIL" -eq 0 ] && echo PASS && exit 0

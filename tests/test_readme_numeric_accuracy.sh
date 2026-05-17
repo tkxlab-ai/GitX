@@ -80,6 +80,8 @@ grep -qF '<!-- gitx:managed:install -->' "$ROOT/README.md" && ok "README has man
 grep -qF '/plugin install gitx@tkx-skills' "$ROOT/README.md" && ok "README cites gitx@tkx-skills (feeds §0h)" || fail "missing central install"
 RC="$(ls -1 "$ROOT"/tests/test_*.sh 2>/dev/null | grep -vc 'test_suite_structure\.sh')"
 awk '/gitx:managed:suite-count/{f=1;next}/\/gitx:managed:suite-count/{f=0}f' "$ROOT/README.md" | grep -qx "$RC" && ok "managed suite-count == filesystem ($RC)" || fail "suite-count mismatch want $RC"
+grep -qF '<!-- gitx:managed:whats-new -->' "$ROOT/README.md" && ok "README has managed whats-new (v1.10.1)" || fail "no managed whats-new"
+grep -qF '<!-- gitx:managed:command-surface -->' "$ROOT/README.md" && ok "README has managed command-surface (v1.10.1)" || fail "no managed command-surface"
 ( cd "$ROOT" && bash scripts/gitx-readme.sh --check >/dev/null 2>&1 ) && ok "gitx-readme --check clean on real repo" || fail "real README drift"
 test -s "$ROOT/references/readme/test_readme_numeric_accuracy.sh.template" && ok "per-repo exactness scaffold shipped (Boss=Both)" || fail "no scaffold template"
 

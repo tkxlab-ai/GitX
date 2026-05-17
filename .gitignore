@@ -104,3 +104,14 @@ tests/.tmp/
 # release.sh rsync staging ignores .gitignore, so it is ALSO on release.sh's
 # explicit --exclude list + .sanitize-ignore (codex P2, v1.9.6 five-facet).
 .python-version
+
+# ── graphify knowledge graph + local Claude instruction (not for public) ──
+# graphify-out/ is a knowledge graph BUILT FROM the private working-memory
+# set above (HANDOFF / Handoff_Logs / Handoff_Decisions / GOTCHAS / .omc):
+# its graph.json + GRAPH_REPORT.md materialize that internal tacit knowledge,
+# so it is the same not-for-public class. CLAUDE.md is local Claude Code
+# instruction, read locally like HANDOFF.md but never pushed public. Same
+# triple-exclude as .python-version: gitignore + release.sh --exclude +
+# .sanitize-ignore (rsync staging ignores .gitignore).
+CLAUDE.md
+graphify-out/

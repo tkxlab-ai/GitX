@@ -51,6 +51,12 @@ is_allowed_legacy_path() {
         # snapshot that legitimately carries the project name. Transient,
         # gitignored, never in the private repo nor any tarball.
         ./.i18n-cache/*|./.omc/*|./.cache/*|./memory/*|./.github-publish-wt/*) return 0 ;;
+        # graphify knowledge graph + local Claude instruction: gitignored,
+        # release-excluded, never shipped. GRAPH_REPORT.md is regenerated
+        # from Handoff_* history that legitimately preserves the legacy
+        # name — same defensive class as .github-publish-wt (five-facet
+        # symmetric parity; never tracked, never in any tarball).
+        ./graphify-out/*|./CLAUDE.md) return 0 ;;
         # gitignored Syncthing conflict quarantine — pre-3e55e14 snapshots
         # of CHANGELOG.md / VERSION / release.sh that may legitimately
         # reference the legacy name in their preserved historical content.

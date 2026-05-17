@@ -73,6 +73,24 @@ for rf in "$ROOT/README.md" "$ROOT/README_CN.md"; do
         || ok "$b advertises 0-FAIL (green) audit"
 done
 
+# 5) gitx-readme §0g guard: README.md must carry BOTH own-line managed
+#    regions (whats-new + command-surface) and gitx-readme --check must be
+#    clean. Inherited by every skill scaffolded via gitx-readme --init
+#    (Decision 0019) — locks the whats-new/command-surface surface so a
+#    silently-rotted region cannot ship to the public mirror.
+# grep -qx is INTENTIONALLY stricter than gr_validate_regions' whitespace-tolerant marker match — the §0g/scaffold guard wants zero marker rot; do not relax to a tolerant grep.
+if [ -f "$ROOT/README.md" ] && grep -qx '<!-- gitx:managed:whats-new -->' "$ROOT/README.md" \
+   && grep -qx '<!-- gitx:managed:command-surface -->' "$ROOT/README.md"; then
+    ok "README.md carries own-line whats-new + command-surface regions"
+else
+    fail "README.md missing own-line whats-new and/or command-surface region"
+fi
+if [ -x "$ROOT/scripts/gitx-readme.sh" ] && ( cd "$ROOT" && bash scripts/gitx-readme.sh --check >/dev/null 2>&1 ); then
+    ok "gitx-readme --check clean (managed regions in sync)"
+else
+    fail "gitx-readme --check non-zero (managed-region drift or script missing)"
+fi
+
 echo ""
 echo "Results: ✅$PASS passed / ❌$FAIL failed"
 [ "$FAIL" -eq 0 ] && echo "PASS" && exit 0
