@@ -1098,7 +1098,7 @@ fi
 # §11c: README 关键章节
 if [ -f "$DIR/README.md" ]; then
     check "README 含项目标题（一级标题）"      grep -q "^# " "$DIR/README.md"
-    check "README 含安装章节"                  grep -qiE "^#{1,3} .*(install|安装)" "$DIR/README.md"
+    check "README 含安装章节"                  grep -qiE "^#{1,3} .*(install|安装|quick.?start|快速|getting.?started)" "$DIR/README.md"
     check "README 含使用/快速开始章节"         grep -qiE "^#{1,3} .*(usage|使用|quick.?start|快速|命令|command)" "$DIR/README.md"
     check "README 含 License 声明"             grep -qiE "(license|许可)" "$DIR/README.md"
     check "README 含贡献/Contributing 链接"    grep -qiE "(contribut|贡献)" "$DIR/README.md"
@@ -1321,6 +1321,80 @@ EOF_DAI
     fi
 fi
 
+# --- §0j shellcheck CI-parity gate (non-counting meta-gate, mirrors §0i) ---
+# Why: the pipeline was blind to public CI red-X (e.g. SC2010 shipped pre-v1.11.0).
+# §0j runs CI's EXACT `shellcheck -S warning` in-loop so a green Deep-Audit
+# guarantees a green CI run. Non-counting like §0i — never calls _track_start/end
+# so TOTAL is unchanged (Gotcha #62). Generic-safe: shellcheck absent → ➖ SKIP,
+# no SHELLCHECK_FAIL (Gotcha #51); no CI-parity contract → ➖ SKIP (Gotcha #51:
+# a dependent skill is never FAILed for a standard it never opted into).
+# -S warning matches CI exactly; suppresses docs-pipeline.sh's SC2016 info
+# findings which are NOT warnings.
+SHELLCHECK_FAIL=0
+echo ""
+echo "§0j. shellcheck CI-parity gate (non-counting)"
+if ! command -v shellcheck > /dev/null 2>&1; then
+    echo "  ➖ shellcheck not found — generic-safe SKIP (install shellcheck to enable CI-parity gate)"
+else
+    # CI-parity-contract guard (Gotcha #51): only audit repos that have opted into
+    # the gitx CI standard (.github/workflows/ci.yml with shellcheck -S warning).
+    # Dependent skills / smoke fixtures lack this contract → generic-safe SKIP.
+    _ci="$PROJECT_ROOT/.github/workflows/ci.yml"
+    if [ -f "$_ci" ] && grep -qi 'shellcheck' "$_ci" && grep -qiE '\-S[[:space:]]+warning' "$_ci"; then
+        _has_ci_parity_contract=1
+    else
+        _has_ci_parity_contract=0
+    fi
+    if [ "$_has_ci_parity_contract" -eq 0 ]; then
+        echo "  ➖ no CI-parity contract (.github/workflows/ci.yml shellcheck) — generic-safe SKIP (dependent skill not held to gitx's CI standard)"
+    else
+        _sc_targets=""
+        [ -f "$PROJECT_ROOT/install.sh" ]     && _sc_targets="$_sc_targets $PROJECT_ROOT/install.sh"
+        [ -d "$PROJECT_ROOT/scripts" ]        && _sc_targets="$_sc_targets $PROJECT_ROOT/scripts/*.sh"
+        [ -d "$PROJECT_ROOT/tests" ]          && _sc_targets="$_sc_targets $PROJECT_ROOT/tests/*.sh"
+        if [ -z "$_sc_targets" ]; then
+            echo "  ➖ no CI targets found (install.sh / scripts/ / tests/) — SKIP"
+        else
+            # shellcheck disable=SC2086  # intentional glob expansion mirrors CI's exact command
+            _sc_out=$(shellcheck -S warning $PROJECT_ROOT/install.sh \
+                $PROJECT_ROOT/scripts/*.sh \
+                $PROJECT_ROOT/tests/*.sh 2>&1) && _sc_rc=0 || _sc_rc=$?
+            if [ "$_sc_rc" -eq 0 ]; then
+                echo "  ✅ shellcheck -S warning clean (CI-parity confirmed)"
+            else
+                echo "  ❌ shellcheck -S warning findings (CI would be red):"
+                echo "$_sc_out" | sed 's/^/    /'
+                SHELLCHECK_FAIL=1
+            fi
+        fi
+    fi
+fi
+
+# --- §0k docs-audit document-contract gate (non-counting meta-gate, mirrors §0j) ---
+# Why: docs-audit.sh owns H1–H7+H10 (document structure); it is non-counting by
+# design (Gotcha #62) — never calls _track_start/_track_end so TOTAL is unchanged.
+# Generic-safe: no manifest → docs-audit SKIPs exit 0 (Gotcha #51). On the real
+# repo this surfaces ✅; dependent skills with no docs-contract manifest surface ➖.
+# Sets DOCS_AUDIT_FAIL=1 on violation so the final decision honors it (same idiom
+# as SHELLCHECK_FAIL / EXACTNESS_FAIL above).
+DOCS_AUDIT_FAIL=0
+echo ""
+echo "§0k. docs-audit document-contract gate (non-counting)"
+_da_script="$SELF_DIR/docs-audit.sh"
+if [ ! -f "$_da_script" ]; then
+    echo "  ➖ docs-audit.sh not found — generic-safe SKIP"
+else
+    _da_out=$(PROJECT_ROOT="$PROJECT_ROOT" bash "$_da_script" 2>&1) && _da_rc=0 || _da_rc=$?
+    if [ "$_da_rc" -eq 0 ]; then
+        echo "  ✅ docs-audit clean (H1–H7 + H10)"
+        echo "$_da_out" | sed 's/^/    /'
+    else
+        echo "  ❌ docs-audit found document contract violations:"
+        echo "$_da_out" | sed 's/^/    /'
+        DOCS_AUDIT_FAIL=1
+    fi
+fi
+
 # Per-section summary (P3-2)
 echo ""
 echo "═══ Per-Section Summary ═══"
@@ -1341,7 +1415,7 @@ rm -f "$_SEC_LOG"
 
 echo ""
 echo "═══════════════════════════════════════════"
-if [ "$FAIL" -eq 0 ] && [ "${EXACTNESS_FAIL:-0}" -eq 0 ]; then
+if [ "$FAIL" -eq 0 ] && [ "${EXACTNESS_FAIL:-0}" -eq 0 ] && [ "${SHELLCHECK_FAIL:-0}" -eq 0 ] && [ "${DOCS_AUDIT_FAIL:-0}" -eq 0 ]; then
     echo "🎉 Deep Audit PASS  (✅$PASS / ❌$FAIL / ➖$SKIP / ⚠️$ADVISORY total $TOTAL)"
     echo "   上游发布未自动执行；如需发布，请人工复核产物、CHANGELOG 和仓库状态后再操作。"
     exit 0

@@ -33,6 +33,7 @@ else
 fi
 
 # === STATIC 2: helper is sourceable without exiting caller ===
+# shellcheck source=/dev/null
 if ( set +e; source "$HELPER"; echo "still-alive" ) | grep -q "still-alive"; then
     ok "helper is sourceable (does not exit caller)"
 else

@@ -14,8 +14,8 @@ fail() { echo "  ❌ $1"; FAIL=$((FAIL+1)); }
 
 echo "══ test_install_docs_force.sh ══"
 
-if grep -q -- './install.sh --force' "$PROJECT_ROOT/README.md" \
-    && grep -qiE 'already|exist|已有|已存在|覆盖' "$PROJECT_ROOT/README.md"; then
+if grep -qE 'install\.sh --force' "$PROJECT_ROOT/README.md" \
+    && grep -qiE 'already|exist|overwrite|overwrites|已有|已存在|覆盖' "$PROJECT_ROOT/README.md"; then
     ok "README documents --force for existing installs"
 else
     fail "README does not clearly document --force for existing installs"

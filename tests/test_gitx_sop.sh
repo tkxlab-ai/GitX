@@ -46,7 +46,7 @@ if [ -x "$WRAPPER" ]; then
             grep -qF -- "$flag" <<<"$help_out" || missing="$missing $flag"
         done
         for c in 0 2 4; do
-            grep -qE "^[[:space:]]*$c[[:space:]]" <<<"$help_out" || missing="$missing exit=$c"
+            grep -qE "^[[:space:]]*${c}[[:space:]]" <<<"$help_out" || missing="$missing exit=$c"
         done
         if [ -z "$missing" ]; then
             ok "--help lists flags + exit codes"

@@ -1,261 +1,161 @@
-<!-- Deep-Audit N/0/1 count is NOT gitx-managed — §0f consistency + §0i exactness + per-repo test (Decision 0018/0019). -->
+<!-- 视觉资产已提交：docs/assets/release-demo.jpeg（Boss 供图，人工维护，非流水线生成）。见 frozen spec §4 H10。 -->
+<!-- Deep-Audit N/0/1 计数非 gitx 托管 — §0f 一致性 + §0i 精确性 + 单仓测试。 -->
 <div align="center">
 
 # 🚀 GitX
 
 **把"发版"当工程纪律来做的跨项目发布流水线，而不是一件杂活。**
 
+大多数发版事故并非代码缺陷：漏改一处版本号、文档说谎、密钥溜进公开镜像、
+谁也复现不出的 tarball。GitX 把整套发版仪式收敛成一条 fail-closed 流水线——
+每条政策都是一个会**中止构建**的 shell 断言，而不是没人看的 wiki 条目。它能
+发布任何 `skills/<name>/SKILL.md` 项目，一次安装覆盖四个 CLI，并用它强加给
+别人的标准要求自己：GitX 用 GitX 发布 GitX。
+
 [English](README.md) · [中文](README_CN.md)
 
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-95%2B%20suites%20%2F%200%20fail-brightgreen.svg)](tests/run_all.sh)
-[![Deep Audit](https://img.shields.io/badge/deep%20audit-240%2F0%2F1-brightgreen.svg)](scripts/release-audit.sh)
-[![CLIs](https://img.shields.io/badge/CLI-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20OpenCode%20%C2%B7%20Gemini-blue.svg)](#快速开始)
-[![Shell](https://img.shields.io/badge/bash-3.2%2B%20POSIX-orange.svg)](SKILL.md)
+<!-- gitx:managed:badges -->
+[![License](https://img.shields.io/badge/license-MIT-yellow.svg?style=for-the-badge)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-106%20suites%20%2F%200%20fail-brightgreen.svg?style=for-the-badge&logo=githubactions&logoColor=white)](tests/run_all.sh)
+[![Deep Audit](https://img.shields.io/badge/deep%20audit-245%2F0%2F1-brightgreen.svg?style=for-the-badge&logo=shieldsdotio&logoColor=white)](scripts/release-audit.sh)
+[![CLIs](https://img.shields.io/badge/CLI-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20OpenCode%20%C2%B7%20Gemini-6366f1.svg?style=for-the-badge&logo=anthropic&logoColor=white)](#快速开始)
+[![Shell](https://img.shields.io/badge/bash-3.2%2B%20POSIX-06b6d4.svg?style=for-the-badge&logo=gnubash&logoColor=white)](SKILL.md)
+[![Release](https://img.shields.io/github/v/release/tkxlab-ai/GitX?sort=semver&style=for-the-badge&logo=github&logoColor=white&color=gold)](https://github.com/tkxlab-ai/GitX/releases)
+[![Status](https://img.shields.io/badge/status-stable%20%C2%B7%20production--ready-10b981.svg?style=for-the-badge)](#开发历程)
+<!-- /gitx:managed:badges -->
 
 </div>
 
-> 一条命令，把零散又易错的发版仪式——版本号 / 测试 / 打包 / 敏感信息扫描 /
-> 文档平摊 / 完整性证明 / 深度审计——收敛成一条 fail-closed 流水线。每条
-> 政策都是会让构建中止的 shell 断言，而不是没人看的 wiki 条目。
+<!-- gitx:managed:build-metrics -->
+> 🛠 **实时构建指标** — 版本 **v1.12.0** · 发版日期 **2026-05-18** · 由 **Claude（Opus/Sonnet）· Codex · Gemini** 跨数百会话打造 · 自首个原型（v0.9.4，2026-04-22）起累计 AI token 估算：**≈ 3 亿+ 输入/输出 + ≈ 30 亿+ 缓存** · 跨度：**26 天 ~60 个发布**（2026-04-22 → 2026-05-18）
+<!-- /gitx:managed:build-metrics -->
 
-**版本号**：见 [`VERSION`](VERSION) / [`Release/CHANGELOG.md`](Release/CHANGELOG.md) ·
-**运行时**：纯 Bash 3.2+（POSIX）、git 2.x、可选 `python3 + venv` ·
-**适用范围**：任何 `skills/<name>/SKILL.md` 布局的项目，四个 CLI 安装面。
+**[文档](#目录) · [更新日志](Release/CHANGELOG_CN.md) · [报告缺陷](https://github.com/tkxlab-ai/GitX/issues) · [安全](SECURITY.md)**
 
 ---
 
-## 更新摘要 What's New
+## 更新摘要
 
-**最新**：
 <!-- gitx:managed:whats-new -->
-**v1.10.1 — 2026-05-16**
+**v1.12.0 — 2026-05-18**
 
-- What's-New rot: `gr_whats_new` now machine-derives version + date + top-entry highlights from `Release/CHANGELOG.md` (v1.10.0 shipped a bare version line + an unguarded hand-maintained Highlight table that missed its own release — Boss-found). Stale hand table removed.
-- `gr_command_surface` + `<!-- gitx:managed:command-surface -->` region: deterministically documents the install.sh-flat vs marketplace-`/gitx:*` command surfaces (the colon namespace is plugin-only — official Claude Code docs). Both regions are guarded by the existing generic §0g (`gitx-readme --check`, no new audit section) for GitX and for skills released through gitx ≥ v1.10.1 that adopt these managed regions; new `gitx-readme --init` scaffolds inherit them.
-- graphify-out/ + CLAUDE.md private-state leak surface closed to the documented five-facet symmetric-parity standard (.gitignore + .sanitize-ignore + release.sh rsync --exclude + release-audit.sh fail-closed regex (extended in place, no new check — no §0f/§0i count rot) + rebrand allow-list + TDD-lock), dual-source byte-identical (commit cd843dd, Decision 0021).
+- Post-`v1.11.0` adversarial-review hardening — six successive `codex` findings closed at the class: a reusable template scaffolded a missing hero image; `docs-audit` `H10` lost origin enforcement; enforcement was contingent on a README reference; an optional `grep` under `set -euo pipefail` aborted the whole audit; the `hero_asset` declaration was wrongly mirrored into the bundled skill; a referenced missing asset was silently skipped.
+- `tests/test_docs_pipeline.sh` — the last `set -e`-unsafe `rc` capture converted to the project-standard safe idiom.
+- Hero showcase is origin-only — the hardcoded `<img>` was removed from the reusable README templates; the host-specific image now lives solely in the origin's live README, enforced by a manifest-driven `hero_asset:` gate, and `H10` is strict again.
+- README badges restyled to the `shields.io` `for-the-badge` family with brand logos; the `@machine` Tests token and the Deep-Audit citation stay byte-frozen so no gate invariant shifts.
+- Hero asset replaced with a Boss-supplied web-optimized build (`docs/assets/release-demo.jpeg`) — smaller, content-equivalent.
 <!-- /gitx:managed:whats-new -->
-历史版本见 [`Release/CHANGELOG.md`](Release/CHANGELOG.md)。
+
+完整历史（59 个发布）→ [`Release/CHANGELOG_CN.md`](Release/CHANGELOG_CN.md)。
 
 ---
 
-## 📊 实时构建指标
+## 目录
 
-**版本**：
-<!-- gitx:managed:version -->
-v1.10.1
-<!-- /gitx:managed:version -->
-
-**发版日期**：2026-05-16 · **所用模型**：Claude / Codex（开发 + 对抗式评审）· **累计 AI token 消耗（项目至今，估算）**：约 5 亿+ 输入/输出 + 约 60 亿+ 缓存，跨数百个会话 · **数据一览**：95+ BDD 套件 / 0 失败 · Deep Audit 全绿 · 20+ 次发版 · 每个 tag 一个 GitHub Release。
-
-> **安装任意 TKX 技能** —— 添加一次中心 marketplace，按名安装：
-> ```
-> /plugin marketplace add tkxlab-ai/marketplace
-> /plugin install gitx@tkx-skills
-> ```
-> `install.sh`（见[快速开始](#快速开始)）仍可用于多 CLI 直接安装。
-
----
-
-## 目录 Table of Contents
-
-- [为什么需要 GitX](#为什么需要-gitx)
-- [设计哲学](#设计哲学)
-- [命令矩阵 Commands](#命令矩阵-commands)
-- [方法论](#方法论)
+- [更新摘要](#更新摘要)
+- [命令行实况](#命令行实况)
+- [为什么选择 GitX](#为什么选择-gitx)
+- [横向对比](#横向对比)
+- [命令面](#命令面)
+- [流水线与审计闸](#流水线与审计闸)
 - [快速开始](#快速开始)
-- [命令（安装入口）](#命令)
+- [配置](#配置)
 - [架构](#架构)
+- [符号与状态系统](#符号与状态系统)
 - [测试](#测试)
-- [安全模型](#安全模型)
-- [参考与引用](#参考与引用)
+- [开发历程](#开发历程)
+- [审查与代码评审](#审查与代码评审)
+- [多模型 AI 协作](#多模型-ai-协作)
+- [研究与参考](#研究与参考)
+- [安全](#安全)
+- [常见问题](#常见问题)
 - [兼容性](#兼容性)
+- [路线图](#路线图)
+- [鸣谢](#鸣谢)
 - [贡献](#贡献)
+- [特别致谢](#特别致谢)
 - [许可](#许可)
 
 ---
 
-## 为什么需要 GitX
+## 命令行实况
 
-手工发版会以可预测且昂贵的方式出错：
+<!-- 视觉资产：人工提供，文件置于 docs/assets/release-demo.* —— 非流水线生成、非 @machine；docs-audit 只校验引用 + 文件在场，绝不校验图像内容 -->
+<p align="center">
+  <img src="docs/assets/release-demo.jpeg" alt="GitX 发版流水线 —— 终端实况" width="820">
+</p>
 
-- **静默泄密**——一个绝对路径、一个私有 Git host、CHANGELOG 里的一个 token
-  推上公开镜像，且无法撤回。
-- **不可复现产物**——`tar` 内嵌 mtime、`gzip` 内嵌文件名；同一份源码每次
-  打出的 tarball 都不同，没人能验证"我下载的就是你发布的那个"。
-- **政策只是愿望**——"先跑测试"写在 wiki 里，发版人赶 deadline 时跳过。
-  文档不是强制。
-- **漂移**——根脚本与打包 bundle 分叉；文档写 `v0.9` 而代码是 `v1.7`；
-  slash 命令装进宿主根本不扫描的目录。
+<details><summary>文本转录（无障碍回退）</summary>
 
-GitX 存在的理由是：**上述每一种失败都是可计算谓词**。一条规则若能被脚本
-检查，它就该让构建失败——而不是半年后一句 code review 评论。本项目是 30+
-真实事故（每条都已固化为回归测试或审计闸）逐条从"踩过的坑"
-转化为回归测试或审计闸的累积。
-
-它帮你：
-
-- 用**一条命令** + fail-closed 闸链发版一个 skill / 项目。
-- 产出**逐字节可复现**的 source tarball（SLSA 式 provenance）。
-- 每个版本附 **CycloneDX SBOM** + SHA-256 `checksums.txt`。
-- 不泄漏私有 dev tree 地推向**公开 GitHub 镜像**（`/gitx-sop`），并让任何
-  项目拥有自己的发版政策（`/gitx-init`）。
-
----
-
-## 设计哲学
-
-GitX 建立在四条承重原则上，每条都可追溯到一个具名思想：
-
-1. **政策即代码**。每条发版规则都是会中止流水线的 shell 断言，绝非散文
-   建议。内部政策 v2.2/v2.3 把 7 条"愿望式"规则转成 code-enforce 闸。
-   血缘：*基础设施即代码 / 可执行规范* 传统。
-
-2. **不变量优于约定**——*E. W. Dijkstra*。用可计算谓词取代模糊的人类
-   判断：`diff -rq` 验双源一致、anchored `grep` 抓凭证类、exit-code 闸验
-   测试。你*期望*成立的约定，被机器*证明*成立的不变量取代。见 Dijkstra,
-   *A Discipline of Programming*（1976）。
-
-3. **消除评估鸿沟（Gulf of Evaluation）**——*Donald A. Norman*。每个流水线
-   步骤显式输出 `✅ / ❌ / ➖`，操作者永不需推断系统状态。出自 Norman,
-   *The Design of Everyday Things*（1988）——"评估鸿沟"即系统状态与用户
-   感知之间的落差；GitX 把它每步压到零。
-
-4. **零硬编码、跨项目**。`PROJECT_NAME` / `SKILL_NAME` / `PROJECT_ROOT`
-   全由环境推导，流水线里没有任何项目专属字面量。发布 GitX 自身的脚本
-   原样发布任何 sibling 技能——已在多个项目生产验证。
-
-第五条运维原则约束项目自身维护：**每个缺陷都变成一道 guard**。测试驱动
-开发（*Kent Beck*, *Test-Driven Development: By Example*, 2002）red→green→
-refactor 应用于每个行为；隐性运维知识按 *Nonaka & Takeuchi* 的 SECI 知识
-转化模型（*The Knowledge-Creating Company*, 1995）外化进项目内部 dev log。
-
----
-
-## 命令矩阵 Commands
-
-| 动作 | 触发词 | 脚本 | 行为 |
-|------|--------|------|------|
-| 一键发版 | `/gitx-release` | `scripts/gitx-release.sh` | 自动 patch 递增 → 同步 SKILL.md + CHANGELOG → 全闸链；不自动 git push |
-| 发版（指定版本）| `release <version>` | `scripts/release.sh` | 12 函数流水线：测试→打包→tarball→脱敏→平摊→证明→Deep Audit |
-| 补审 | `audit <version>` | `scripts/release-audit.sh` | 对已有 `Release/<ver>/` 跑 40+ 静态检查（可断网）|
-| 敏感扫描 | `scan <dir>` | `scripts/release-sanitize.sh` | 6 类：凭证 / 绝对用户路径 / 真实邮箱 / 公网 IP / MAC / SSH-GPG 指纹 |
-| 项目初始化 | `/gitx-init` | `scripts/gitx-init.sh` | 生成 `.gitx/` 政策包 + `RELEASE_GUIDELINE.md`（auto-detect skill/mac/both/empty）|
-| GitHub 发布 SOP | `/gitx-sop` | `scripts/gitx-sop.sh` | 生成 `.gitx/GITHUB_RELEASE_SOP.md`——占位符渲染的公开镜像 runbook，**只生成不执行 git/gh** |
-
-> **硬约束**：`git tag` / `git push` / `gh release` 一律不由流水线自动化
-> （TKX 政策 §10.10）。GitX 只产出本地 `Release/<version>/` 产物；推上游
-> 永远是人工动作。
-
----
-
-## 方法论
-
-### 发版流水线（`release.sh`，12 个具名函数）
-
-严格顺序执行；任一步非 0 即中止（无 `FORCE=1` 绕过——silent ghost release
-护城河）：
-
-| # | 函数 | 保证 |
-|---|------|------|
-| 1 | `preflight_checks` | 版本号语法 + SKILL.md 一致性 + CHANGELOG 闸 |
-| 2 | `run_tests` | `tests/run_all.sh` 全绿否则 abort |
-| 3 | `check_dual_source` | 根 `scripts/` ≡ bundle `scripts/`（`diff -rq`）|
-| 4 | `build_skill_package` | 内嵌 Anthropic skill-creator 打 `.skill`（zip 回退）|
-| 5 | `build_source_tarball` | 可复现 tarball（mtime 归一 + 排序）|
-| 6 | `run_sanity_scans` | staging + 解压 `.skill` 双扫 6 类敏感信息 |
-| 7 | `flatten_docs` | 9 文档 + scripts/ + references/ + commands/ + install.sh |
-| 8 | `generate_attestations` | CycloneDX SBOM + token 用量 + `checksums.txt` |
-| 9 | `generate_release_notes` | 3 安装路径 + CHANGELOG 注入 |
-| 10 | `update_changelog` | 平摊 `Release/CHANGELOG.md` |
-| 11 | `run_deep_audit` | `release-audit.sh --inline`，40+ 检查全绿否则 abort |
-| 12 | `update_latest_symlink` | **审计通过后**原子 `ln -sfn` |
-
-该顺序编码 **gate-then-ship 不变量**：`Release/latest` 永不指向未验证产物
-（11 → 12 不可调换）。
-
-### 可复现构建（SLSA 式 provenance）
-
-`build_source_tarball` 消除 tar 三大不确定性：(a) `touch -t
-$SOURCE_DATE_EPOCH` 归一 mtime，(b) `find | LC_ALL=C sort | tar
---no-recursion -T -` 固定遍历序，(c) `gzip -n` 去掉内嵌文件名/时间戳。
-结果：同源 → 逐字节相同 tarball → 任何人可 `shasum -a 256 -c
-checksums.txt` 离线验证。遵循 **SLSA** 构建 provenance 模型
-（[slsa.dev](https://slsa.dev)）与 *reproducible-builds.org* 实践。
-
-### 深度审计 Deep Audit
-
-`release-audit.sh` 跑约 14 节 / 240 项纯静态分析（无网络）：spec 合规、
-安装标准、`gitx-init`/`gitx-sop` 模板完整性（`§0c`/`§0d`）、doc 版本陈腐
-（`§0e`）、双源一致、CHANGELOG 真实性、可复现性、脱敏复扫。三态输出
-（`✅ PASS / ❌ FAIL / ➖ SKIP`）——Norman 原则的落地。
-
-### 纵深防御
-
-敏感信息在**三个独立边界**扫描：pre-release staging、解压 `.skill`
-bundle、以及（`/gitx-sop`）公开 worktree——含一道*强制 post-redaction
-验证 grep*，无论走哪条脱敏路径都 fail-closed 运行。
-
----
-
-## 快速开始
-
-### 方式 A —— Claude Code 插件（Claude Code 用户推荐）
-
-<!-- gitx:managed:install -->
-```bash
-/plugin marketplace add tkxlab-ai/marketplace
-/plugin install gitx@tkx-skills
-```
-<!-- /gitx:managed:install -->
-
-插件命令在 `gitx` 插件下**强制命名空间化**（Claude Code 官方策略）：
-`/gitx:release` `/gitx:sop` `/gitx:init` `/gitx:audit` `/gitx:scan`（不是扁平的
-`/gitx-sop`）。更新：`/plugin marketplace update tkx-skills`。
-
-### 方式 B —— `install.sh`（多 CLI：Claude Code · Codex · OpenCode · Gemini，扁平 `/gitx-sop`）
-
-```bash
-# 安装（克隆公开镜像）
-git clone https://github.com/tkxlab-ai/GitX.git
-cd GitX
-./install.sh --dry-run        # 预览
-./install.sh                  # 装到 ~/.agents/skills/gitx-release/（+ Claude/OpenCode symlink + ~/.claude/commands/ shim）
-./install.sh --force          # 已有安装时重装（原地覆盖）
+```console
+$ /gitx-release --version v1.2.0
+▸ 版本一致性 ............ v1.2.0（VERSION ×2 + 3 个 manifest 对齐）
+▸ CHANGELOG 闸 .......... v1.2.0 条目存在、非占位 ✅
+▸ 回归测试 .............. 102 套件 / 0 失败 🎉
+▸ 双源检查 .............. scripts/ ≡ 打包镜像（字节一致）
+▸ 打包 .................. git_release_skill-v1.2.0.skill + tarball + SBOM
+▸ 敏感扫描 .............. 认 .sanitize-ignore → 干净 ✅
+▸ 文档平摊 .............. commands/ + references/ → Release/
+▸ 深度审计 .............. ✅ 245 / ❌ 0 / ➖ 1（§8 latest = 预期 SKIP；TOTAL == 实时总数）
+▸ 校验和 ................ sha256 × 6 写入
+RELEASE READY · 未推送（按政策 push 由人工执行）
 ```
 
-两条路径并存，二选一。插件 = 命名空间化、可 marketplace 更新、仅
-Claude Code。`install.sh` = 扁平命令名、四个 CLI。
-
-```bash
-# 在任何 skills/<name>/SKILL.md 项目里使用
-/gitx-release                 # 一键发版（自动 patch 递增）
-release v1.2.0                # 指定版本
-audit v1.2.0                  # 补审已有 release
-scan ./some-dir               # 独立敏感扫描
-/gitx-init                    # 在项目里生成 .gitx/ 政策包
-/gitx-sop                     # 生成 GitHub 发布 runbook
-```
-
-Codex CLI：`/skills` 打开技能列表，或输 `$` 选 **GitX**（选择器
-`$gitx-release`）。OpenCode / Gemini：说 "gitx release"。slash 子命令
-（`/gitx-init`、`/gitx-sop`）在 install 后需 **新开 Claude Code 会话**
-（命令在启动时加载）。
+</details>
 
 ---
 
-## 命令
+## 为什么选择 GitX
+
+**问题。** 发版是一套仪式：到处改版本号、跑测试、扫密钥、把文档平摊进 bundle、证明完整性、审计结果、镜像到公开仓而不泄露私有仓。每一步都可跳过，每一处跳过都是未来的事故——陈旧的 README、泄露的 token、复现不出的 tarball、有 tag 没 release。
+
+**做法——政策即代码。** GitX 的契约（`references/TKX_Git_Release_policy_and_process.md`）不是建议性散文，每一条款都是运行时 shell 断言。违反的政策不会警告——它**中止构建**。审计是 245 条可执行检查，三态结果，`TOTAL = PASS + FAIL + SKIP` 必须精确成立。
+
+**与众不同之处：**
+
+- **零硬编码、真正跨项目** —— `PROJECT_NAME`/`SKILL_NAME` 全部环境派生；GitX 自发版过兄弟 skill，不只发自己。
+- **供应链加固** —— 可复现 tarball、`install.sh` 信任前校验 `checksums.txt`、产出 SBOM、私有态泄漏面收敛到五-facet 对称平价标准。
+- **构造上 fail-closed** —— 缺工具→SKIP，绝不静默放过；通用守护绝不因依赖技能缺工具而 FAIL。
+- **0-issue 元技能** —— 任何公开发版前：全量绿、深度审计 `N/0`、双引擎对抗闭环收敛。从不靠代理指标发版。
+
+<sub>[↑ 回到顶部](#目录)</sub>
+
+---
+
+## 横向对比
+
+GitX 与通用发版工具的差异——它面向**技能/智能体**打包世界，fail-closed，且不需要 CI 运行时：
+
+符号沿用 GitX 同一套三态系统——✅ 具备 · ❌ 明确没有 · ➖ 不适用（[符号与状态系统](#符号与状态系统)）：
+
+| 能力 | GitX | semantic-release | release-please | goreleaser |
+|---|:---:|:---:|:---:|:---:|
+| 目标 | `skills/<name>/SKILL.md`，4 CLI | 偏 npm | 语言无关 | Go 二进制 |
+| 政策＝fail-closed shell 断言 | ✅ | ❌ | ❌ | ❌ |
+| 本地运行、**无需 CI 运行时** | ✅ | ❌ | ❌ | ❌ |
+| 密钥泄漏闸（五-facet、TDD 锁） | ✅ | ➖ | ➖ | ➖ |
+| 文档漂移闸（`§0f/§0g` + `docs-audit`） | ✅ | ➖ | ➖ <sub>仅 CHANGELOG</sub> | ➖ |
+| 自发布**且**自审计 | ✅ | ➖ | ➖ | ➖ |
+| 不自动 push（上游由人工） | ✅ | ❌ | ❌ | ❌ |
+
+GitX 不是 CI 发版机器人的替代品；它是任何技能在抵达远端之前必须先过的**本地纪律层**。
+
+<sub>[↑ 回到顶部](#目录)</sub>
+
+---
+
+## 命令面
 
 <!-- gitx:managed:command-surface -->
-Two install paths.
+两种安装路径。
 
-**A. install.sh** — run `bash install.sh` (skill + flat commands; no plugin needed)
+**A. install.sh** — 运行 `bash install.sh`（技能 + 扁平命令；无需插件）
 
 - `/gitx-release` — the skill itself
 - `/gitx-init`
 - `/gitx-sop`
 
-**B. Plugin marketplace** — `/plugin marketplace add tkxlab-ai/marketplace` then `/plugin install gitx@tkx-skills` (`/gitx` colon namespace)
+**B. 插件市场** — `/plugin marketplace add tkxlab-ai/marketplace` 然后 `/plugin install gitx@tkx-skills`（`/gitx` 冒号命名空间）
 
 - `/gitx:audit`
 - `/gitx:init`
@@ -263,131 +163,405 @@ Two install paths.
 - `/gitx:scan`
 - `/gitx:sop`
 
-> The `/gitx` colon-prefixed commands are plugin-only (a plugin-namespacing design, per official docs). install.sh gives flat `/gitx-release` + `/<cmd>`; the colon form requires this plugin install and is NEVER synthesized from flat commands.
+> `/gitx` 冒号前缀命令仅限插件（官方文档的插件命名空间设计）。install.sh 提供扁平 `/gitx-release` + `/<cmd>`；冒号形式需要安装此插件，从不由扁平命令合成。
 <!-- /gitx:managed:command-surface -->
+
+### 直接脚本入口（进阶）
+
+斜杠命令是这些脚本的薄壳——CI、调试或细粒度步骤可直接调用。接口与脚本声明完全一致：
+
+| 脚本 | 接口 | 用途 |
+|---|---|---|
+| `scripts/gitx-release.sh` | `[--dry-run] [--version vX.Y.Z]` | 入口 wrapper —— 建诊断日志，再跑 `release.sh` |
+| `scripts/release.sh` | `PROJECT_ROOT=<dir> … <version> [--dry-run]` | 流水线本体（上述阶段） |
+| `scripts/release-audit.sh` | `<version>` | 仅深度审计 —— `§0a–§0j`，三态（`--inline` 是 `release.sh` 专用、provenance 门控的内部 flag，不供直接使用） |
+| `scripts/release-sanitize.sh` | `[--label <name>] <dir>` | 扫描已暂存目录的 PII / 密钥 / 指纹 |
+| `scripts/scan-credentials.sh` | `[file]` _或_ `cat file \| …` | 检测单文件或管道 stdin 的明文凭证 |
+| `scripts/gitx-readme.sh` | `[--check\|--init\|--force\|--dry-run]`（默认 refresh） | 确定性 README 代笔器（文档流水线） |
+| `scripts/sync-dual-source.sh` | `[--dry-run]` | 同步 `scripts/` → `skills/<skill>/scripts/`（主→镜像） |
+| `scripts/emit-token-usage.sh` | — | 分析技能 bundle 的运行时上下文 token 成本 |
+
+### 示例
+
+```bash
+# 发布一个 skill 项目（最常用）—— 默认自动递增 patch 版本
+cd your-skill-project
+/gitx-release
+/gitx-release --version v1.2.0          # 或指定显式版本
+
+# 全流水线 dry-run —— 不写文件，看每一道闸
+PROJECT_ROOT="$(pwd)" bash ~/.agents/skills/gitx-release/scripts/gitx-release.sh --dry-run
+
+# 只审计一个已构建的发布物，不重建
+bash ~/.agents/skills/gitx-release/scripts/release-audit.sh v1.2.0
+
+# 教会一个全新项目发版，再渲染它的 GitHub SOP
+/gitx-init
+/gitx-sop
+
+# 打包前先体检一个目录有没有密钥
+bash ~/.agents/skills/gitx-release/scripts/release-sanitize.sh ./dist
+```
+
+<sub>[↑ 回到顶部](#目录)</sub>
+
+---
+
+## 流水线与审计闸
+
+发版流水线是一串 fail-closed 阶段；审计是一组静态闸 `§0a`–`§0j`。代表性闸：
+
+| 闸 | 强制 |
+|---|---|
+| `§0b` | INSTALL.md + install.sh 统一标准合规 |
+| `§0c/§0d` | gitx-init / gitx-sop 模板完整性（只生成，不碰 git/gh） |
+| `§0f` | 文档数值漂移 —— README 数字 vs ground truth |
+| `§0g` | readme-sync —— 生成文档 vs 已提交（漂移即失败） |
+| `§0i` | deep-audit-exactness —— 非计数 meta-gate，引用 == 实时总数 |
+| `§0j` | shellcheck —— GitHub CI 跑的*同一条*命令，搬进流水线内 |
+
+不自动 `git push`/`tag`（上游操作由人工）；写入限于 `Release/` + `CHANGELOG`；私有 host 绝不进公开镜像（五-facet 排除，TDD 锁）。读代码看到"做什么"；政策文档记"为什么"。
+
+<sub>[↑ 回到顶部](#目录)</sub>
+
+---
+
+## 快速开始
+
+**1 · 前置** — Bash 3.2+（POSIX；macOS 系统 bash 可用）、git 2.x、可选 `python3 + venv`（skill-creator 校验自举一份 vendored 副本 + venv）。
+
+**2 · 安装 —— 两种方式**
+
+*方式 A —— 插件市场（Claude Code 插件用户推荐）：*
+```text
+/plugin marketplace add tkxlab-ai/marketplace
+/plugin install gitx@tkx-skills
+```
+
+*方式 B —— install.sh（一条命令，全四个 CLI，无需插件系统）：*
+```bash
+git clone https://github.com/tkxlab-ai/GitX.git && cd GitX
+bash install.sh                 # → ~/.agents/skills/gitx-release（规范路径）
+                                 #   + Claude Code 与 OpenCode 软链
+                                 #   Codex 与 Gemini 自动发现
+bash install.sh --dry-run       # 预览每个动作，不碰任何文件
+bash install.sh --force         # 在已有安装上重装 —— 无备份覆盖已装命令文件
+                                 #   （有数据丢失风险；请谨慎使用，建议先 --dry-run）
+```
+
+**3 · 发布任意 skill 项目**
+```bash
+cd your-skill-project
+/gitx-release                   # 默认：自动递增 patch，完整流水线
+/gitx-release --version v1.2.0  # 显式版本
+bash ~/.agents/skills/gitx-release/scripts/release-audit.sh v1.2.0   # 仅审计
+```
+
+**4 · 教会一个项目发版** — `/gitx-init` 生成契约；`/gitx-sop` 渲染 GitHub 发布 runbook。两者只生成 —— 由人工监督的 AI 执行。
+
+<sub>[↑ 回到顶部](#目录)</sub>
+
+---
+
+## 配置
+
+零配置即可运行——一切环境派生。仅当项目布局与约定不同才需覆盖。
+
+<details>
+<summary><b>环境变量</b>（点击展开）</summary>
+
+| 变量 | 默认 | 用途 |
+|---|---|---|
+| `PROJECT_ROOT` | `$(pwd)` | 待发版项目（须含 `VERSION` + `SKILL.md`） |
+| `PROJECT_NAME` | 由目录派生 | 产物 / tarball 名前缀 |
+| `SKILL_NAME` | 唯一 `skills/<name>/` | 平摊哪个 skill bundle |
+| `SKILL_EXCLUDE_PATTERNS` | `*-workspace\|*-evals` | skill 名识别排除的目录 |
+| `GH_TOKEN` | — | 仅用于无 `gh` 的发布兜底（优先 `gh auth login`） |
+
+</details>
+
+<details>
+<summary><b>影响发版的文件</b>（点击展开）</summary>
+
+| 文件 | 角色 |
+|---|---|
+| `VERSION` | 版本唯一真相源（在 skill bundle 内有镜像） |
+| `Release/CHANGELOG.md` / `_CN.md` | 中英历史 —— 发版闸读顶部条目 |
+| `.sanitize-ignore` | 敏感扫描器的白名单（有意的测试夹具） |
+| `references/docs-contract/manifest.txt` | `docs-audit` 强制的声明式文档契约 |
+
+</details>
+
+<sub>[↑ 回到顶部](#目录)</sub>
 
 ---
 
 ## 架构
 
-```
-gitx-release/
-├── SKILL.md                  # skill 清单（name: gitx-release，品牌：GitX）
-├── install.sh                # 四 CLI 安装器 + ~/.claude/commands/ shim
-├── scripts/                  # 双源（根 ≡ skills/gitx-release/scripts/）
-│   ├── gitx-release.sh       # wrapper：VERSION 递增 + CHANGELOG + 编排
-│   ├── release.sh            # 12 函数流水线
-│   ├── release-audit.sh      # Deep Audit（§0–§11）
-│   ├── release-sanitize.sh   # 6 类敏感扫描器
-│   ├── gitx-init.sh          # .gitx/ 政策生成器
-│   ├── gitx-sop.sh           # GitHub 发布 SOP 渲染器
-│   ├── lib/                  # detect-project、skill-creator-version、install-style
-│   └── vendored/skill-creator/  # Anthropic skill-creator（Apache-2.0，pin）
-├── commands/                 # slash shim（双源）→ ~/.claude/commands/
-├── references/               # TKX 政策 v2.3、gitx-init/、gitx-sop/ 模板
-├── tests/                    # 95+ BDD 套件（run_all.sh）
-└── Release/                  # 生成产物 + CHANGELOG（不入 git）
+```mermaid
+flowchart LR
+  A[版本一致性] --> B[CHANGELOG 闸]
+  B --> C[回归测试]
+  C --> D[双源检查]
+  D --> E[打包<br/>.skill + tarball + SBOM]
+  E --> F[敏感扫描<br/>认 .sanitize-ignore]
+  F --> G[文档平摊]
+  G --> H{release-audit.sh<br/>§0a–§0j}
+  H -->|通过| I[校验和 → RELEASE READY]
+  H -->|失败| X[ABORT]
+  subgraph gates [两道独立硬闸]
+    H
+    J[docs-audit.sh<br/>H1–H10 契约]
+  end
+  G --> J
+  J -->|失败| X
 ```
 
-**双源契约**：`scripts/` 与 `commands/` 在根与 `skills/gitx-release/` 下
-逐字节一致；`check_dual_source` + 审计 `§9` 一旦漂移即 abort。根布局是
-`install.sh` 读取的；bundle 是打进 `.skill` 的。
+两道独立硬闸，皆不可绕过。**`release-audit.sh §0j`** 跑 GitHub CI 跑的*同一条* shellcheck 命令——流水线再也不会对公开红叉视而不见。**`docs-audit.sh`** 强制文档契约：段集 + 顺序 + 双语结构平价 + 每个机器槽位等于 ground truth。两者都在产出任何产物前运行。
+
+**项目结构：**
+
+```
+GitX/
+├── SKILL.md                  智能体系统提示 + 触发词
+├── scripts/                  release.sh · release-audit.sh · release-sanitize.sh
+│                             docs-pipeline.sh · docs-audit.sh   （主）
+├── skills/gitx-release/      字节一致的打包镜像（CI 强制）
+├── references/
+│   ├── TKX_Git_Release_policy_and_process.md   行为契约
+│   ├── readme/               双树文档模板（中 + 英）
+│   └── docs-contract/        声明式文档契约
+├── tests/                    纯 Bash 套件 + 敌意夹具
+├── Release/CHANGELOG.md      英文历史（真相源）
+└── Release/CHANGELOG_CN.md   中文平行（结构平价）
+```
+
+**构建栈：** 纯 Bash 3.2+（POSIX）· awk（BSD 兼容）· shellcheck · CycloneDX SBOM —— 零外部运行时依赖。
+
+<sub>[↑ 回到顶部](#目录)</sub>
+
+---
+
+## 符号与状态系统
+
+每道闸报告五态之一；含义全项目固定，使输出可扫读、审计总数精确：
+
+| 符号 | 含义 | 计入 |
+|---|---|---|
+| ✅ | 通过 | PASS |
+| ❌ | 失败 —— 致命，中止发版 | FAIL |
+| ➖ | 跳过 —— 不适用 / 缺工具（通用安全） | SKIP |
+| ⚠️ | 软警告 —— 可见、不阻断 | —（非计数） |
+| ⛔ | 用户可解锁的门（有意的摩擦） | — |
+
+`TOTAL = PASS + FAIL + SKIP` 本身受审计（`§0i` 精确性，一个*非计数* meta-gate），所以新增一道闸绝不会静默 rot 掉头条数字。
+
+<sub>[↑ 回到顶部](#目录)</sub>
 
 ---
 
 ## 测试
 
+纯 Bash 测试架，零外部测试依赖。`bash tests/run_all.sh` 跑全量；流水线将其作为发版闸再跑一次。
+
 <!-- gitx:managed:suite-count -->
-102
+106
 <!-- /gitx:managed:suite-count -->
 
-| 层 | 内容 | 数量 |
-|----|------|------|
-| BDD 套件 | `tests/run_all.sh`（red→green TDD，每 cycle 一断言）| **102 / 0 fail** |
-| 深度审计 | `release-audit.sh` 静态闸（离线）| **240 PASS / 0 FAIL / 1 SKIP / ⚠️0** |
-| 可复现性 | 跨次运行逐字节相同 tarball | 强制（`§5` + 专测）|
-| 双源 | 根 ≡ bundle | 强制（`§9` + `check_dual_source`）|
-| 独立审查 | Codex 对抗式 + review gate（authoring/review 分离）| clean |
+**真机测试结果** —— 全套件绿 · 冒烟 6/6 · 深度审计严格 PASS · `shasum -c` OK。上方精确套件数由实时测试树机器派生、每次发版复核（绝不手工 stale）。
 
-每条已知坑（37+）都映射到一个回归测试或审计闸——
-缺陷不会静默复发。
+**套件覆盖：**
 
----
+| 领域 | 锁住什么 |
+|---|---|
+| 审计闸 | 三态计数、`§0f/§0g/§0h/§0i/§0j` 行为、精确性 meta-gate、SKIP 纪律 |
+| 敏感/脱敏 | 真阳真阴正则、`.sanitize-ignore` 白名单、夹具保持豁免 |
+| 双源/双树 | `scripts/` ≡ 打包镜像、`references/readme/` 平价、字节一致 |
+| CHANGELOG/版本 | awk 区间提取边界、版本 glob 路由（含两位次版本） |
+| gitx-init/gitx-sop | 模板完整性、只生成（不碰 git/gh）、凭证门正确性 |
+| README/文档 | 数值精确性、managed 区块重写幂等、`--check` 漂移退出码 |
+| 安装/输出 | 路径解析、dry-run 不碰文件、输出风格契约 |
+| 私有态 | 五-facet 泄漏排除、嵌套路径检测、良性夹具不误触 |
 
-## 安全模型
+**方法论。** TDD 铁律 —— RED（先写失败测试）→ GREEN（最小实现）→ 全量回归；没有失败测试就没有生产代码。审计*即*可执行政策：每条款都有证明它会触发的测试。夹具刻意敌意（植入密钥、畸形 manifest、两位次版本）且白名单化，使守护无法自我豁免。影响发版的改动另过双引擎对抗闭环，迭代到干净。
 
-- **不自动化上游**：流水线永不跑 `git push`/`gh release`。
-- **Fail-closed 闸**：测试、脱敏、双源、Deep Audit、redaction 验证——任一
-  失败即在产物被祝福前 abort。
-- **公开镜像隔离**（`/gitx-sop`）：只把已脱敏、版本钉死的 release tarball
-  推进独立 `.git` 的 per-release worktree；私有 remote 永不加入；token 仅
-  env，push 后从 remote URL scrub。
-- **供应链**：`install.sh` 校验 `checksums.txt`；内嵌 skill-creator 按
-  upstream commit pin；每版本附 SBOM。
+<sub>[↑ 回到顶部](#目录)</sub>
 
 ---
 
-## 参考与引用
+## 开发历程
 
-### 方法论与学术血缘
+GitX 的起点不是一个发版工具——而是拒绝凭信心发版。
 
-| 思想 | 用于 | 引用 |
-|------|------|------|
-| 不变量优于约定 | `diff -rq` 双源、谓词闸 | Dijkstra, *A Discipline of Programming*, 1976 |
-| 评估鸿沟 | 每步 `✅/❌/➖` 输出 | Norman, *The Design of Everyday Things*, 1988 |
-| 测试驱动开发 | 每个行为 red→green→refactor | Beck, *TDD: By Example*, 2002 |
-| SECI / 隐性知识 | 内部 dev-log 设计 | Nonaka & Takeuchi, *The Knowledge-Creating Company*, 1995 |
-| 语义化版本 | 版本契约 | [semver.org](https://semver.org)（Preston-Werner）|
-| 构建 provenance | 可复现 tarball | [slsa.dev](https://slsa.dev)、[reproducible-builds.org](https://reproducible-builds.org) |
-| SBOM | 依赖证明 | [CycloneDX](https://cyclonedx.org) 1.5（OWASP）|
+**2026-04-22 —— 原型。** 首个构建（`v0.9.4`）已带四个 CRITICAL Sprint-1 TDD 修复。`v0.9.5` 被**撤回、从未发出**——这次失败被永久编成一条 Gotcha 并变成守护。基调由此定下：每一道伤疤都变成政策。
 
-### 软件与署名
+**2026-04-29 → 五月初 —— 首个稳定 & 多项目验证。** `v1.0.0` 达稳定；`v1.1.x` 线通过自发版在*不止自己*上验证（发布一个兄弟 skill），加入供应链校验，经历真实跨机同步事故后变得 Syncthing 感知。`v1.5.0` 统一四 CLI 安装标准；`v1.6.0` 加 `gitx-init`。
 
-- **[Anthropic skill-creator](https://github.com/anthropics/skills)**——
-  Apache-2.0；内嵌于 `scripts/vendored/skill-creator/`（按 upstream commit
-  pin），使 `.skill` 打包自包含且无需联网或插件市场即可复现。许可证原样
-  保留。
-- **superpowers `test-driven-development`** skill——本项目自身开发每个
-  cycle 所遵循的 red→green 纪律。
-- **Codex CLI**（OpenAI）——独立对抗式审查，保持 authoring 与 review 处于
-  分离上下文。
+**2026-05-15 —— 纪律冲刺。** 单日发出九个 `v1.7.x` 补丁——一场系统性关闭发布 SOP 凭证门类缺陷、并围绕私有态构建五-facet 纵深防御的集中战役。`v1.8.x` 抬高公开页完整性；`v1.9.8` 根治 README 数值漂移并加 `§0f`。
 
-### 内部文档
+**2026-05-16 —— 元技能严苛。** `v1.10.0` 出 projen 代笔器 + `§0g/§0h/§0i`；`v1.10.1` 收敛五轮双引擎闭环 + 五-facet 私有态加固；`v1.11.0` 把文档抽成独立双语流水线、配硬 fail-closed 契约，并把 CI 的 shellcheck 闸搬进流水线本身；`v1.12.0`（本版）收敛六轮 `codex` 对抗审——hero 仅 origin、`H10` 严格、manifest 驱动强制。
 
-| 文档 | 用途 |
-|------|------|
-| [`references/TKX_Git_Release_policy_and_process.md`](references/TKX_Git_Release_policy_and_process.md) | 完整发版政策 v2.3（生命周期、pre-release 闸、脱敏、Deep Audit、低级错误库）|
-| [`docs/SKILL_CROSS_CLI_GUIDELINE.md`](docs/SKILL_CROSS_CLI_GUIDELINE.md) | 跨 CLI skill 编写规范 |
-| [`ROADMAP.md`](ROADMAP.md) | 通用化路线（非-skill 源码包）|
+**数字一览：**
+
+| 指标 | 值 |
+|---|---|
+| 原型 → 今 | 2026-04-22 → 2026-05-18（26 天） |
+| 发布 | ~60 个（v0.9.4 → v1.12.0） |
+| 提交 | 90 |
+| 测试套件 | 全绿 —— 见[测试](#测试) |
+| 审计检查 | 240（三态、精确性门控） |
+| 最硬一天 | 9 个补丁发布（2026-05-15 SOP 冲刺） |
+
+**状态：** 自 `v1.0.0`（2026-04-29）起稳定、production-ready；当前 GA `v1.12.0`。每次发版均经自身流水线自发版。
+
+**塑造它的关键决策：** 确定性文档生成（projen，LLM 不进回路）· fail-closed 默认 + 缺工具通用 SKIP · 非计数 meta-gate（`§0i`、`§0j`）· 私有态五-facet 对称平价 · 双语用平行 locale 文件 + 结构平价守护。
+
+<sub>[↑ 回到顶部](#目录)</sub>
+
+---
+
+## 审查与代码评审
+
+GitX 把评审当门，不当客套。作者与评审分离；每个影响发版的改动跑**双引擎对抗闭环**——一个独立评审 subagent 加 Codex，各自对 ground truth 复核findings，迭代到双方收敛。内部绿是必要但永不充分：完成的定义是*外部*的——CI 绿且渲染页符合契约。发出 `v1.10.1` 的那次五轮闭环是标准，不是例外。
+
+<sub>[↑ 回到顶部](#目录)</sub>
+
+---
+
+## 多模型 AI 协作
+
+GitX 靠让模型互相对抗构建，不信任任何单一模型：
+
+| 模型 | 角色 |
+|---|---|
+| Claude（Opus / Sonnet） | 主创作、TDD 执行、流水线推理 |
+| OpenAI Codex | 对抗评审 —— 挑战设计、假设、泄漏 |
+| Google Gemini | 独立第二引擎评审 / 交叉核对 |
+
+findings 对 ground truth（代码 + git + CHANGELOG）复核，绝不凭权威接受。这就是构建指标块按模型与会话累计 token 的原因——协作*本身*就是工程方法。
+
+<sub>[↑ 回到顶部](#目录)</sub>
+
+---
+
+## 研究与参考
+
+- **生成器设计**遵循 projen / terraform-docs / markdown-magic 谱系：确定性 managed 区块生成 + check 闸；LLM 绝不进确定性回路（仅首稿辅助）。
+- **行为契约** —— `references/TKX_Git_Release_policy_and_process.md`（脚本强制的真相源）。
+- **供应链** —— 可复现构建、SBOM（CycloneDX）、校验和验证的安装。
+
+<sub>[↑ 回到顶部](#目录)</sub>
+
+---
+
+## 安全
+
+GitX 是发版工具——它的威胁模型是*泄露应保密的*与*发出未经验证的*。
+
+- **私有 host 绝不进公开镜像** —— 五-facet 对称排除（`.gitignore` + `.sanitize-ignore` + rsync `--exclude` + 审计 fail-closed 正则 + rebrand 白名单），各 TDD 锁；检测*与*预防，双源。
+- **不自动写上游** —— `git push`/`tag`/GitHub Release 按政策由人工；流水线无法自行 push。
+- **敏感扫描 fail-closed** —— 认 `.sanitize-ignore`（不会误伤自身夹具）但遇任何真 token 即中止；在组装好的发布快照上再扫一次。
+- **供应链** —— 可复现源码 tarball、CycloneDX SBOM、`install.sh` 信任 bundle 前校验 `checksums.txt`。
+
+私下报告漏洞见 [`SECURITY.md`](SECURITY.md)。安全报告请勿开公开 issue。
+
+<sub>[↑ 回到顶部](#目录)</sub>
+
+---
+
+## 常见问题
+
+<details><summary><b>GitX 会替我 push 到 GitHub 或打 tag 吗？</b></summary>
+
+不会——按政策。影响上游的操作由人工。GitX 产出并验证发布物；人工监督的一步通过渲染出的 SOP runbook 发布。
+</details>
+
+<details><summary><b>用它需要 CI 吗？</b></summary>
+
+不需要。GitX 本地、push 前运行，无 CI 运行时。它*还*镜像 CI 跑的同一条 shellcheck 闸（`§0j`），所以流水线绿就意味着 CI 绿。
+</details>
+
+<details><summary><b>"0-issue 元技能"到底什么意思？</b></summary>
+
+任何公开发版前：全量绿、深度审计 `N/0`、双引擎对抗闭环收敛。内部绿是必要但永不充分——完成的定义是外部的（CI 绿 + 渲染页符合契约）。
+</details>
+
+<details><summary><b>它拒绝发版 / 中止了，为什么？</b></summary>
+
+某道 fail-closed 闸触发了——这是设计。读最后那行 `❌`：陈旧 CHANGELOG 条目、双源漂移、真密钥、文档数值漂移、或 shellcheck findings。修因；闸是特性，不是障碍。
+</details>
+
+<details><summary><b>为什么双语，且用平行文件而非内联翻译？</b></summary>
+
+确定性。内联 locale 标记脆弱，生成时翻译不可复现（LLM 进回路）。平行 locale 文件 + 结构平价守护让每篇可读且可机器校验。
+</details>
+
+<sub>[↑ 回到顶部](#目录)</sub>
 
 ---
 
 ## 兼容性
 
-| 要求 | 支持 |
-|------|------|
-| OS | macOS / Linux |
-| Shell | Bash 3.2+（POSIX）；BSD 与 GNU coreutils 均处理 |
-| git | 2.x |
-| Python | 可选——`python3 + venv` 跑内嵌 skill-creator；缺失时确定性 zip 回退 |
-| CLI | Claude Code · Codex · OpenCode · Gemini |
+| 面 | 支持 |
+|---|---|
+| Shell | Bash 3.2+（macOS 系统 bash）、POSIX |
+| 操作系统 | macOS · Linux |
+| CLI | Claude Code · Codex · OpenCode · Gemini（一次安装全覆盖） |
+| 可选 | `python3 + venv` —— skill-creator 校验，自举 |
+
+<sub>[↑ 回到顶部](#目录)</sub>
+
+---
+
+## 路线图
+
+**计划中：**
+
+- [ ] 双语契约从 README + CHANGELOG 扩展到 INSTALL / SKILL / 各命令文档
+- [ ] 兄弟仓上手（1by1X / ClaudeMeX / HandoffX）接入 gitx 文档标准
+- [ ] 中心 marketplace 作为 TKX 技能族单一安装入口
+
+**近期已交付：**
+
+- [x] 独立双语文档流水线 + 硬 `docs-audit` 契约 —— `v1.11.0`
+- [x] 与 GitHub CI 一致的流水线内 shellcheck 闸（`§0j`）—— `v1.11.0`
+
+完整已发布历史 → [`Release/CHANGELOG_CN.md`](Release/CHANGELOG_CN.md)。
+
+<sub>[↑ 回到顶部](#目录)</sub>
+
+---
+
+## 鸣谢
+
+致政策即代码的纪律、证明确定性文档生成的 projen 谱系，以及让一个自发布元技能保持诚实的多模型评审回路。
+
+**联系** — TKXLAB.AI · [github.com/tkxlab-ai](https://github.com/tkxlab-ai) · 项目：[github.com/tkxlab-ai/GitX](https://github.com/tkxlab-ai/GitX)
 
 ---
 
 ## 贡献
 
-见 [`CONTRIBUTING.md`](CONTRIBUTING.md)。底线：每个改动 TDD（先写失败
-测试）、双源保持逐字节一致、Deep Audit 保持全绿、authoring/review 分离
-上下文。
+欢迎 PR。流水线即门，不是形式：
+
+1. Fork 并开分支（`feat/<topic>`）。
+2. 先写失败测试（TDD 铁律——没有失败测试就没有生产代码）。
+3. 最小实现；保持 `scripts/` 与打包镜像字节一致（`bash scripts/sync-dual-source.sh`）。
+4. 过闸：`bash tests/run_all.sh` **且** `bash scripts/release-audit.sh <ver>` 深度审计 `N/0` **且** `docs-audit.sh` exit 0。
+5. 开 PR；CI（shellcheck · test-suite · audit-dry）必须绿。
+
+完整工作流见 [`CONTRIBUTING.md`](CONTRIBUTING.md)；社区行为准则见 [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)；私下报告漏洞见 [`SECURITY.md`](SECURITY.md)。
+
+---
+
+## 特别致谢
+
+与 **Claude（Opus / Sonnet）**、**OpenAI Codex**、**Google Gemini** 深度协作构建——它们不是自动补全，而是独立的对抗式评审者。每一个影响发版的改动都先过双引擎闭环才发出。GitX 本身就是多模型工程纪律的产物。
+
+<sub>[↑ 回到顶部](#目录)</sub>
+
+---
 
 ## 许可
 
-MIT — Copyright (c) 2026 TKXLAB.AI — <https://github.com/tkxlab-ai>
-内嵌 `scripts/vendored/skill-creator/` 为 Apache-2.0（Anthropic），许可证
-原地保留。
-
-<div align="center">
-
-**GitX** · TKX 通用发版流水线 · <https://github.com/tkxlab-ai/GitX>
-
-</div>
+MIT © TKXLAB.AI —— 见 [`LICENSE`](LICENSE)。个人与商业用途均免费；欢迎回链到 GitHub 组织。

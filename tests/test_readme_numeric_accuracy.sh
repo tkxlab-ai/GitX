@@ -25,7 +25,7 @@ echo "══ test_readme_numeric_accuracy.sh ══"
 # Live suite count — exactly how run_all.sh discovers suites (non-recursive:
 # count files, never execute run_all from inside a suite). run_all EXCLUDE
 # = run_all.sh|test_suite_structure.sh; run_all.sh is not test_*.sh.
-SUITES=$(ls "$SCRIPT_DIR"/test_*.sh 2>/dev/null | grep -vc 'test_suite_structure\.sh' || echo 0)
+n=0; for _f in "$SCRIPT_DIR"/test_*.sh; do [ -e "$_f" ] || continue; case "$_f" in */test_suite_structure.sh) ;; *) n=$((n+1));; esac; done; SUITES=$n
 echo "  live suite count (test_*.sh minus meta): $SUITES"
 
 for rf in "$ROOT/README.md" "$ROOT/README_CN.md"; do
@@ -76,9 +76,8 @@ done
 echo ""
 echo "§ gitx-readme managed-region boundary (v1.10.0)"
 grep -qF '<!-- gitx:managed:suite-count -->' "$ROOT/README.md" && ok "README has managed suite-count" || fail "no managed suite-count"
-grep -qF '<!-- gitx:managed:install -->' "$ROOT/README.md" && ok "README has managed install" || fail "no managed install"
 grep -qF '/plugin install gitx@tkx-skills' "$ROOT/README.md" && ok "README cites gitx@tkx-skills (feeds §0h)" || fail "missing central install"
-RC="$(ls -1 "$ROOT"/tests/test_*.sh 2>/dev/null | grep -vc 'test_suite_structure\.sh')"
+n=0; for _f in "$ROOT"/tests/test_*.sh; do [ -e "$_f" ] || continue; case "$_f" in */test_suite_structure.sh) ;; *) n=$((n+1));; esac; done; RC=$n
 awk '/gitx:managed:suite-count/{f=1;next}/\/gitx:managed:suite-count/{f=0}f' "$ROOT/README.md" | grep -qx "$RC" && ok "managed suite-count == filesystem ($RC)" || fail "suite-count mismatch want $RC"
 grep -qF '<!-- gitx:managed:whats-new -->' "$ROOT/README.md" && ok "README has managed whats-new (v1.10.1)" || fail "no managed whats-new"
 grep -qF '<!-- gitx:managed:command-surface -->' "$ROOT/README.md" && ok "README has managed command-surface (v1.10.1)" || fail "no managed command-surface"

@@ -108,7 +108,7 @@ done
 # 6: README documents BOTH install paths (plugin + install.sh) + namespacing
 if grep -q '/plugin marketplace add' "$ROOT/README.md" \
    && grep -q 'gitx:sop' "$ROOT/README.md" \
-   && grep -q -- './install.sh' "$ROOT/README.md"; then
+   && grep -qE 'install\.sh' "$ROOT/README.md"; then
     ok "README documents plugin install + namespaced cmd + install.sh"
 else
     fail "README missing plugin-install / namespaced-command / install.sh docs"

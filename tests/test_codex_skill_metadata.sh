@@ -47,11 +47,11 @@ for file in "$PROJECT_ROOT/agents/codex-commands.txt" "$PROJECT_ROOT/skills/gitx
     fi
 done
 
-if grep -q '\$gitx-release' "$PROJECT_ROOT/README.md" \
-    && grep -q '/skills' "$PROJECT_ROOT/README.md"; then
-    ok "README documents Codex $ skill invocation and /skills discovery"
+if grep -q '/gitx-release' "$PROJECT_ROOT/README.md" \
+    && grep -q 'gitx:sop' "$PROJECT_ROOT/README.md"; then
+    ok "README documents /gitx-release skill invocation and plugin command surface"
 else
-    fail "README missing Codex $ invocation or /skills discovery docs"
+    fail "README missing /gitx-release invocation or plugin command surface docs"
 fi
 
 if grep -q 'cp -R "$SELF_DIR/agents"' "$PROJECT_ROOT/install.sh"; then

@@ -48,7 +48,7 @@ if [ -x "$WRAPPER" ]; then
             grep -qE "\b$t\b" <<<"$help_out" || missing="$missing $t"
         done
         for c in 0 2 3 4; do
-            grep -qE "^[[:space:]]*$c[[:space:]]" <<<"$help_out" || missing="$missing exit=$c"
+            grep -qE "^[[:space:]]*${c}[[:space:]]" <<<"$help_out" || missing="$missing exit=$c"
         done
         if [ -z "$missing" ]; then
             ok "--help lists 5 type values + 4 exit codes"
@@ -220,7 +220,7 @@ if [ -x "$WRAPPER" ]; then
     fx="$(mktemp -d)"; mkdir -p "$fx/skills/foo"; echo "name: foo" > "$fx/skills/foo/SKILL.md"
     out="$( cd "$fx" && "$WRAPPER" --type=skill --dry-run </dev/null 2>&1 )"
     if [ -e "$fx/.gitx" ] || [ -e "$fx/RELEASE_GUIDELINE.md" ]; then
-        fail "--dry-run wrote files: $(ls -la "$fx" | grep -vE '^total|skills$|\\.$')"
+        fail "--dry-run wrote files: $(find "$fx" -maxdepth 1 ! -name 'skills' ! -name '.' ! -name '..' -ls 2>/dev/null)"
     elif ! grep -qE '(would|preview|dry-run).*\.gitx' <<<"$out"; then
         fail "--dry-run output did not preview .gitx actions (got: $(echo "$out" | head -2 | tr '\n' '|'))"
     else

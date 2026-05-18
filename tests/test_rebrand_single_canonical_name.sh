@@ -85,6 +85,15 @@ is_allowed_legacy_path() {
         ./tests/test_codex_skill_metadata.sh) return 0 ;;
         ./tests/test_install_sh_runtime.sh) return 0 ;;
         ./tests/test_audit_codex_command_selectors.sh) return 0 ;;
+        # Boss-signed bilingual README templates deliberately document
+        # $git-release-pipeline as the deprecated Codex selector alias
+        # (the inline comment reads: "deprecated alias of $gitx-release;
+        # codex-commands.txt only — not a slash command"). This is a
+        # documented-legacy reference, not a live path/identifier.
+        ./references/readme/README.template.md) return 0 ;;
+        ./references/readme/README_CN.template.md) return 0 ;;
+        ./skills/gitx-release/references/readme/README.template.md) return 0 ;;
+        ./skills/gitx-release/references/readme/README_CN.template.md) return 0 ;;
     esac
     return 1
 }

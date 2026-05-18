@@ -1,0 +1,49 @@
+# GitX documentation declarative contract — single source of truth.
+# docs-pipeline.sh generates to it; docs-audit.sh enforces it. No LLM in loop.
+h3_threshold: 8
+# cjk_allow path is resolved relative to $PROJECT_ROOT
+cjk_allow: references/docs-contract/cjk-allow.txt
+# hero_asset: optional showcase image. DECLARED here ⇒ H10 ENFORCES its
+# presence (this project ships it as a required, committed asset). OMITTED ⇒
+# the reserved docs/assets/release-demo.* slot is OPTIONAL — a downstream
+# skill scaffolding the reusable README template is not release-blocked on
+# an image only the origin ships. Host-agnostic: data-driven from this file.
+hero_asset: docs/assets/release-demo.jpeg
+
+region: badges
+region: build-metrics
+region: whats-new
+region: command-surface
+region: suite-count
+
+# README sections — ordered IDs, EN ≡ CN parallel. machine= slot flag.
+doc:README.md locale:en
+doc:README_CN.md locale:cn
+section: whats-new           machine:yes  region:whats-new
+section: table-of-contents   machine:no
+section: cli-in-action       machine:no
+section: why-gitx            machine:no
+section: comparison          machine:no
+section: command-surface     machine:yes  region:command-surface
+section: pipeline-audit-gates machine:no
+section: quick-start         machine:no
+section: configuration       machine:no
+section: architecture        machine:no
+section: symbol-state        machine:no
+section: testing             machine:yes  region:suite-count
+section: development-journey machine:no
+section: audits-code-review  machine:no
+section: multi-model-ai      machine:no
+section: research-references machine:no
+section: security            machine:no
+section: faq                 machine:no
+section: compatibility       machine:no
+section: roadmap             machine:no
+section: acknowledgments     machine:no
+section: contributing        machine:no
+section: special-thanks      machine:no
+section: license             machine:no
+
+# CHANGELOG — hand-authored parallel files; H5 = structural parity ONLY.
+doc:Release/CHANGELOG.md    locale:en source-of-truth:yes
+doc:Release/CHANGELOG_CN.md locale:cn parity:structural

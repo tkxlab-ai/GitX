@@ -270,6 +270,8 @@ release.sh 必须正则验证 `^v[0-9]+\.[0-9]+(\.[0-9]+)?(-(alpha|beta|rc)\.?[0
 | 🔌 MAC | `aa:bb:cc:dd:ee:ff` | — |
 | 🔑 SSH/GPG 指纹 | `SHA256:...` / `ssh-rsa AAAA...` | — |
 
+> **测试与开发硬规则（📁 类的前置约束）**：所有 test / fixture / script / 文档**必须**用默认系统环境变量（`$HOME`、`$PROJECT_ROOT` 等）或 `$HOME` / `~`——**禁止**任何会实际泄露用户名的硬编码目录（`/Users/<name>/`、`/home/<name>/`、`C:\Users\<name>\`）：既泄露用户名，又在他机/CI 上必然失败。本表 📁 行由 `release-sanitize.sh` 在每次发版 + §0 审计强制扫描，真实命中 fail-closed 阻断发布；§5.2 豁免目录仅限故意脏数据夹具，正常测试不在豁免内。
+
 ### 5.2 豁免目录
 
 - `tests/fixtures/` — 故意的脏测试数据
