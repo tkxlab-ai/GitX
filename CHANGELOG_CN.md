@@ -14,6 +14,14 @@
 
 ---
 
+## v1.12.2 — 2026-05-19
+
+### Fixed
+- **中文 README（`README_CN.md`）的「更新摘要 / 命令面」渲染成英文** —— `docs-pipeline` 的 `dp_whats_new` locale-blind（恒取英文 `Release/CHANGELOG.md`），`dp_command_surface` 硬编码一处英文标签。cn locale 现取手写真相源 `Release/CHANGELOG_CN.md`，「技能本体」标签本地化，中文页现读作中文。
+
+### Changed
+- **`docs-audit` H3（CN 英文长串探测器）不再整体跳过所有 `gitx:managed:` 区** —— 语言中立区（`badges` / `build-metrics` / `suite-count`）仍跳，但 `whats-new` + `command-surface` 散文现纳入扫描；中文 README 里出现英文长串即 fail 闸而非静默出货——隐藏此问题约每个版本的系统盲点已堵死。
+
 ## v1.12.1 — 2026-05-18
 
 ### Fixed

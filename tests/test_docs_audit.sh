@@ -155,6 +155,98 @@ fi
 rm -rf "$TMP_H3"
 trap - EXIT
 
+# --- T6b: H3 fires on an English run INSIDE a CN managed region. v1.12.2
+#          closes the systemic blindspot: pre-v1.12.2 H3 blanket-skipped
+#          EVERY gitx:managed region, so dp_whats_new emitting English into
+#          README_CN's whats-new shipped a Chinese page reading English for
+#          ~every release and NO gate caught it. This is the regression
+#          guard for that exact hole. ---
+TMP_H3M=$(mktemp -d)
+trap 'rm -rf "$TMP_H3M"' EXIT
+mkdir -p "$TMP_H3M/references/docs-contract" "$TMP_H3M/Release"
+cp "$MANIFEST" "$TMP_H3M/references/docs-contract/manifest.txt"
+cp "$REAL_ROOT/references/docs-contract/cjk-allow.txt" "$TMP_H3M/references/docs-contract/cjk-allow.txt"
+cp "$REAL_ROOT/README.md"    "$TMP_H3M/README.md"
+cp "$REAL_ROOT/README_CN.md" "$TMP_H3M/README_CN.md"
+cp "$REAL_ROOT/VERSION" "$TMP_H3M/VERSION"
+cp "$REAL_ROOT/Release/CHANGELOG.md" "$TMP_H3M/Release/CHANGELOG.md"
+[ -f "$REAL_ROOT/Release/CHANGELOG_CN.md" ] && cp "$REAL_ROOT/Release/CHANGELOG_CN.md" "$TMP_H3M/Release/CHANGELOG_CN.md" || true
+ln -s "$REAL_ROOT/tests" "$TMP_H3M/tests"
+# Put a 10-word English run INSIDE the cn whats-new managed region — exactly
+# what the locale-blind dp_whats_new used to emit.
+perl -0pi -e 's{(<!-- gitx:managed:whats-new -->\n).*?(\n<!-- /gitx:managed:whats-new -->)}{${1}**v9.9.9 — 2026-09-09**\n\n- alpha bravo charlie delta echo foxtrot golf hotel india juliet\n${2}}s' "$TMP_H3M/README_CN.md"
+if [ -f "$AUDIT" ]; then
+  # set -e-safe rc capture (Gotcha #3/#52): AND-OR list so a non-zero audit
+  # does not abort the test before rc is read.
+  _h3m_out=$(PROJECT_ROOT="$TMP_H3M" bash "$AUDIT" 2>&1) && rc_h3m=0 || rc_h3m=$?
+  if [ "$rc_h3m" -ne 0 ] && printf '%s\n' "$_h3m_out" | grep -q 'docs-audit H3.*README_CN'; then
+    ok "H3 fires on English INSIDE README_CN whats-new managed region (blindspot closed)"
+  else
+    fail "H3 did NOT catch EN inside CN whats-new region (rc=$rc_h3m) — v1.12.2 blindspot regression"
+  fi
+else
+  fail "T6b skipped: audit script missing"
+fi
+rm -rf "$TMP_H3M"
+trap - EXIT
+
+# --- T6c: positive reader-perspective — the REAL README_CN whats-new +
+#          command-surface managed regions MUST be CJK-bearing. A Chinese
+#          README that renders English machine prose is the v1.12.2 defect;
+#          this asserts the rendered page actually reads as Chinese. ---
+_cn_wn=$(awk '/<!-- gitx:managed:whats-new -->/,/<!-- \/gitx:managed:whats-new -->/' "$REAL_ROOT/README_CN.md" | grep -c '[一-龥]' 2>/dev/null || true)
+_cn_cs=$(awk '/<!-- gitx:managed:command-surface -->/,/<!-- \/gitx:managed:command-surface -->/' "$REAL_ROOT/README_CN.md" | grep -c '[一-龥]' 2>/dev/null || true)
+if [ "${_cn_wn:-0}" -gt 0 ] && [ "${_cn_cs:-0}" -gt 0 ]; then
+  ok "README_CN whats-new + command-surface are CJK-bearing (Chinese page reads Chinese)"
+else
+  fail "README_CN whats-new/command-surface not Chinese (wn=$_cn_wn cs=$_cn_cs) — locale regression"
+fi
+
+# --- T6d: Codex v1.12.2 [high] regression — a downstream repo with
+#          README_CN.md but only Release/CHANGELOG.md (no CHANGELOG_CN.md)
+#          must NOT get its cn whats-new silently blanked, and H3 must NOT
+#          newly fail it (generic-safe: strict only for bilingual adopters). ---
+# (d1) dp_whats_new cn falls back to EN (never empty) when no CHANGELOG_CN.
+TMP_FB=$(mktemp -d)
+trap 'rm -rf "$TMP_FB"' EXIT
+mkdir -p "$TMP_FB/Release"
+printf '# CL\n\n## v1.0.0 — 2026-01-01\n\n### Fixed\n- english fallback bullet alpha\n\n---\n' \
+  > "$TMP_FB/Release/CHANGELOG.md"   # deliberately NO CHANGELOG_CN.md
+_fb=$(DOCS_PIPELINE_LIB=1 PROJECT_ROOT="$TMP_FB" SKILL_NAME=x bash -c 'source "'"$REAL_ROOT"'/scripts/docs-pipeline.sh"; LOCALE=cn dp_whats_new' 2>/dev/null || true)
+if [ -n "$_fb" ]; then
+  ok "dp_whats_new cn falls back to EN when no CHANGELOG_CN (region not blanked)"
+else
+  fail "dp_whats_new cn EMPTY without CHANGELOG_CN — Codex v1.12.2 [high] regression (silent CN blank)"
+fi
+rm -rf "$TMP_FB"
+trap - EXIT
+
+# (d2) H3 generic-safe: EN inside README_CN whats-new + NO CHANGELOG_CN →
+#      H3 must NOT fire (contrast T6b which HAS CHANGELOG_CN and DOES fire).
+TMP_GS=$(mktemp -d)
+trap 'rm -rf "$TMP_GS"' EXIT
+mkdir -p "$TMP_GS/references/docs-contract" "$TMP_GS/Release"
+cp "$MANIFEST" "$TMP_GS/references/docs-contract/manifest.txt"
+cp "$REAL_ROOT/references/docs-contract/cjk-allow.txt" "$TMP_GS/references/docs-contract/cjk-allow.txt"
+cp "$REAL_ROOT/README.md"    "$TMP_GS/README.md"
+cp "$REAL_ROOT/README_CN.md" "$TMP_GS/README_CN.md"
+cp "$REAL_ROOT/VERSION" "$TMP_GS/VERSION"
+cp "$REAL_ROOT/Release/CHANGELOG.md" "$TMP_GS/Release/CHANGELOG.md"   # NO CHANGELOG_CN.md
+ln -s "$REAL_ROOT/tests" "$TMP_GS/tests"
+perl -0pi -e 's{(<!-- gitx:managed:whats-new -->\n).*?(\n<!-- /gitx:managed:whats-new -->)}{${1}**v9.9.9 — 2026-09-09**\n\n- alpha bravo charlie delta echo foxtrot golf hotel india juliet\n${2}}s' "$TMP_GS/README_CN.md"
+if [ -f "$AUDIT" ]; then
+  _gs_out=$(PROJECT_ROOT="$TMP_GS" bash "$AUDIT" 2>&1) && : || :
+  if printf '%s\n' "$_gs_out" | grep -q 'docs-audit H3.*README_CN'; then
+    fail "H3 fired on a downstream WITHOUT CHANGELOG_CN — newly breaks dependents (generic-safe regression)"
+  else
+    ok "H3 generic-safe: no CHANGELOG_CN → whats-new region not scanned (dependent not newly broken)"
+  fi
+else
+  fail "T6d(d2) skipped: audit script missing"
+fi
+rm -rf "$TMP_GS"
+trap - EXIT
+
 # --- T7: H3 passes — whitelist-only run in README_CN.md → exit 0 ---
 # Uses the tar methodology (includes tests/ + full tree) so H6 --check has an
 # accurate command-surface and does not produce spurious drift on this scratch.

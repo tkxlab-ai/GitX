@@ -169,7 +169,27 @@ dp_install(){
 }
 dp_whats_new(){
   local cl entry out
-  for cl in "$PROJECT_ROOT/Release/CHANGELOG.md" "$PROJECT_ROOT/CHANGELOG.md"; do
+  # v1.12.2 (locale-aware): the cn README's whats-new MUST render Chinese.
+  # Source it from the hand-authored CN changelog (Release/CHANGELOG_CN.md,
+  # H5 structural-parity-gated; root /CHANGELOG_CN.md is its generated
+  # mirror). en unchanged. Was locale-blind (always EN) — that shipped a
+  # Chinese README with an English whats-new for ~every release; the §2b
+  # "locale-invariant" assumption is retired now that CHANGELOG_CN.md is a
+  # real source-of-truth (docs-audit H3 now scans this region, prevent-rot).
+  # Codex v1.12.2 [high]: cn MUST fall back to the EN changelog when no
+  # CHANGELOG_CN.md exists. A downstream repo with README_CN.md but only the
+  # historically-supported Release/CHANGELOG.md would otherwise get its cn
+  # whats-new region blanked (empty output → dp_rewrite_file writes empty),
+  # silent doc corruption with exit 0. CN-first, EN-fallback = never empty;
+  # adopters of the bilingual changelog get Chinese, non-adopters keep their
+  # prior (EN-sourced) content unchanged — strictly backward-compatible.
+  local -a _cls
+  case "${LOCALE:-en}" in
+    cn) _cls=("$PROJECT_ROOT/Release/CHANGELOG_CN.md" "$PROJECT_ROOT/CHANGELOG_CN.md" \
+              "$PROJECT_ROOT/Release/CHANGELOG.md"    "$PROJECT_ROOT/CHANGELOG.md") ;;
+    *)  _cls=("$PROJECT_ROOT/Release/CHANGELOG.md"    "$PROJECT_ROOT/CHANGELOG.md") ;;
+  esac
+  for cl in "${_cls[@]}"; do
     [ -f "$cl" ] || continue
     entry=$(awk '/^## /{n++} n==1{print} n==2{exit}' "$cl" 2>/dev/null || true)
     [ -n "$entry" ] || continue
@@ -213,7 +233,7 @@ dp_whats_new(){
 }
 dp_command_surface(){
   local skill plug f pj="$PROJECT_ROOT/.claude-plugin/plugin.json" out cmd_dir plug_cmd_dirs
-  local _label_two_paths _label_a_prefix _label_b_prefix _label_b_na _label_footer_only
+  local _label_two_paths _label_a_prefix _label_b_prefix _label_b_na _label_footer_only _label_skill_self
   # Locale-aware framing labels (static text only; machine values — skill name,
   # plug name, command names — are locale-invariant identical bytes per §2b).
   case "${LOCALE:-en}" in
@@ -223,6 +243,7 @@ dp_command_surface(){
       _label_b_prefix='**B. 插件市场** — `/plugin marketplace add tkxlab-ai/marketplace` 然后 `/plugin install %s@tkx-skills`（`/%s` 冒号命名空间）'
       _label_b_na='**B. 插件安装** — 不适用：无 `.claude-plugin/plugin.json`；本技能仅通过路径 A（install.sh，扁平命令）安装。'
       _label_footer_only='> `/%s` 冒号前缀命令仅限插件（官方文档的插件命名空间设计）。install.sh 提供扁平 `/%s` + `/<cmd>`；冒号形式需要安装此插件，从不由扁平命令合成。'
+      _label_skill_self='技能本体'
       ;;
     *)
       _label_two_paths='Two install paths.'
@@ -230,6 +251,7 @@ dp_command_surface(){
       _label_b_prefix='**B. Plugin marketplace** — `/plugin marketplace add tkxlab-ai/marketplace` then `/plugin install %s@tkx-skills` (`/%s` colon namespace)'
       _label_b_na='**B. Plugin install** — N/A: no `.claude-plugin/plugin.json`; this skill installs only via path A (install.sh, flat commands).'
       _label_footer_only='> The `/%s` colon-prefixed commands are plugin-only (a plugin-namespacing design, per official docs). install.sh gives flat `/%s` + `/<cmd>`; the colon form requires this plugin install and is NEVER synthesized from flat commands.'
+      _label_skill_self='the skill itself'
       ;;
   esac
   skill="$(dp_skill_name)"
@@ -272,7 +294,7 @@ dp_command_surface(){
   out=$(
     printf '%s\n\n' "$_label_two_paths"
     printf -- '%s\n\n' "$_label_a_prefix"
-    printf -- '- `/%s` — the skill itself\n' "$skill"
+    printf -- '- `/%s` — %s\n' "$skill" "$_label_skill_self"
     if [ -n "$cmd_dir" ]; then
       for f in "$cmd_dir"/*.md; do [ -f "$f" ] || continue
         printf -- '- `/%s`\n' "$(basename "$f" .md)"; done

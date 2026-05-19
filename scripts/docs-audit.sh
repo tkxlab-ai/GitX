@@ -186,8 +186,16 @@ _check_h3() {
     wl_pattern=$(LC_ALL=C awk 'NF>0{print}' "$allow_file" | tr '\n' '|' | sed 's/|$//')
   fi
 
+  # Generic-safe (Codex v1.12.2 [high]): the whats-new/command-surface
+  # un-skip only applies when the project ADOPTED the bilingual changelog
+  # (Release/CHANGELOG_CN.md present). A downstream repo with README_CN.md
+  # but only CHANGELOG.md legitimately has EN-sourced (fallback) machine
+  # prose there — it must NOT newly fail their release. cnscan=1 → scan
+  # those regions (strict, GitX); cnscan=0 → keep skipping (status quo).
+  local _h3_cnscan=0
+  [ -f "$PROJECT_ROOT/Release/CHANGELOG_CN.md" ] && _h3_cnscan=1
   local snippet
-  snippet=$(LC_ALL=C awk -v thresh="$thresh" -v wl="$wl_pattern" '
+  snippet=$(LC_ALL=C awk -v thresh="$thresh" -v wl="$wl_pattern" -v cnscan="$_h3_cnscan" '
     BEGIN {
       n = split(wl, a, "|")
       for (i=1; i<=n; i++) allowed[a[i]] = 1
@@ -195,9 +203,22 @@ _check_h3() {
     # Skip fenced code blocks.
     /^```/ { fence = !fence; next }
     fence  { next }
-    # Skip gitx managed regions (machine-generated; English content in CN files
-    # by design — e.g. whats-new region is always EN, not a mixing defect).
-    /^<!-- gitx:managed:/  { managed = 1; next }
+    # Managed-region policy v1.12.2 closes the systemic blindspot that let
+    # a Chinese README ship an English whats-new for ~every release.
+    # NOTE: this comment is INSIDE the single-quoted awk program — keep it
+    # apostrophe-free and paren-free (an apostrophe terminates the awk
+    # string; SC1011). badges / build-metrics / suite-count are
+    # language-NEUTRAL machine values (shields URLs, version-date-model
+    # identifiers, a bare number) so they stay skipped. whats-new and
+    # command-surface are prose that MUST match the file own-locale
+    # language (cn now sourced from Release CHANGELOG_CN.md) so they are
+    # NOT skipped WHEN cnscan==1 (project adopted Release CHANGELOG_CN.md):
+    # a long English run there then fails H3 so an EN-in-CN whats-new
+    # regression can never silently ship again. cnscan==0 keeps the prior
+    # skip so a downstream without CHANGELOG_CN is not newly broken.
+    /^<!-- gitx:managed:(badges|build-metrics|suite-count) -->/ { managed = 1; next }
+    /^<!-- gitx:managed:(whats-new|command-surface) -->/         { managed = (cnscan == 1 ? 0 : 1); next }
+    /^<!-- gitx:managed:/   { managed = 1; next }
     /^<!-- \/gitx:managed:/ { managed = 0; next }
     managed { next }
     {

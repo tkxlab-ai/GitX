@@ -21,7 +21,7 @@ same standard it imposes on others: GitX releases GitX.
 
 <!-- gitx:managed:badges -->
 [![License](https://img.shields.io/badge/license-MIT-yellow.svg?style=for-the-badge)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-109%20suites%20%2F%200%20fail-brightgreen.svg?style=for-the-badge&logo=githubactions&logoColor=white)](tests/run_all.sh)
+[![Tests](https://img.shields.io/badge/tests-110%20suites%20%2F%200%20fail-brightgreen.svg?style=for-the-badge&logo=githubactions&logoColor=white)](tests/run_all.sh)
 [![Deep Audit](https://img.shields.io/badge/deep%20audit-246%2F0%2F1-brightgreen.svg?style=for-the-badge&logo=shieldsdotio&logoColor=white)](scripts/release-audit.sh)
 [![CLIs](https://img.shields.io/badge/CLI-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20OpenCode%20%C2%B7%20Gemini-6366f1.svg?style=for-the-badge&logo=anthropic&logoColor=white)](#quick-start)
 [![Shell](https://img.shields.io/badge/bash-3.2%2B%20POSIX-06b6d4.svg?style=for-the-badge&logo=gnubash&logoColor=white)](SKILL.md)
@@ -32,7 +32,7 @@ same standard it imposes on others: GitX releases GitX.
 </div>
 
 <!-- gitx:managed:build-metrics -->
-> 🛠 **Live build metrics** — Version **v1.12.1** · Released **2026-05-18** · Engineered with **Claude (Opus/Sonnet) · Codex · Gemini** across hundreds of sessions · Cumulative AI tokens since the first prototype (v0.9.4, 2026-04-22), estimated: **≈ 300M+ input/output + ≈ 3B+ cached** · Span: **~61 releases across 26 days** (2026-04-22 → 2026-05-18)
+> 🛠 **Live build metrics** — Version **v1.12.2** · Released **2026-05-19** · Engineered with **Claude (Opus/Sonnet) · Codex · Gemini** across hundreds of sessions · Cumulative AI tokens since the first prototype (v0.9.4, 2026-04-22), estimated: **≈ 300M+ input/output + ≈ 3B+ cached** · Span: **~61 releases across 26 days** (2026-04-22 → 2026-05-18)
 <!-- /gitx:managed:build-metrics -->
 
 **[Documentation](#table-of-contents) · [Changelog](CHANGELOG.md) · [Report a bug](https://github.com/tkxlab-ai/GitX/issues) · [Security](SECURITY.md)**
@@ -42,14 +42,10 @@ same standard it imposes on others: GitX releases GitX.
 ## What's New
 
 <!-- gitx:managed:whats-new -->
-**v1.12.1 — 2026-05-18**
+**v1.12.2 — 2026-05-19**
 
-- Public CHANGELOG links 404'd on GitHub — README linked `Release/CHANGELOG.md` / `Release/CHANGELOG_CN.md` (private-tree paths) but the published mirror flattens `Release/` away (Gotcha #80). Links now point to flat `CHANGELOG.md` / `CHANGELOG_CN.md`; root mirrors are generated from the source-of-truth `Release/CHANGELOG.md` before the source tarball, so the public changelog is full history, not a stale stub.
-- `CHANGELOG_CN.md` was never published — `release.sh` flatten shipped only the EN changelog; the CN parallel + a root mirror now ship so `README_CN`'s changelog link resolves.
-- `release.sh` derived the reproducible release date from the stale root `/CHANGELOG.md` (Gotcha #81); it now reads the source-of-truth `Release/CHANGELOG.md`, ending ~11 releases of silent wall-clock fallback.
-- README curated numbers had drifted from ground truth — the Deep-Audit citation read `245` while the live audit total is `246` (the `§0i` deep-audit-exactness gate), and "Full history (59 releases)" lagged the actual `61` CHANGELOG entries; both corrected across the bilingual README + templates + skill mirrors — the exact curated-number rot the `§0f`/`§0i` guards exist to catch.
-- `Quick Start` moved to right after `Why GitX` (before `Comparison`) via the docs-contract manifest; the ToC was reordered with it and is now guarded by a new `test_toc_order` assertion.
-- Added an `Install troubleshooting` subsection (EN + CN) covering the local git `insteadOf` HTTPS→SSH rewrite that breaks marketplace install, with web-verified remedies.
+- The Chinese README (`README_CN.md`) rendered an **English** What's New / Command Surface — `docs-pipeline`'s `dp_whats_new` was locale-blind (it always sourced the English `Release/CHANGELOG.md`) and `dp_command_surface` hard-coded one English label. The cn locale now sources the hand-authored `Release/CHANGELOG_CN.md`, and the "skill itself" label is localized, so a Chinese page reads as Chinese.
+- `docs-audit` H3 (the CN long-English-run detector) no longer blanket-skips every `gitx:managed:` region: language-neutral regions (`badges` / `build-metrics` / `suite-count`) stay skipped, but `whats-new` + `command-surface` prose is now scanned, so an English-in-a-Chinese-README regression fails the gate instead of shipping silently — the systemic blindspot that hid this for ~every release is closed.
 <!-- /gitx:managed:whats-new -->
 
 Full history (61 releases) → [`CHANGELOG.md`](CHANGELOG.md).
@@ -377,7 +373,7 @@ Every gate reports one of five states; the meaning is fixed project-wide so outp
 Pure-bash harness, zero external test dependencies. `bash tests/run_all.sh` runs everything; the pipeline re-runs it as a release gate.
 
 <!-- gitx:managed:suite-count -->
-109
+110
 <!-- /gitx:managed:suite-count -->
 
 **Real-Machine Test Results** — full suite green · smoke 6/6 · Deep Audit strict PASS · `shasum -c` OK. The exact suite count above is machine-derived from the live test tree and re-verified every release (it never goes stale by hand).

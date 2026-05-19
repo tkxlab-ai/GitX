@@ -2,6 +2,14 @@
 
 All notable changes per release, newest first. Chinese parallel: [`CHANGELOG_CN.md`](CHANGELOG_CN.md).
 
+## v1.12.2 — 2026-05-19
+
+### Fixed
+- The Chinese README (`README_CN.md`) rendered an **English** What's New / Command Surface — `docs-pipeline`'s `dp_whats_new` was locale-blind (it always sourced the English `Release/CHANGELOG.md`) and `dp_command_surface` hard-coded one English label. The cn locale now sources the hand-authored `Release/CHANGELOG_CN.md`, and the "skill itself" label is localized, so a Chinese page reads as Chinese.
+
+### Changed
+- `docs-audit` H3 (the CN long-English-run detector) no longer blanket-skips every `gitx:managed:` region: language-neutral regions (`badges` / `build-metrics` / `suite-count`) stay skipped, but `whats-new` + `command-surface` prose is now scanned, so an English-in-a-Chinese-README regression fails the gate instead of shipping silently — the systemic blindspot that hid this for ~every release is closed.
+
 ## v1.12.1 — 2026-05-18
 
 ### Fixed
