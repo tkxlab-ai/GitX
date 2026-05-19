@@ -18,7 +18,7 @@ same standard it imposes on others: GitX releases GitX.
 <!-- gitx:managed:badges -->
 [![License](https://img.shields.io/badge/license-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-102%20suites%20%2F%200%20fail-brightgreen.svg?style=for-the-badge&logo=githubactions&logoColor=white)](tests/run_all.sh)
-[![Deep Audit](https://img.shields.io/badge/deep%20audit-245%2F0%2F1-brightgreen.svg?style=for-the-badge&logo=shieldsdotio&logoColor=white)](scripts/release-audit.sh)
+[![Deep Audit](https://img.shields.io/badge/deep%20audit-246%2F0%2F1-brightgreen.svg?style=for-the-badge&logo=shieldsdotio&logoColor=white)](scripts/release-audit.sh)
 [![CLIs](https://img.shields.io/badge/CLI-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20OpenCode%20%C2%B7%20Gemini-6366f1.svg?style=for-the-badge&logo=anthropic&logoColor=white)](#quick-start)
 [![Shell](https://img.shields.io/badge/bash-3.2%2B%20POSIX-06b6d4.svg?style=for-the-badge&logo=gnubash&logoColor=white)](SKILL.md)
 [![Release](https://img.shields.io/github/v/release/tkxlab-ai/GitX?sort=semver&style=for-the-badge&logo=github&logoColor=white&color=gold)](https://github.com/tkxlab-ai/GitX/releases)
@@ -28,10 +28,10 @@ same standard it imposes on others: GitX releases GitX.
 </div>
 
 <!-- gitx:managed:build-metrics -->
-> 🛠 **Live build metrics** — Version **v1.11.0** · Released **2026-05-16** · Engineered with **Claude (Opus/Sonnet) · Codex · Gemini** across hundreds of sessions · Cumulative AI tokens since the first prototype (v0.9.4, 2026-04-22), estimated: **≈ 300M+ input/output + ≈ 3B+ cached** · Span: **~60 releases across 26 days** (2026-04-22 → 2026-05-18)
+> 🛠 **Live build metrics** — Version **v1.11.0** · Released **2026-05-16** · Engineered with **Claude (Opus/Sonnet) · Codex · Gemini** across hundreds of sessions · Cumulative AI tokens since the first prototype (v0.9.4, 2026-04-22), estimated: **≈ 300M+ input/output + ≈ 3B+ cached** · Span: **~61 releases across 26 days** (2026-04-22 → 2026-05-18)
 <!-- /gitx:managed:build-metrics -->
 
-**[Documentation](#table-of-contents) · [Changelog](Release/CHANGELOG.md) · [Report a bug](https://github.com/tkxlab-ai/GitX/issues) · [Security](SECURITY.md)**
+**[Documentation](#table-of-contents) · [Changelog](CHANGELOG.md) · [Report a bug](https://github.com/tkxlab-ai/GitX/issues) · [Security](SECURITY.md)**
 
 ---
 
@@ -47,7 +47,7 @@ same standard it imposes on others: GitX releases GitX.
 | v1.9.7 | 2026-05-16 | gitx-sop credential-gate systemic fix; five-facet defense-in-depth |
 <!-- /gitx:managed:whats-new -->
 
-Full history (59 releases) → [`Release/CHANGELOG.md`](Release/CHANGELOG.md).
+Full history (61 releases) → [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
@@ -56,10 +56,10 @@ Full history (59 releases) → [`Release/CHANGELOG.md`](Release/CHANGELOG.md).
 - [What's New](#whats-new)
 - [CLI in Action](#cli-in-action)
 - [Why GitX](#why-gitx)
+- [Quick Start](#quick-start)
 - [Comparison](#comparison)
 - [Command Surface](#command-surface)
 - [Pipeline & Audit Gates](#pipeline--audit-gates)
-- [Quick Start](#quick-start)
 - [Configuration](#configuration)
 - [Architecture](#architecture)
 - [Symbol & State System](#symbol--state-system)
@@ -92,7 +92,7 @@ $ /gitx-release --version v1.2.0
 ▸ package ................... git_release_skill-v1.2.0.skill + tarball + SBOM
 ▸ secret scan ............... .sanitize-ignore-aware → clean ✅
 ▸ doc flatten ............... commands/ + references/ → Release/
-▸ Deep Audit ................ ✅ 245 / ❌ 0 / ➖ 1   (§8 latest = expected SKIP; TOTAL == live total)
+▸ Deep Audit ................ ✅ 246 / ❌ 0 / ➖ 1   (§8 latest = expected SKIP; TOTAL == live total)
 ▸ checksums ................. sha256 × 6 written
 RELEASE READY · nothing pushed (push is user-manual by policy)
 ```
@@ -105,7 +105,7 @@ RELEASE READY · nothing pushed (push is user-manual by policy)
 
 **The problem.** Releasing is a ritual: bump the version everywhere, run the tests, scan for secrets, flatten docs into the bundle, prove integrity, audit the result, mirror to a public host without leaking the private one. Every step is skippable, and every skipped step is a future incident — a stale README, a leaked token, an unreproducible tarball, a tag with no release.
 
-**The approach — policy as code.** GitX's contract (`references/TKX_Git_Release_policy_and_process.md`) is not advisory prose; each clause is a runtime shell assertion. A violated policy does not warn — it **aborts the build**. The audit is 245 executable checks with a three-state result where `TOTAL = PASS + FAIL + SKIP` must hold exactly.
+**The approach — policy as code.** GitX's contract (`references/TKX_Git_Release_policy_and_process.md`) is not advisory prose; each clause is a runtime shell assertion. A violated policy does not warn — it **aborts the build**. The audit is 246 executable checks with a three-state result where `TOTAL = PASS + FAIL + SKIP` must hold exactly.
 
 **What makes it different:**
 
@@ -113,6 +113,52 @@ RELEASE READY · nothing pushed (push is user-manual by policy)
 - **Supply-chain hardened** — reproducible tarball, `checksums.txt` verified by `install.sh`, SBOM, private-state closed to a five-facet symmetric-parity standard.
 - **Fail-closed by construction** — missing tool → SKIP, never silent pass; generic guards never FAIL a dependent skill for tooling it lacks.
 - **A 0-issue meta-skill** — before any public release: full suite green, Deep Audit `N/0`, dual-engine adversarial closure converged. Never shipped on a proxy metric.
+
+<sub>[↑ back to top](#table-of-contents)</sub>
+
+---
+
+## Quick Start
+
+**1 · Prerequisites** — Bash 3.2+ (POSIX; macOS system bash works), git 2.x, optional `python3 + venv` (skill-creator validation auto-bootstraps a vendored copy + venv).
+
+**2 · Install — two ways**
+
+*Option A — Plugin marketplace (recommended for Claude Code plugin users):*
+```text
+/plugin marketplace add tkxlab-ai/marketplace
+/plugin install gitx@tkx-skills
+```
+
+*Option B — install.sh (one command, all four CLIs, no plugin system):*
+```bash
+git clone https://github.com/tkxlab-ai/GitX.git && cd GitX
+bash install.sh                 # → ~/.agents/skills/gitx-release (canonical)
+                                 #   + Claude Code & OpenCode symlinks
+                                 #   Codex & Gemini auto-discover
+bash install.sh --dry-run       # preview every action, touch nothing
+bash install.sh --force         # reinstall over an existing install — overwrites
+                                 #   installed command files WITHOUT backup (data-loss;
+                                 #   use deliberately, prefer --dry-run first)
+```
+
+**3 · Release any skill project**
+```bash
+cd your-skill-project
+/gitx-release                   # default: auto-increment patch, full pipeline
+/gitx-release --version v1.2.0  # explicit version
+bash ~/.agents/skills/gitx-release/scripts/release-audit.sh v1.2.0   # audit only
+```
+
+**4 · Teach a project to release** — `/gitx-init` scaffolds the contract; `/gitx-sop` renders the GitHub-publish runbook. Both generate only — a human-supervised AI executes.
+
+### Install troubleshooting
+
+If `/plugin install gitx@tkx-skills` fails with `Host key verification failed` / `No ED25519 host key is known for github.com`, your machine's git is rewriting the HTTPS clone to SSH — a **local git config**, not a GitX issue (it breaks *every* GitHub HTTPS clone on that machine). Pick one:
+
+1. **Remove the global HTTPS→SSH rewrite** (recommended — Claude Code clones public plugins over anonymous HTTPS). List your rewrites with `git config --global --get-regexp 'url\..*insteadof'`, then `--unset` (or `--unset-all` if multiple) the `url.<base>.insteadOf` entry it prints that rewrites `https://github.com/` to SSH.
+2. **Keep SSH, fix host verification** — verify the key against [GitHub's published SSH fingerprints](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints), or route SSH over the HTTPS port by adding to `~/.ssh/config`: `Host github.com` → `Hostname ssh.github.com`, `Port 443`, `User git` (a valid SSH key must be on your GitHub account).
+3. **Bypass the git clone** — fetch over HTTPS with `curl` (not git, so the rewrite does not apply) and run the installer: `curl -fsSL https://github.com/tkxlab-ai/GitX/archive/refs/heads/main.tar.gz | tar xz` then `cd GitX-main && ./install.sh`.
 
 <sub>[↑ back to top](#table-of-contents)</sub>
 
@@ -231,44 +277,6 @@ The release pipeline is a sequence of fail-closed stages; the audit is a set of 
 | `§0j` | shellcheck — the *exact* command GitHub CI runs, inside the pipeline |
 
 No automated `git push`/`tag` (upstream ops are user-manual); writes confined to `Release/` + `CHANGELOG`; the private host never reaches the public mirror (five-facet exclusion, TDD-locked). Reading the code shows *what*; the policy doc records *why*.
-
-<sub>[↑ back to top](#table-of-contents)</sub>
-
----
-
-## Quick Start
-
-**1 · Prerequisites** — Bash 3.2+ (POSIX; macOS system bash works), git 2.x, optional `python3 + venv` (skill-creator validation auto-bootstraps a vendored copy + venv).
-
-**2 · Install — two ways**
-
-*Option A — Plugin marketplace (recommended for Claude Code plugin users):*
-```text
-/plugin marketplace add tkxlab-ai/marketplace
-/plugin install gitx@tkx-skills
-```
-
-*Option B — install.sh (one command, all four CLIs, no plugin system):*
-```bash
-git clone https://github.com/tkxlab-ai/GitX.git && cd GitX
-bash install.sh                 # → ~/.agents/skills/gitx-release (canonical)
-                                 #   + Claude Code & OpenCode symlinks
-                                 #   Codex & Gemini auto-discover
-bash install.sh --dry-run       # preview every action, touch nothing
-bash install.sh --force         # reinstall over an existing install — overwrites
-                                 #   installed command files WITHOUT backup (data-loss;
-                                 #   use deliberately, prefer --dry-run first)
-```
-
-**3 · Release any skill project**
-```bash
-cd your-skill-project
-/gitx-release                   # default: auto-increment patch, full pipeline
-/gitx-release --version v1.2.0  # explicit version
-bash ~/.agents/skills/gitx-release/scripts/release-audit.sh v1.2.0   # audit only
-```
-
-**4 · Teach a project to release** — `/gitx-init` scaffolds the contract; `/gitx-sop` renders the GitHub-publish runbook. Both generate only — a human-supervised AI executes.
 
 <sub>[↑ back to top](#table-of-contents)</sub>
 
@@ -412,20 +420,20 @@ GitX did not begin as a release tool — it began as a refusal to ship on faith.
 
 **2026-05-15 — the discipline sprint.** Nine `v1.7.x` patch releases in a single day — a focused campaign that systematically closed a credential-gate class in the publish SOP and built five-facet defense-in-depth around private state. `v1.8.x` raised public-page completeness; `v1.9.8` root-caused README numeric rot and added `§0f`.
 
-**2026-05-16 — meta-skill rigor.** `v1.10.0` shipped the projen ghostwriter + `§0g/§0h/§0i`; `v1.10.1` converged a five-round dual-engine closure + five-facet private-state hardening; `v1.11.0` extracts docs into an independent bilingual pipeline with a hard fail-closed contract and pulls CI's shellcheck gate into the pipeline; `v1.12.0` (this release) converges a six-round `codex` adversarial review on the docs contract — origin-only hero, strict `H10`, manifest-driven enforcement.
+**2026-05-16 — meta-skill rigor.** `v1.10.0` shipped the projen ghostwriter + `§0g/§0h/§0i`; `v1.10.1` converged a five-round dual-engine closure + five-facet private-state hardening; `v1.11.0` extracts docs into an independent bilingual pipeline with a hard fail-closed contract and pulls CI's shellcheck gate into the pipeline; `v1.12.0` converges a six-round `codex` adversarial review on the docs contract — origin-only hero, strict `H10`, manifest-driven enforcement; `v1.12.1` (this release) fixes the public CHANGELOG-link layout (Gotcha #80/#81), ships the CN changelog, and reorders Quick Start.
 
 **Numbers at a glance:**
 
 | Metric | Value |
 |---|---|
 | Prototype → today | 2026-04-22 → 2026-05-18 (26 days) |
-| Releases | ~60 (v0.9.4 → v1.12.0) |
+| Releases | ~61 (v0.9.4 → v1.12.1) |
 | Commits | 90 |
 | Test suites | full green — see [Testing](#testing) |
 | Audit checks | 240 (three-state, exactness-gated) |
 | Hardest day | 9 patch releases (2026-05-15 SOP sprint) |
 
-**Status:** stable & production-ready since `v1.0.0` (2026-04-29); current GA `v1.12.0`. Self-baked through its own pipeline every release.
+**Status:** stable & production-ready since `v1.0.0` (2026-04-29); current GA `v1.12.1`. Self-baked through its own pipeline every release.
 
 **Key decisions:** deterministic doc generation (projen, no LLM in loop) · fail-closed default with generic-safe SKIP · non-counting meta-gates (`§0i`, `§0j`) · five-facet symmetric parity for private state · bilingual via parallel locale files with structural-parity guards.
 
@@ -539,7 +547,7 @@ Determinism. Inline locale markers are fragile and generate-time translation is 
 - [x] Independent bilingual documentation pipeline + hard `docs-audit` contract — `v1.11.0`
 - [x] In-pipeline shellcheck gate matching GitHub CI (`§0j`) — `v1.11.0`
 
-Full shipped history → [`Release/CHANGELOG.md`](Release/CHANGELOG.md).
+Full shipped history → [`CHANGELOG.md`](CHANGELOG.md).
 
 <sub>[↑ back to top](#table-of-contents)</sub>
 

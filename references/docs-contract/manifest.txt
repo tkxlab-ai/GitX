@@ -23,10 +23,10 @@ section: whats-new           machine:yes  region:whats-new
 section: table-of-contents   machine:no
 section: cli-in-action       machine:no
 section: why-gitx            machine:no
+section: quick-start         machine:no
 section: comparison          machine:no
 section: command-surface     machine:yes  region:command-surface
 section: pipeline-audit-gates machine:no
-section: quick-start         machine:no
 section: configuration       machine:no
 section: architecture        machine:no
 section: symbol-state        machine:no

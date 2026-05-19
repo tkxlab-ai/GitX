@@ -1395,6 +1395,65 @@ else
     fi
 fi
 
+# --- §0l published-layout ref gate (non-counting meta-gate, mirrors §0k) ---
+# Why (Gotcha #80): docs-audit H10 resolves README refs against the PRIVATE
+# source tree, where Release/CHANGELOG*.md exist. The thing actually
+# published to GitHub is the SOURCE TARBALL (SOP Phase 4 extracts it): it
+# carries the root /CHANGELOG{,_CN}.md mirrors + tests/ + scripts/ +
+# references/ + docs/ but NO Release/ dir. A link valid privately
+# (Release/CHANGELOG.md) thus 404s publicly. This gate re-resolves every
+# repo-local README ref against the EXTRACTED source tarball (the true
+# public layout) so private-valid/public-broken links abort the release.
+# Validating $DIR (the flattened distribution artifact) instead would be the
+# WRONG proxy — it false-fails on legit links like tests/run_all.sh that the
+# public source tree resolves. Non-counting (Gotcha #62: no _track_*, TOTAL
+# unchanged). Generic-safe (Gotcha #51): no source tarball → ➖ SKIP. Sets
+# PUBLAYOUT_FAIL=1 like the gates above so the final decision honors it.
+PUBLAYOUT_FAIL=0
+echo ""
+echo "§0l. published-layout ref gate (non-counting)"
+_pl_tar="$DIR/${PROJECT_NAME}-${VERSION}-source.tar.gz"
+if [ ! -f "$_pl_tar" ]; then
+    echo "  ➖ no source tarball in artifact — generic-safe SKIP"
+else
+    _pl_tmp=$(mktemp -d)
+    if tar xzf "$_pl_tar" -C "$_pl_tmp" 2>/dev/null; then
+        _pl_root="$_pl_tmp/${PROJECT_NAME}-${VERSION}"
+        [ -d "$_pl_root" ] || _pl_root="$(find "$_pl_tmp" -maxdepth 1 -mindepth 1 -type d | head -1)"
+        _pl_bad=0
+        if [ ! -f "$_pl_root/README.md" ]; then
+            echo "  ➖ extracted tree has no README.md — generic-safe SKIP"
+        else
+            for _rf in "$_pl_root/README.md" "$_pl_root/README_CN.md"; do
+                [ -f "$_rf" ] || continue
+                while IFS= read -r _ref; do
+                    [ -n "$_ref" ] || continue
+                    [ -e "$_pl_root/$_ref" ] || { echo "  ❌ unresolved in published layout: $_ref ($(basename "$_rf"))" >&2; _pl_bad=1; }
+                done <<EOF_PL
+$(LC_ALL=C awk '
+  { line=$0
+    while (match(line,/src="[^"]+"/)>0){ v=substr(line,RSTART+5,RLENGTH-6); sub(/#.*$/,"",v);
+      if(v!="" && v!~/^https?:\/\// && v!~/^mailto:/ && v!~/^#/) print v; line=substr(line,RSTART+RLENGTH) } }
+  { line=$0
+    while (match(line,/\]\([^)]+\)/)>0){ v=substr(line,RSTART+2,RLENGTH-3); sub(/#.*$/,"",v);
+      if(v!="" && v!~/^https?:\/\// && v!~/^mailto:/ && v!~/^#/) print v; line=substr(line,RSTART+RLENGTH) } }
+' "$_rf" | sort -u)
+EOF_PL
+            done
+            if [ "$_pl_bad" -eq 0 ]; then
+                echo "  ✅ every repo-local README ref resolves in the published source tree"
+            else
+                echo "  ❌ stale/private-only ref(s) would 404 in the public GitHub mirror — Gotcha #80"
+                PUBLAYOUT_FAIL=1
+            fi
+        fi
+    else
+        echo "  ❌ could not extract source tarball — cannot verify published layout"
+        PUBLAYOUT_FAIL=1
+    fi
+    rm -rf "$_pl_tmp"
+fi
+
 # Per-section summary (P3-2)
 echo ""
 echo "═══ Per-Section Summary ═══"
@@ -1415,7 +1474,7 @@ rm -f "$_SEC_LOG"
 
 echo ""
 echo "═══════════════════════════════════════════"
-if [ "$FAIL" -eq 0 ] && [ "${EXACTNESS_FAIL:-0}" -eq 0 ] && [ "${SHELLCHECK_FAIL:-0}" -eq 0 ] && [ "${DOCS_AUDIT_FAIL:-0}" -eq 0 ]; then
+if [ "$FAIL" -eq 0 ] && [ "${EXACTNESS_FAIL:-0}" -eq 0 ] && [ "${SHELLCHECK_FAIL:-0}" -eq 0 ] && [ "${DOCS_AUDIT_FAIL:-0}" -eq 0 ] && [ "${PUBLAYOUT_FAIL:-0}" -eq 0 ]; then
     echo "🎉 Deep Audit PASS  (✅$PASS / ❌$FAIL / ➖$SKIP / ⚠️$ADVISORY total $TOTAL)"
     echo "   上游发布未自动执行；如需发布，请人工复核产物、CHANGELOG 和仓库状态后再操作。"
     exit 0

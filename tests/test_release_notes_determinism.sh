@@ -32,12 +32,14 @@ else
     ok "release.sh: no bare RELEASE_DATE=\$(date +%Y-%m-%d) direct assignment"
 fi
 
-# ── Test 2: RELEASE_DATE derived from root CHANGELOG.md grep ──────────────
-if grep -qF 'CHANGELOG.md' "$RELEASE_SH" && \
-   grep -qE 'RELEASE_DATE=.*grep|grep.*oE.*[0-9]\{4\}.*CHANGELOG' "$RELEASE_SH"; then
-    ok "release.sh: RELEASE_DATE extracted from root CHANGELOG.md via grep"
+# ── Test 2: RELEASE_DATE derived from the SOURCE-OF-TRUTH Release/CHANGELOG.md
+#    (v1.12.1 Gotcha #81: was root /CHANGELOG.md — a generated/stale mirror
+#    lacking the version entry → silent wall-clock fallback). The date MUST
+#    come from Release/CHANGELOG.md, the §4-gated authored history.
+if grep -qE 'RELEASE_DATE=.*grep -m1 "\^## \$\{VERSION\} " "\$PROJECT_ROOT/Release/CHANGELOG\.md"' "$RELEASE_SH"; then
+    ok "release.sh: RELEASE_DATE extracted from Release/CHANGELOG.md (source of truth)"
 else
-    fail "release.sh: RELEASE_DATE not extracted from root CHANGELOG.md"
+    fail "release.sh: RELEASE_DATE not sourced from Release/CHANGELOG.md (Gotcha #81 regression)"
 fi
 
 # ── Test 3: SOURCE_DATE_EPOCH appears as RELEASE_DATE fallback ─────────────

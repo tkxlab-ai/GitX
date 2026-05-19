@@ -71,3 +71,10 @@ skills/gitx-release/references/gitx-sop/*
 # release.sh scans the staged source and the fresh .skill bundle separately.
 # Historical Release/* outputs are ignored for whole-repo local self-checks.
 Release/*
+
+# .gitx/ policy pack (GITHUB_RELEASE_SOP.md, marketplace-entry.json, …):
+# gitignored + release.sh --exclude'd private working memory (CLAUDE.md).
+# Its `git config user.email "noreply@github.com"` is the SOP's documented
+# public-safe publish identity, never shipped. Whitelisted so the whole-repo
+# self-check stays clean — same class as .github-publish-wt/* / .omc/*.
+.gitx/*

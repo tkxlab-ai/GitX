@@ -99,6 +99,11 @@ description: Demo for hot-patch test.
 EOF
 printf 'v0.0.1\n' > "$FIXTURE/skills/demo-skill/VERSION"
 printf 'v0.0.1\n' > "$FIXTURE/VERSION"
+# Precondition the real pipeline guarantees before build_source_tarball runs
+# (the §4 pre-flight CHANGELOG gate). This slice skips that gate, so seed
+# Release/CHANGELOG.md so inject_root_changelog_into_stage has its required
+# source-of-truth (v1.12.1 Codex round-4 [high] unified inject path).
+printf '# Changelog\n## v0.0.1 — 2026-01-01\n- fixture entry\n' > "$FIXTURE/Release/CHANGELOG.md"
 
 # Slice build_source_tarball + run_sanity_scans into a self-contained script
 SLICE=$(mktemp)
@@ -115,6 +120,12 @@ SLICE=$(mktemp)
     echo 'CLEANUP_EXTRAS=()'
     echo 'mkdir -p "$RELEASE_DIR"'
     echo 'run() { "$@"; }'
+    # build_source_tarball now delegates to two sibling helpers (v1.12.1
+    # Codex round-4 [high]: unified non-destructive staging inject + single
+    # deterministic pack recipe). The slice must carry them too, defined
+    # BEFORE build_source_tarball, or the modern path dies "command not found".
+    sed -n '/^inject_root_changelog_into_stage()/,/^}$/p' "$RELEASE_SH"
+    sed -n '/^pack_source_tarball_deterministic()/,/^}$/p' "$RELEASE_SH"
     sed -n '/^build_source_tarball()/,/^}$/p' "$RELEASE_SH"
     echo 'build_source_tarball'
     echo 'echo "STAGE_SUB after build = ${STAGE_SUB:-UNSET}"'

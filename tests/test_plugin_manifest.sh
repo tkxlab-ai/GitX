@@ -168,12 +168,17 @@ _stale=0
 _needle='marketplace add tkxlab-ai/Git[X]'   # matches the real literal; not itself the literal
 while IFS= read -r _f; do
     # exempt project-record / internal handoff artifacts (not shipped
-    # config): CHANGELOG, Release/, .git/, and the handoff v2 four-piece +
-    # backup (GOTCHAS.md / Handoff_Logs/ / Handoff_Decisions/ / HANDOFF*),
-    # which legitimately quote the stale form as history — same class as
-    # CHANGELOG. release.sh also --excludes these from the public mirror.
+    # config): CHANGELOG{,_CN} (root mirrors + Release/ source-of-truth),
+    # Release/, .git/, and the handoff v2 four-piece + backup (GOTCHAS.md /
+    # Handoff_Logs/ / Handoff_Decisions/ / HANDOFF*), which legitimately
+    # quote the stale form as immutable history — same class as CHANGELOG
+    # (Gotcha #66: never rewrite history). v1.12.1: */CHANGELOG_CN.md added
+    # — the root /CHANGELOG_CN.md mirror (new in v1.12.1, sibling of the
+    # already-exempt */CHANGELOG.md) carries the same historical entries;
+    # without this it false-fails on the v1.12.0 entry that DOCUMENTS the
+    # legacy-marketplace-add removal.
     case "$_f" in
-        */Release/*|*/CHANGELOG.md|*/.git/*) continue ;;
+        */Release/*|*/CHANGELOG.md|*/CHANGELOG_CN.md|*/.git/*) continue ;;
         */GOTCHAS.md|*/Handoff_Logs/*|*/Handoff_Decisions/*|*/Handoff_Logs.archive/*|*/HANDOFF.md|*/HANDOFF.md.bak|*/HANDOFF.md.pre-v2-backup|*/HANDOFF.archive.md) continue ;;
     esac
     _stale=1; fail "stale per-repo marketplace add in $_f"

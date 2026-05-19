@@ -158,14 +158,16 @@ preflight_checks() {
     echo ""
 
     # --- Pre-flight 0: CHANGELOG gate (§4 #5 — fail-fast before any artifact is created) ---
-    # Derive release date from root CHANGELOG header for reproducible builds.
-    # Priority: root CHANGELOG.md grep → SOURCE_DATE_EPOCH → wall-clock.
-    # v1.0.8 hardening (Arch #4): wall-clock is now LAST RESORT and emits a
-    # stderr warning. When SOURCE_DATE_EPOCH is also unset and no CHANGELOG
-    # date can be parsed, we still proceed (preserving v1.0.7 behaviour for
-    # bootstrap / first-release cases) but the warning makes the operator
-    # aware that the resulting RELEASE_NOTES.md is not byte-reproducible.
-    RELEASE_DATE=$(grep -m1 "^## ${VERSION} " "$PROJECT_ROOT/CHANGELOG.md" 2>/dev/null \
+    # Derive release date from the SOURCE-OF-TRUTH changelog
+    # (Release/CHANGELOG.md — the hand-authored accumulated history the §4
+    # gate below validates). Priority: Release/CHANGELOG.md → SOURCE_DATE_EPOCH
+    # → wall-clock. v1.12.1 fix (Gotcha #81): previously read root
+    # /CHANGELOG.md, now a generated mirror (historically a STALE stub) that
+    # lacked the version entry, so RELEASE_DATE silently wall-clock-fell-back
+    # for ~11 releases (non-byte-reproducible RELEASE_NOTES). The version
+    # entry is authored & gated in Release/CHANGELOG.md — read it there.
+    # v1.0.8 hardening (Arch #4): wall-clock is LAST RESORT + stderr warning.
+    RELEASE_DATE=$(grep -m1 "^## ${VERSION} " "$PROJECT_ROOT/Release/CHANGELOG.md" 2>/dev/null \
                    | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' || true)
     if [ -z "$RELEASE_DATE" ] && [ -n "${SOURCE_DATE_EPOCH:-}" ]; then
         RELEASE_DATE=$(date -u -r "$SOURCE_DATE_EPOCH" "+%Y-%m-%d" 2>/dev/null \
@@ -453,6 +455,130 @@ build_skill_package() {
     fi
 }
 
+# v1.12.1 (Gotcha #80/#81; Codex round-2 [high]): the public GitHub mirror is
+# built from the source tarball. Release/ is stripped from that tarball, and
+# README links are flat (`CHANGELOG.md`, `CHANGELOG_CN.md`) — so the tarball
+# MUST carry flat full-history changelogs or the public links 404 (P0/P0-2).
+#
+# The earlier approach `cp`'d Release/CHANGELOG*.md over the downstream
+# project's WORKING-TREE root CHANGELOG — a destructive, no-rollback generic
+# write: this script is a cross-project pipeline whose contract limits writes
+# to Release/ + a root CHANGELOG *append*; a full overwrite can nuke a
+# hand-authored root changelog, and on a later gate failure the mutation
+# persists (cleanup only reaps the release dir / staging temps). Codex
+# round-2 no-ship.
+#
+# Fix: inject into the tarball STAGING tree ONLY — STAGE_SUB is a mktemp
+# temp dir, NEVER $PROJECT_ROOT. The rsync path calls this after rsync and
+# before the deterministic touch+tar (so reproducibility holds). The scrub
+# path (`git archive HEAD`) cannot inject non-destructively; there the
+# committed root mirror must already be current, enforced fail-closed by
+# assert_changelog_tarball_parity (below) — never by a silent overwrite.
+# CN parallel is generic-safe (only injected when the source exists).
+inject_root_changelog_into_stage() {
+    if [ "$DRY_RUN" = "1" ]; then
+        echo "  [dry-run] Would inject Release/CHANGELOG{,_CN}.md → staging root (working tree untouched)"
+        return 0
+    fi
+    local pair src dest
+    for pair in "Release/CHANGELOG.md:CHANGELOG.md" "Release/CHANGELOG_CN.md:CHANGELOG_CN.md"; do
+        src="$PROJECT_ROOT/${pair%%:*}"
+        if [ ! -f "$src" ]; then
+            [ "$src" = "$PROJECT_ROOT/Release/CHANGELOG.md" ] \
+                && { echo "❌ inject_root_changelog_into_stage: $src missing" >&2; exit 1; }
+            continue
+        fi
+        # Codex round-3 [high]: `rsync -a` preserves a downstream root
+        # CHANGELOG symlink into STAGE_SUB; `cp` would write THROUGH it,
+        # escaping the staging sandbox into the symlink target (working-tree
+        # corruption — the exact thing this design promises never happens).
+        # Unlink the staged dest first so cp creates a fresh regular file,
+        # then assert it is not a symlink (fail-closed defense-in-depth).
+        dest="$STAGE_SUB/${pair##*:}"
+        rm -f -- "$dest"
+        # NOTE: no `cp --` — BSD/macOS cp rejects `--` (Codex round-5 [high];
+        # GitX advertises macOS/Bash 3.2). $src/$dest are fixed internal
+        # paths (not flag-injection vectors); the prior `rm -f -- "$dest"`
+        # already broke any preserved symlink, so plain cp is safe + portable.
+        cp "$src" "$dest"
+        if [ -L "$dest" ]; then
+            echo "❌ inject_root_changelog_into_stage: staged $dest is a symlink — aborting" >&2
+            exit 1
+        fi
+        echo "✅ staged ${pair##*:} from ${pair%%:*} (public tarball full history; working tree untouched)"
+    done
+}
+
+# Codex (v1.12.1 independent review, [high]): the rsync path injects flat
+# CHANGELOG{,_CN}.md into the staging tree (inject_root_changelog_into_stage,
+# above) so its tarball is current by construction. The scrub-tarball path
+# (`git archive HEAD`) CANNOT inject non-destructively — if a downstream
+# project's committed root mirror is stale, its public source tarball ships
+# the STALE CHANGELOG (Gotcha #81 class, scrub path). §0l only checks README
+# refs RESOLVE, not that changelog CONTENT is current. This gate is the
+# universal fail-closed post-condition for BOTH paths: it verifies the
+# ACTUAL built source tarball — the artifact that becomes the public GitHub
+# mirror — carries CHANGELOG{,_CN}.md byte-identical to the source-of-truth
+# Release/CHANGELOG{,_CN}.md (rsync: confirms injection; scrub: aborts with
+# an instruction to commit the regenerated mirror). CN is generic-safe.
+assert_changelog_tarball_parity() {
+    if [ "$DRY_RUN" = "1" ]; then
+        echo "  [dry-run] Would assert source tarball CHANGELOG{,_CN}.md == Release/CHANGELOG{,_CN}.md"
+        return 0
+    fi
+    local _cp_t _cp_pair _cp_src _cp_name _cp_got
+    _cp_t=$(mktemp -d)
+    CLEANUP_EXTRAS+=("$_cp_t")
+    if ! tar -xzf "$TAR_OUT" -C "$_cp_t" 2>/dev/null; then
+        echo "❌ changelog-parity: cannot extract $TAR_OUT to verify public CHANGELOG" >&2
+        exit 1
+    fi
+    for _cp_pair in "Release/CHANGELOG.md:CHANGELOG.md" "Release/CHANGELOG_CN.md:CHANGELOG_CN.md"; do
+        _cp_src="$PROJECT_ROOT/${_cp_pair%%:*}"
+        _cp_name="${_cp_pair##*:}"
+        # CN parallel is optional per the docs-contract (H5 generic-safe):
+        # only enforce when the source-of-truth file exists.
+        [ -f "$_cp_src" ] || continue
+        _cp_got=$(find "$_cp_t" -maxdepth 2 -name "$_cp_name" -type f 2>/dev/null | head -1)
+        if [ -z "$_cp_got" ]; then
+            echo "❌ changelog-parity: $_cp_name MISSING from source tarball (would 404 publicly) — aborting" >&2
+            exit 1
+        fi
+        if ! cmp -s "$_cp_src" "$_cp_got"; then
+            echo "❌ changelog-parity: source tarball $_cp_name != ${_cp_pair%%:*} (stale / scrub-uncommitted mirror would ship) — aborting" >&2
+            exit 1
+        fi
+        echo "✅ source tarball $_cp_name byte-identical to ${_cp_pair%%:*} (public changelog current)"
+    done
+}
+
+# Single deterministic source-tarball pack recipe (Gotcha #14: two builds of
+# the same staged tree → byte-identical .tar.gz; honors SOURCE_DATE_EPOCH,
+# SLSA). Codex round-4 [high]: extracted into ONE helper so BOTH the scrub
+# and rsync paths inject the source-of-truth changelog and re-pack via the
+# SAME recipe — path-agnostic, no second recipe to drift.
+# Globals: STAGE, STAGE_SUB, TAR_OUT, PROJECT_NAME, VERSION, DRY_RUN.
+pack_source_tarball_deterministic() {
+    local sde_touch
+    if [ -n "${SOURCE_DATE_EPOCH:-}" ]; then
+        sde_touch=$(date -u -r "$SOURCE_DATE_EPOCH" "+%Y%m%d%H%M.%S" 2>/dev/null \
+                    || date -u -d "@$SOURCE_DATE_EPOCH" "+%Y%m%d%H%M.%S" 2>/dev/null \
+                    || echo "200001010000.00")
+    else
+        sde_touch="200001010000.00"
+    fi
+    run find "$STAGE_SUB" -exec touch -t "$sde_touch" {} + || true
+    if [ "$DRY_RUN" = "1" ]; then
+        echo "  [dry-run] tar + gzip → $TAR_OUT"
+        return 0
+    fi
+    (
+        cd "$STAGE" && \
+        find "${PROJECT_NAME}-${VERSION}" -print | LC_ALL=C sort | \
+        tar --no-recursion --owner=0 --group=0 --numeric-owner -T - -cf -
+    ) 2>/dev/null | gzip -n > "$TAR_OUT"
+}
+
 build_source_tarball() {
     TAR_OUT="$RELEASE_DIR/${PROJECT_NAME}-${VERSION}-source.tar.gz"
 
@@ -495,6 +621,16 @@ build_source_tarball() {
         else
             tar -xzf "$TAR_OUT" -C "$STAGE"
         fi
+        # Codex round-4 [high]: scrub-tarball.sh archives HEAD, so a freshly
+        # edited (uncommitted) Release/CHANGELOG{,_CN}.md would NOT ship and
+        # the parity gate would dead-end the normal scrub release flow. Inject
+        # the source-of-truth changelog into the extracted STAGE_SUB (a temp
+        # dir — $PROJECT_ROOT untouched) and re-pack TAR_OUT with the single
+        # deterministic recipe. scrub's git-tracked-only cleanliness holds:
+        # we re-pack ITS extracted clean tree plus the changelog.
+        inject_root_changelog_into_stage
+        pack_source_tarball_deterministic
+        echo "   → $TAR_OUT (re-packed with source-of-truth CHANGELOG; $(du -h "$TAR_OUT" 2>/dev/null | cut -f1 || echo "dry-run"))"
         return 0
     fi
 
@@ -562,27 +698,15 @@ build_source_tarball() {
         "${SKILL_EXCLUDE[@]+"${SKILL_EXCLUDE[@]}"}" \
         "$PROJECT_ROOT/" "$STAGE_SUB/" 2>/dev/null
 
+    # Non-destructive: overwrite the staged flat CHANGELOG{,_CN}.md with the
+    # source-of-truth Release/ copies (rsync excludes Release/, so a stale
+    # committed root mirror would otherwise ship). STAGE_SUB is a temp dir —
+    # $PROJECT_ROOT is never touched. Before the deterministic touch+tar
+    # below, so tarball reproducibility holds.
+    inject_root_changelog_into_stage
+
     echo "📦 Building source tarball..."
-    # v0.9.8 (Gotcha #14): reproducible-build transforms so two consecutive
-    # releases of the same source produce byte-identical tarballs.
-    # v0.9.9 (feature A): honor SOURCE_DATE_EPOCH (Debian/Nix/SLSA standard).
-    if [ -n "${SOURCE_DATE_EPOCH:-}" ]; then
-        SDE_TOUCH=$(date -u -r "$SOURCE_DATE_EPOCH" "+%Y%m%d%H%M.%S" 2>/dev/null \
-                    || date -u -d "@$SOURCE_DATE_EPOCH" "+%Y%m%d%H%M.%S" 2>/dev/null \
-                    || echo "200001010000.00")
-    else
-        SDE_TOUCH="200001010000.00"
-    fi
-    run find "$STAGE_SUB" -exec touch -t "$SDE_TOUCH" {} + || true
-    if [ "$DRY_RUN" = "1" ]; then
-        echo "  [dry-run] tar + gzip → $TAR_OUT"
-    else
-        (
-            cd "$STAGE" && \
-            find "${PROJECT_NAME}-${VERSION}" -print | LC_ALL=C sort | \
-            tar --no-recursion --owner=0 --group=0 --numeric-owner -T - -cf -
-        ) 2>/dev/null | gzip -n > "$TAR_OUT"
-    fi
+    pack_source_tarball_deterministic
     echo "   → $TAR_OUT ($(du -h "$TAR_OUT" 2>/dev/null | cut -f1 || echo "dry-run"))"
 }
 
@@ -795,7 +919,7 @@ Release date: $RELEASE_DATE
 - \`${PROJECT_NAME}-${VERSION}-source.tar.gz\` — 完整源码包
 
 ### 平摊文档与安装脚本
-- \`README.md\` / \`INSTALL.md\` / \`CHANGELOG.md\` / \`TEST-SCENARIOS.md\` / \`SKILL.md\` / \`LICENSE\` / \`CONTRIBUTING.md\` / \`CODE_OF_CONDUCT.md\` / \`SECURITY.md\`
+- \`README.md\` / \`README_CN.md\` / \`INSTALL.md\` / \`CHANGELOG.md\` / \`CHANGELOG_CN.md\` / \`TEST-SCENARIOS.md\` / \`SKILL.md\` / \`LICENSE\` / \`CONTRIBUTING.md\` / \`CODE_OF_CONDUCT.md\` / \`SECURITY.md\`
 - \`install.sh\` — 平摊安装脚本（支持自举从同目录 .skill / tarball 解压）
 
 ## 快速安装
@@ -841,9 +965,16 @@ update_changelog() {
         echo "  [dry-run] Skipping CHANGELOG flatten"
         return 0
     fi
-    # --- 5. Flatten Release/CHANGELOG.md into release dir ---
+    # --- 5. Flatten Release/CHANGELOG.md (+ CN parallel) into release dir ---
     run cp "$PROJECT_ROOT/Release/CHANGELOG.md" "$RELEASE_DIR/CHANGELOG.md"
     echo "✅ Release/CHANGELOG.md 已平摊到 $RELEASE_DIR/（含 $VERSION 条目）"
+    # v1.12.1 (P0-2): CN parallel must ship next to CHANGELOG.md so the
+    # flattened artifact + .skill carry it and README_CN's
+    # [更新日志](CHANGELOG_CN.md) resolves. Generic-safe: only when present.
+    if [ -f "$PROJECT_ROOT/Release/CHANGELOG_CN.md" ]; then
+        run cp "$PROJECT_ROOT/Release/CHANGELOG_CN.md" "$RELEASE_DIR/CHANGELOG_CN.md"
+        echo "✅ Release/CHANGELOG_CN.md 已平摊到 $RELEASE_DIR/"
+    fi
 }
 
 run_deep_audit() {
@@ -963,6 +1094,7 @@ run_tests
 check_dual_source
 build_skill_package
 build_source_tarball
+assert_changelog_tarball_parity
 run_sanity_scans
 flatten_docs
 echo "📋 Running docs-audit ......... document contract (H1–H7 + H10)"

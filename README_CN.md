@@ -14,10 +14,14 @@
 
 [English](README.md) · [中文](README_CN.md)
 
+<p align="center">
+  <img src="https://github.com/tkxlab-ai/GitX/raw/main/docs/assets/release-demo.jpeg" alt="GitX 发版流水线" width="820">
+</p>
+
 <!-- gitx:managed:badges -->
 [![License](https://img.shields.io/badge/license-MIT-yellow.svg?style=for-the-badge)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-106%20suites%20%2F%200%20fail-brightgreen.svg?style=for-the-badge&logo=githubactions&logoColor=white)](tests/run_all.sh)
-[![Deep Audit](https://img.shields.io/badge/deep%20audit-245%2F0%2F1-brightgreen.svg?style=for-the-badge&logo=shieldsdotio&logoColor=white)](scripts/release-audit.sh)
+[![Tests](https://img.shields.io/badge/tests-109%20suites%20%2F%200%20fail-brightgreen.svg?style=for-the-badge&logo=githubactions&logoColor=white)](tests/run_all.sh)
+[![Deep Audit](https://img.shields.io/badge/deep%20audit-246%2F0%2F1-brightgreen.svg?style=for-the-badge&logo=shieldsdotio&logoColor=white)](scripts/release-audit.sh)
 [![CLIs](https://img.shields.io/badge/CLI-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20OpenCode%20%C2%B7%20Gemini-6366f1.svg?style=for-the-badge&logo=anthropic&logoColor=white)](#快速开始)
 [![Shell](https://img.shields.io/badge/bash-3.2%2B%20POSIX-06b6d4.svg?style=for-the-badge&logo=gnubash&logoColor=white)](SKILL.md)
 [![Release](https://img.shields.io/github/v/release/tkxlab-ai/GitX?sort=semver&style=for-the-badge&logo=github&logoColor=white&color=gold)](https://github.com/tkxlab-ai/GitX/releases)
@@ -27,26 +31,27 @@
 </div>
 
 <!-- gitx:managed:build-metrics -->
-> 🛠 **实时构建指标** — 版本 **v1.12.0** · 发版日期 **2026-05-18** · 由 **Claude（Opus/Sonnet）· Codex · Gemini** 跨数百会话打造 · 自首个原型（v0.9.4，2026-04-22）起累计 AI token 估算：**≈ 3 亿+ 输入/输出 + ≈ 30 亿+ 缓存** · 跨度：**26 天 ~60 个发布**（2026-04-22 → 2026-05-18）
+> 🛠 **实时构建指标** — 版本 **v1.12.1** · 发版日期 **2026-05-18** · 由 **Claude（Opus/Sonnet）· Codex · Gemini** 跨数百会话打造 · 自首个原型（v0.9.4，2026-04-22）起累计 AI token 估算：**≈ 3 亿+ 输入/输出 + ≈ 30 亿+ 缓存** · 跨度：**26 天 ~61 个发布**（2026-04-22 → 2026-05-18）
 <!-- /gitx:managed:build-metrics -->
 
-**[文档](#目录) · [更新日志](Release/CHANGELOG_CN.md) · [报告缺陷](https://github.com/tkxlab-ai/GitX/issues) · [安全](SECURITY.md)**
+**[文档](#目录) · [更新日志](CHANGELOG_CN.md) · [报告缺陷](https://github.com/tkxlab-ai/GitX/issues) · [安全](SECURITY.md)**
 
 ---
 
 ## 更新摘要
 
 <!-- gitx:managed:whats-new -->
-**v1.12.0 — 2026-05-18**
+**v1.12.1 — 2026-05-18**
 
-- Post-`v1.11.0` adversarial-review hardening — six successive `codex` findings closed at the class: a reusable template scaffolded a missing hero image; `docs-audit` `H10` lost origin enforcement; enforcement was contingent on a README reference; an optional `grep` under `set -euo pipefail` aborted the whole audit; the `hero_asset` declaration was wrongly mirrored into the bundled skill; a referenced missing asset was silently skipped.
-- `tests/test_docs_pipeline.sh` — the last `set -e`-unsafe `rc` capture converted to the project-standard safe idiom.
-- Hero showcase is origin-only — the hardcoded `<img>` was removed from the reusable README templates; the host-specific image now lives solely in the origin's live README, enforced by a manifest-driven `hero_asset:` gate, and `H10` is strict again.
-- README badges restyled to the `shields.io` `for-the-badge` family with brand logos; the `@machine` Tests token and the Deep-Audit citation stay byte-frozen so no gate invariant shifts.
-- Hero asset replaced with a Boss-supplied web-optimized build (`docs/assets/release-demo.jpeg`) — smaller, content-equivalent.
+- Public CHANGELOG links 404'd on GitHub — README linked `Release/CHANGELOG.md` / `Release/CHANGELOG_CN.md` (private-tree paths) but the published mirror flattens `Release/` away (Gotcha #80). Links now point to flat `CHANGELOG.md` / `CHANGELOG_CN.md`; root mirrors are generated from the source-of-truth `Release/CHANGELOG.md` before the source tarball, so the public changelog is full history, not a stale stub.
+- `CHANGELOG_CN.md` was never published — `release.sh` flatten shipped only the EN changelog; the CN parallel + a root mirror now ship so `README_CN`'s changelog link resolves.
+- `release.sh` derived the reproducible release date from the stale root `/CHANGELOG.md` (Gotcha #81); it now reads the source-of-truth `Release/CHANGELOG.md`, ending ~11 releases of silent wall-clock fallback.
+- README curated numbers had drifted from ground truth — the Deep-Audit citation read `245` while the live audit total is `246` (the `§0i` deep-audit-exactness gate), and "Full history (59 releases)" lagged the actual `61` CHANGELOG entries; both corrected across the bilingual README + templates + skill mirrors — the exact curated-number rot the `§0f`/`§0i` guards exist to catch.
+- `Quick Start` moved to right after `Why GitX` (before `Comparison`) via the docs-contract manifest; the ToC was reordered with it and is now guarded by a new `test_toc_order` assertion.
+- Added an `Install troubleshooting` subsection (EN + CN) covering the local git `insteadOf` HTTPS→SSH rewrite that breaks marketplace install, with web-verified remedies.
 <!-- /gitx:managed:whats-new -->
 
-完整历史（59 个发布）→ [`Release/CHANGELOG_CN.md`](Release/CHANGELOG_CN.md)。
+完整历史（61 个发布）→ [`CHANGELOG_CN.md`](CHANGELOG_CN.md)。
 
 ---
 
@@ -55,10 +60,10 @@
 - [更新摘要](#更新摘要)
 - [命令行实况](#命令行实况)
 - [为什么选择 GitX](#为什么选择-gitx)
+- [快速开始](#快速开始)
 - [横向对比](#横向对比)
 - [命令面](#命令面)
 - [流水线与审计闸](#流水线与审计闸)
-- [快速开始](#快速开始)
 - [配置](#配置)
 - [架构](#架构)
 - [符号与状态系统](#符号与状态系统)
@@ -80,11 +85,6 @@
 
 ## 命令行实况
 
-<!-- 视觉资产：人工提供，文件置于 docs/assets/release-demo.* —— 非流水线生成、非 @machine；docs-audit 只校验引用 + 文件在场，绝不校验图像内容 -->
-<p align="center">
-  <img src="docs/assets/release-demo.jpeg" alt="GitX 发版流水线 —— 终端实况" width="820">
-</p>
-
 <details><summary>文本转录（无障碍回退）</summary>
 
 ```console
@@ -96,7 +96,7 @@ $ /gitx-release --version v1.2.0
 ▸ 打包 .................. git_release_skill-v1.2.0.skill + tarball + SBOM
 ▸ 敏感扫描 .............. 认 .sanitize-ignore → 干净 ✅
 ▸ 文档平摊 .............. commands/ + references/ → Release/
-▸ 深度审计 .............. ✅ 245 / ❌ 0 / ➖ 1（§8 latest = 预期 SKIP；TOTAL == 实时总数）
+▸ 深度审计 .............. ✅ 246 / ❌ 0 / ➖ 1（§8 latest = 预期 SKIP；TOTAL == 实时总数）
 ▸ 校验和 ................ sha256 × 6 写入
 RELEASE READY · 未推送（按政策 push 由人工执行）
 ```
@@ -109,7 +109,7 @@ RELEASE READY · 未推送（按政策 push 由人工执行）
 
 **问题。** 发版是一套仪式：到处改版本号、跑测试、扫密钥、把文档平摊进 bundle、证明完整性、审计结果、镜像到公开仓而不泄露私有仓。每一步都可跳过，每一处跳过都是未来的事故——陈旧的 README、泄露的 token、复现不出的 tarball、有 tag 没 release。
 
-**做法——政策即代码。** GitX 的契约（`references/TKX_Git_Release_policy_and_process.md`）不是建议性散文，每一条款都是运行时 shell 断言。违反的政策不会警告——它**中止构建**。审计是 245 条可执行检查，三态结果，`TOTAL = PASS + FAIL + SKIP` 必须精确成立。
+**做法——政策即代码。** GitX 的契约（`references/TKX_Git_Release_policy_and_process.md`）不是建议性散文，每一条款都是运行时 shell 断言。违反的政策不会警告——它**中止构建**。审计是 246 条可执行检查，三态结果，`TOTAL = PASS + FAIL + SKIP` 必须精确成立。
 
 **与众不同之处：**
 
@@ -117,6 +117,51 @@ RELEASE READY · 未推送（按政策 push 由人工执行）
 - **供应链加固** —— 可复现 tarball、`install.sh` 信任前校验 `checksums.txt`、产出 SBOM、私有态泄漏面收敛到五-facet 对称平价标准。
 - **构造上 fail-closed** —— 缺工具→SKIP，绝不静默放过；通用守护绝不因依赖技能缺工具而 FAIL。
 - **0-issue 元技能** —— 任何公开发版前：全量绿、深度审计 `N/0`、双引擎对抗闭环收敛。从不靠代理指标发版。
+
+<sub>[↑ 回到顶部](#目录)</sub>
+
+---
+
+## 快速开始
+
+**1 · 前置** — Bash 3.2+（POSIX；macOS 系统 bash 可用）、git 2.x、可选 `python3 + venv`（skill-creator 校验自举一份 vendored 副本 + venv）。
+
+**2 · 安装 —— 两种方式**
+
+*方式 A —— 插件市场（Claude Code 插件用户推荐）：*
+```text
+/plugin marketplace add tkxlab-ai/marketplace
+/plugin install gitx@tkx-skills
+```
+
+*方式 B —— install.sh（一条命令，全四个 CLI，无需插件系统）：*
+```bash
+git clone https://github.com/tkxlab-ai/GitX.git && cd GitX
+bash install.sh                 # → ~/.agents/skills/gitx-release（规范路径）
+                                 #   + Claude Code 与 OpenCode 软链
+                                 #   Codex 与 Gemini 自动发现
+bash install.sh --dry-run       # 预览每个动作，不碰任何文件
+bash install.sh --force         # 在已有安装上重装 —— 无备份覆盖已装命令文件
+                                 #   （有数据丢失风险；请谨慎使用，建议先 --dry-run）
+```
+
+**3 · 发布任意 skill 项目**
+```bash
+cd your-skill-project
+/gitx-release                   # 默认：自动递增 patch，完整流水线
+/gitx-release --version v1.2.0  # 显式版本
+bash ~/.agents/skills/gitx-release/scripts/release-audit.sh v1.2.0   # 仅审计
+```
+
+**4 · 教会一个项目发版** — `/gitx-init` 生成契约；`/gitx-sop` 渲染 GitHub 发布 runbook。两者只生成 —— 由人工监督的 AI 执行。
+
+### 安装疑难
+
+若 `/plugin install gitx@tkx-skills` 报 `Host key verification failed` / `No ED25519 host key is known for github.com`：是你机器的 git 把 HTTPS clone 改写成了 SSH —— **本机 git 配置**问题，非 GitX（该机任何 GitHub HTTPS clone 都会这样）。三选一：
+
+1. **移除全局 HTTPS→SSH 改写**（推荐 —— Claude Code 用匿名 HTTPS clone 公开插件）：用 `git config --global --get-regexp 'url\..*insteadof'` 列出改写，再 `--unset`（多个用 `--unset-all`）其中把 `https://github.com/` 改写成 SSH 的 `url.<base>.insteadOf` 项。
+2. **保留 SSH、修主机校验** —— 对照 [GitHub 官方 SSH 指纹](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints) 核验，或在 `~/.ssh/config` 走 HTTPS 端口：`Host github.com` → `Hostname ssh.github.com`、`Port 443`、`User git`（GitHub 账号须挂有效 SSH key）。
+3. **绕过 git clone** —— 用 `curl`（非 git，改写不生效）走 HTTPS 取仓再装：`curl -fsSL https://github.com/tkxlab-ai/GitX/archive/refs/heads/main.tar.gz | tar xz` 然后 `cd GitX-main && ./install.sh`。
 
 <sub>[↑ 回到顶部](#目录)</sub>
 
@@ -226,43 +271,6 @@ bash ~/.agents/skills/gitx-release/scripts/release-sanitize.sh ./dist
 
 ---
 
-## 快速开始
-
-**1 · 前置** — Bash 3.2+（POSIX；macOS 系统 bash 可用）、git 2.x、可选 `python3 + venv`（skill-creator 校验自举一份 vendored 副本 + venv）。
-
-**2 · 安装 —— 两种方式**
-
-*方式 A —— 插件市场（Claude Code 插件用户推荐）：*
-```text
-/plugin marketplace add tkxlab-ai/marketplace
-/plugin install gitx@tkx-skills
-```
-
-*方式 B —— install.sh（一条命令，全四个 CLI，无需插件系统）：*
-```bash
-git clone https://github.com/tkxlab-ai/GitX.git && cd GitX
-bash install.sh                 # → ~/.agents/skills/gitx-release（规范路径）
-                                 #   + Claude Code 与 OpenCode 软链
-                                 #   Codex 与 Gemini 自动发现
-bash install.sh --dry-run       # 预览每个动作，不碰任何文件
-bash install.sh --force         # 在已有安装上重装 —— 无备份覆盖已装命令文件
-                                 #   （有数据丢失风险；请谨慎使用，建议先 --dry-run）
-```
-
-**3 · 发布任意 skill 项目**
-```bash
-cd your-skill-project
-/gitx-release                   # 默认：自动递增 patch，完整流水线
-/gitx-release --version v1.2.0  # 显式版本
-bash ~/.agents/skills/gitx-release/scripts/release-audit.sh v1.2.0   # 仅审计
-```
-
-**4 · 教会一个项目发版** — `/gitx-init` 生成契约；`/gitx-sop` 渲染 GitHub 发布 runbook。两者只生成 —— 由人工监督的 AI 执行。
-
-<sub>[↑ 回到顶部](#目录)</sub>
-
----
-
 ## 配置
 
 零配置即可运行——一切环境派生。仅当项目布局与约定不同才需覆盖。
@@ -365,7 +373,7 @@ GitX/
 纯 Bash 测试架，零外部测试依赖。`bash tests/run_all.sh` 跑全量；流水线将其作为发版闸再跑一次。
 
 <!-- gitx:managed:suite-count -->
-106
+109
 <!-- /gitx:managed:suite-count -->
 
 **真机测试结果** —— 全套件绿 · 冒烟 6/6 · 深度审计严格 PASS · `shasum -c` OK。上方精确套件数由实时测试树机器派生、每次发版复核（绝不手工 stale）。
@@ -399,20 +407,20 @@ GitX 的起点不是一个发版工具——而是拒绝凭信心发版。
 
 **2026-05-15 —— 纪律冲刺。** 单日发出九个 `v1.7.x` 补丁——一场系统性关闭发布 SOP 凭证门类缺陷、并围绕私有态构建五-facet 纵深防御的集中战役。`v1.8.x` 抬高公开页完整性；`v1.9.8` 根治 README 数值漂移并加 `§0f`。
 
-**2026-05-16 —— 元技能严苛。** `v1.10.0` 出 projen 代笔器 + `§0g/§0h/§0i`；`v1.10.1` 收敛五轮双引擎闭环 + 五-facet 私有态加固；`v1.11.0` 把文档抽成独立双语流水线、配硬 fail-closed 契约，并把 CI 的 shellcheck 闸搬进流水线本身；`v1.12.0`（本版）收敛六轮 `codex` 对抗审——hero 仅 origin、`H10` 严格、manifest 驱动强制。
+**2026-05-16 —— 元技能严苛。** `v1.10.0` 出 projen 代笔器 + `§0g/§0h/§0i`；`v1.10.1` 收敛五轮双引擎闭环 + 五-facet 私有态加固；`v1.11.0` 把文档抽成独立双语流水线、配硬 fail-closed 契约，并把 CI 的 shellcheck 闸搬进流水线本身；`v1.12.0` 收敛六轮 `codex` 对抗审——hero 仅 origin、`H10` 严格、manifest 驱动强制；`v1.12.1`（本版）修复公开 CHANGELOG 链接布局（Gotcha #80/#81）、补发 CN changelog、重排 Quick Start。
 
 **数字一览：**
 
 | 指标 | 值 |
 |---|---|
 | 原型 → 今 | 2026-04-22 → 2026-05-18（26 天） |
-| 发布 | ~60 个（v0.9.4 → v1.12.0） |
+| 发布 | ~61 个（v0.9.4 → v1.12.1） |
 | 提交 | 90 |
 | 测试套件 | 全绿 —— 见[测试](#测试) |
 | 审计检查 | 240（三态、精确性门控） |
 | 最硬一天 | 9 个补丁发布（2026-05-15 SOP 冲刺） |
 
-**状态：** 自 `v1.0.0`（2026-04-29）起稳定、production-ready；当前 GA `v1.12.0`。每次发版均经自身流水线自发版。
+**状态：** 自 `v1.0.0`（2026-04-29）起稳定、production-ready；当前 GA `v1.12.1`。每次发版均经自身流水线自发版。
 
 **塑造它的关键决策：** 确定性文档生成（projen，LLM 不进回路）· fail-closed 默认 + 缺工具通用 SKIP · 非计数 meta-gate（`§0i`、`§0j`）· 私有态五-facet 对称平价 · 双语用平行 locale 文件 + 结构平价守护。
 
@@ -526,7 +534,7 @@ GitX 是发版工具——它的威胁模型是*泄露应保密的*与*发出未
 - [x] 独立双语文档流水线 + 硬 `docs-audit` 契约 —— `v1.11.0`
 - [x] 与 GitHub CI 一致的流水线内 shellcheck 闸（`§0j`）—— `v1.11.0`
 
-完整已发布历史 → [`Release/CHANGELOG_CN.md`](Release/CHANGELOG_CN.md)。
+完整已发布历史 → [`CHANGELOG_CN.md`](CHANGELOG_CN.md)。
 
 <sub>[↑ 回到顶部](#目录)</sub>
 

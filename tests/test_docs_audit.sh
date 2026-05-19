@@ -432,15 +432,22 @@ else
 fi
 
 # --- T15-hero: H10 model — STRICT refs + manifest-driven origin gate ---
-# (a)  declared hero_asset + asset absent + still referenced → HARD-FAIL.
-# (a') declared + absent + NOT referenced                    → STILL HARD-FAIL
-#      (standalone gate is unconditional, not contingent on a link).
-# (b)  undeclared + README references a MISSING hero          → HARD-FAIL
-#      (H10 is strict — a *referenced* missing local ref always fails; the
-#       Codex no-silent-broken-image guarantee).
-# (b') undeclared + README references NO hero                 → CLEAN
-#      (a downstream scaffold from the hero-less reusable template emits no
-#       broken ref in the first place — not silently skipped by H10).
+# v1.12.1: the live README hero is now a TOP-OF-PAGE flag using an ABSOLUTE
+# raw URL (https://github.com/.../docs/assets/release-demo.jpeg); H10 skips
+# absolute URLs by design, and there is no longer any relative repo-local
+# hero <img>. So hero presence is enforced SOLELY by the manifest-driven
+# standalone hero_asset gate (unconditional, ref-independent). H10 strictness
+# is tested decoupled from the hero via a deliberately-injected broken ref.
+# (a)  declared hero_asset + asset absent                     → HARD-FAIL
+#      (standalone gate is unconditional — no relative ref needed).
+# (a') declared + asset absent + EVERY hero ref stripped      → STILL HARD-FAIL
+#      (proves the gate is not contingent on any reference at all).
+# (b)  undeclared + an injected relative repo-local missing ref → HARD-FAIL
+#      (H10 strict — any *referenced* missing local ref fails; non-vacuous,
+#       decoupled from the now-absolute hero).
+# (b') undeclared + only the absolute-URL hero, no broken ref → CLEAN
+#      (absolute-URL hero is H10-skipped; undeclared ⇒ standalone gate no-op
+#       — the legitimate downstream-adopter case).
 # (c)  near-miss with no extension                            → HARD-FAIL.
 CA=$(mktemp -d); CB=$(mktemp -d)
 trap 'rm -rf "$CA" "$CB"' EXIT
@@ -451,40 +458,40 @@ for D in "$CA" "$CB"; do
 done
 if [ -f "$AUDIT" ] && [ -f "$MANIFEST" ] && [ -f "$CA/references/docs-contract/manifest.txt" ]; then
   # CLONE-A keeps the declared hero_asset (as in the real repo).
-  # (a) declared + asset removed + README still references it → hard-fail
+  # (a) declared + asset removed → standalone gate hard-fail (ref-independent)
   out_ha=$(PROJECT_ROOT="$CA" bash "$AUDIT" 2>&1) && rc_ha=0 || rc_ha=$?
   if [ "$rc_ha" -ne 0 ] && printf '%s\n' "$out_ha" | grep -q 'declared hero_asset missing'; then
     ok "H10 hard-fails when declared hero_asset absent (origin enforcement)"
   else
     fail "H10 must enforce declared hero_asset presence but did not (exit $rc_ha)"
   fi
-  # (a') strip the README refs (symmetric EN+CN) → STILL hard-fail (unconditional)
-  sed -i.bak '/<img src="docs\/assets\/release-demo/d' "$CA/README.md" "$CA/README_CN.md" 2>/dev/null
+  # (a') strip EVERY hero ref (incl the absolute-URL flag) → STILL hard-fail
+  sed -i.bak '/release-demo\.jpeg/d' "$CA/README.md" "$CA/README_CN.md" 2>/dev/null
   rm -f "$CA/README.md.bak" "$CA/README_CN.md.bak"
   out_hap=$(PROJECT_ROOT="$CA" bash "$AUDIT" 2>&1) && rc_hap=0 || rc_hap=$?
   if [ "$rc_hap" -ne 0 ] && printf '%s\n' "$out_hap" | grep -q 'declared hero_asset missing'; then
-    ok "H10 enforces declared hero_asset even when unreferenced (unconditional)"
+    ok "H10 enforces declared hero_asset even with ZERO hero refs (unconditional)"
   else
     fail "H10 declared-hero enforcement contingent on a reference (exit $rc_hap)"
   fi
   # CLONE-B: strip the declaration → undeclared (downstream-adopter) manifest.
   sed -i.bak '/^hero_asset:/d' "$CB/references/docs-contract/manifest.txt" \
     && rm -f "$CB/references/docs-contract/manifest.txt.bak"
-  # (b) undeclared + README still references the (missing) hero → STRICT hard-fail
+  # (b) undeclared + injected relative repo-local MISSING ref → STRICT hard-fail
+  printf '\n[broken](docs/assets/does-not-exist-xyz.svg)\n' >> "$CB/README.md"
   out_hb=$(PROJECT_ROOT="$CB" bash "$AUDIT" 2>&1) && rc_hb=0 || rc_hb=$?
-  if [ "$rc_hb" -ne 0 ] && printf '%s\n' "$out_hb" | grep -q 'unresolved local ref.*release-demo'; then
-    ok "H10 hard-fails on a referenced missing hero, undeclared (no silent broken image)"
+  if [ "$rc_hb" -ne 0 ] && printf '%s\n' "$out_hb" | grep -q 'unresolved local ref.*does-not-exist-xyz'; then
+    ok "H10 strict: hard-fails on a referenced missing repo-local ref (non-vacuous)"
   else
-    fail "H10 silently passed a referenced missing hero (exit $rc_hb) — Codex no-ship"
+    fail "H10 not strict: referenced missing local ref passed (exit $rc_hb) — Codex no-ship class"
   fi
-  # (b') strip the hero refs (symmetric EN+CN) → hero-less scaffold is CLEAN
-  sed -i.bak '/<img src="docs\/assets\/release-demo/d' "$CB/README.md" "$CB/README_CN.md" 2>/dev/null
-  rm -f "$CB/README.md.bak" "$CB/README_CN.md.bak"
+  # (b') remove the injected broken ref → only absolute-URL hero remains → CLEAN
+  sed -i.bak '/does-not-exist-xyz/d' "$CB/README.md" && rm -f "$CB/README.md.bak"
   out_hbp=$(PROJECT_ROOT="$CB" bash "$AUDIT" 2>&1) && rc_hbp=0 || rc_hbp=$?
   if [ "$rc_hbp" -eq 0 ]; then
-    ok "H10 clean — undeclared + no hero referenced (hero-less scaffold safe)"
+    ok "H10 clean — undeclared + only the absolute-URL hero (downstream-adopter safe)"
   else
-    fail "H10 wrongly failed a hero-less undeclared scaffold (exit $rc_hbp): $(printf '%s' "$out_hbp" | grep H10 | head -1)"
+    fail "H10 wrongly failed an undeclared absolute-URL-hero scaffold (exit $rc_hbp): $(printf '%s' "$out_hbp" | grep H10 | head -1)"
   fi
   # (c) near-miss with no extension still hard-fails (non-vacuous)
   printf '\n[nearmiss](docs/assets/release-demo)\n' >> "$CB/README.md"
