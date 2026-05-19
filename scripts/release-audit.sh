@@ -765,8 +765,13 @@ if [ -f "$DIR/$TAR_FILE" ]; then
     # (unchanged, Karpathy#3). Folded into THIS one regex / one check_not
     # so the audit PASS/FAIL count stays constant (Gotcha #62 — adding a
     # check would rot the README/§0f/§0i count).
+    # codex round-7 [medium]: .gitx/ (gitx-sop policy pack: GITHUB_RELEASE_SOP.md,
+    # marketplace-entry.json, …) is .sanitize-ignore-whitelisted + release.sh
+    # --exclude='.gitx' (prevention). The whitelist removed sanitizer
+    # detection of it, so the fail-closed net MUST positively reject it here
+    # (detection) — same prevent-AND-detect pairing as .github-publish-wt.
     check_not "不含 private local state dotdirs" \
-        grep -qE "^${PROJECT_NAME}-${VERSION}/(\.1by1/|\.i18n-cache/|\.cache/|\.ssh/|\.aws/|\.env[^/]*|\.python-version|\.github-publish-wt/)|^${PROJECT_NAME}-${VERSION}/.*graphify-out/|^${PROJECT_NAME}-${VERSION}/(.*/)?CLAUDE\.md$" "$LIST"
+        grep -qE "^${PROJECT_NAME}-${VERSION}/(\.1by1/|\.i18n-cache/|\.cache/|\.ssh/|\.aws/|\.env[^/]*|\.python-version|\.github-publish-wt/|\.gitx/)|^${PROJECT_NAME}-${VERSION}/.*graphify-out/|^${PROJECT_NAME}-${VERSION}/(.*/)?CLAUDE\.md$" "$LIST"
     rm -f "$LIST"
     trap - RETURN   # clear the §5-scoped RETURN trap before leaving the function
 fi

@@ -23,7 +23,7 @@ found=0
 while IFS= read -r tarball; do
     [ -z "$tarball" ] && continue
     found=1
-    if tar tzf "$tarball" 2>/dev/null | grep -qE '/(\.1by1/|\.i18n-cache/|\.cache/|\.ssh/|\.aws/|\.env[^/]*|\.python-version)'; then
+    if tar tzf "$tarball" 2>/dev/null | grep -qE '/(\.1by1/|\.i18n-cache/|\.cache/|\.ssh/|\.aws/|\.env[^/]*|\.python-version|\.gitx/)'; then
         fail "$(realpath "$tarball") contains private local state paths"
     else
         ok "$(basename "$tarball") has no private local state paths"

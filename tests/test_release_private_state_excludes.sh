@@ -27,7 +27,7 @@ echo "══ test_release_private_state_excludes.sh ══"
 # shippable input; rsync staging ignores .gitignore so it must be on the
 # explicit --exclude list or it leaks into the public source tarball
 # (codex P2, v1.9.6). Dual-source byte-identity covers the bundle copy.
-for pat in ".omc" ".1by1" ".i18n-cache" ".cache" ".env*" ".ssh" ".aws" ".python-version" ".github-publish-wt" "graphify-out" "CLAUDE.md"; do
+for pat in ".omc" ".1by1" ".i18n-cache" ".cache" ".env*" ".ssh" ".aws" ".python-version" ".github-publish-wt" ".gitx" "graphify-out" "CLAUDE.md"; do
     if grep -Fq -- "--exclude='$pat'" "$RELEASE_SH" || grep -Fq -- "--exclude=\"$pat\"" "$RELEASE_SH"; then
         ok "release.sh excludes $pat"
     else
@@ -118,6 +118,25 @@ if [ "$_psf_hits" = 3 ] && ! printf '%s\n' 'demo-1.0.0/scripts/ok.sh' | grep -qE
     ok "private-state detection: nested skills/.../CLAUDE.md + docs/.../graphify-out/ + top-level caught (3), benign missed"
 else
     fail "private-state depth-agnostic detection wrong (hits=$_psf_hits, expected 3 + benign miss)"
+fi
+
+# ── Test 2g: fail-closed net must ALSO reject .gitx/ (codex round-7 [med]) ─
+# .gitx/ (gitx-sop policy pack) is .sanitize-ignore-whitelisted + release.sh
+# --exclude='.gitx' (prevention, Test 1 above). The whitelist removed
+# sanitizer detection, so the audit fail-closed net MUST positively reject a
+# stale/external tarball carrying .gitx/ (detection) — same prevent-AND-
+# detect pairing as .github-publish-wt (Test 2d).
+if grep -qF '.gitx/' "$AUDIT_SH"; then
+    ok "release-audit.sh fail-closed net rejects .gitx/ (codex round-7 [medium])"
+else
+    fail "release-audit.sh omits .gitx/ from private-state regex — whitelisted-but-undetected gap"
+fi
+# Behavioral non-vacuity: .gitx/ under the release root must match the regex.
+if printf '%s\n' 'demo-1.0.0/.gitx/GITHUB_RELEASE_SOP.md' \
+   | grep -qE '^demo-1.0.0/(\.1by1/|\.i18n-cache/|\.cache/|\.ssh/|\.aws/|\.env[^/]*|\.python-version|\.github-publish-wt/|\.gitx/)'; then
+    ok "private-state detection: .gitx/ payload caught (non-vacuous)"
+else
+    fail "private-state regex does not actually match .gitx/ payload"
 fi
 
 echo ""

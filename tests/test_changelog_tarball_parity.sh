@@ -128,8 +128,9 @@ mkdir -p "$SC/proj-1"; printf 'v1.10.0 STALE-COMMITTED\n' > "$SC/proj-1/CHANGELO
 ( cd "$SC" && tar -czf head.tgz proj-1 )            # ~ git archive HEAD (stale)
 EX="$SC/ex"; mkdir -p "$EX"; tar -xzf "$SC/head.tgz" -C "$EX"   # scrub extract
 inject_safe "$T/truth.md" "$EX/proj-1"              # inject source-of-truth
-# deterministic re-pack (same recipe shape as pack_source_tarball_deterministic)
-find "$EX/proj-1" -exec touch -t 200001010000.00 {} + 2>/dev/null || true
+# deterministic re-pack (same recipe shape as pack_source_tarball_deterministic;
+# touch -h mirrors the Codex round-8 [high] no-dereference fix)
+find "$EX/proj-1" -exec touch -h -t 200001010000.00 {} + 2>/dev/null || true
 ( cd "$EX" && find proj-1 -print | LC_ALL=C sort | tar --no-recursion --owner=0 --group=0 --numeric-owner -T - -cf - ) 2>/dev/null | gzip -n > "$SC/repack1.tgz"
 ( cd "$EX" && find proj-1 -print | LC_ALL=C sort | tar --no-recursion --owner=0 --group=0 --numeric-owner -T - -cf - ) 2>/dev/null | gzip -n > "$SC/repack2.tgz"
 parity "$SC/repack1.tgz" "$T/truth.md" \
@@ -139,6 +140,26 @@ cmp -s "$SC/repack1.tgz" "$SC/repack2.tgz" \
     && ok "scrub re-pack is deterministic (two builds byte-identical, Gotcha #14)" \
     || fail "scrub re-pack NOT reproducible (determinism regression)"
 rm -rf "$SC"
+
+# (b6) Codex round-8 [high]: pack_source_tarball_deterministic's mtime
+#      normalization (`find STAGE_SUB -exec touch -h -t ...`) must NOT
+#      dereference a tracked symlink and rewrite its target's mtime
+#      OUTSIDE the staging dir. Simulate the exact recipe; prove the
+#      out-of-stage sentinel keeps its (distinct) mtime + content.
+SM=$(mktemp -d)
+OUT="$SM/outside-sentinel"; printf 'SENTINEL\n' > "$OUT"
+touch -t 202601011200.00 "$OUT"                 # distinct, recent mtime
+REF="$SM/ref2000"; : > "$REF"; touch -t 200001010000.00 "$REF"
+mkdir -p "$SM/stg/proj-1"; ln -s "$OUT" "$SM/stg/proj-1/CHANGELOG.md"
+# the exact helper recipe (no-dereference)
+find "$SM/stg" -exec touch -h -t 200001010000.00 {} + 2>/dev/null || true
+{ [ "$OUT" -nt "$REF" ] && cmp -s <(printf 'SENTINEL\n') "$OUT"; } \
+    && ok "mtime-normalize no-deref: out-of-stage symlink target untouched (Codex round-8 [high])" \
+    || fail "SYMLINK-DEREF: touch rewrote out-of-stage target mtime/content (non-destructive contract broken)"
+[ -L "$SM/stg/proj-1/CHANGELOG.md" ] \
+    && ok "staged symlink preserved as a symlink (touch -h acted on the link)" \
+    || fail "staged symlink was dereferenced/replaced by touch"
+rm -rf "$SM"
 
 echo "Results: ✅$PASS passed / ❌$FAIL failed"
 [ "$FAIL" -eq 0 ] && echo PASS || { echo FAIL; exit 1; }

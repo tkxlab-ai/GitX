@@ -567,7 +567,14 @@ pack_source_tarball_deterministic() {
     else
         sde_touch="200001010000.00"
     fi
-    run find "$STAGE_SUB" -exec touch -t "$sde_touch" {} + || true
+    # Codex round-8 [high]: `touch` dereferences symlinks by default — a
+    # tracked symlink in the staged tree (scrub path: git archive preserves
+    # symlinks) would rewrite its TARGET's mtime, mutating state OUTSIDE
+    # STAGE_SUB (absolute / ../ targets) and breaking the non-destructive
+    # contract. `-h` acts on the link itself (no-dereference); portable on
+    # BSD/macOS + GNU touch. Symlinks get their own normalized mtime →
+    # still byte-reproducible, zero external mutation.
+    run find "$STAGE_SUB" -exec touch -h -t "$sde_touch" {} + || true
     if [ "$DRY_RUN" = "1" ]; then
         echo "  [dry-run] tar + gzip → $TAR_OUT"
         return 0
@@ -901,7 +908,7 @@ generate_release_notes() {
 
     if [ "$HAS_COMMANDS" = "1" ]; then
         COMMANDS_SETUP="mkdir -p ~/.claude/skills ~/.claude/commands"
-        COMMANDS_INSTALL_LINE=$'\n# 安装 slash command shims\ncp ~/.claude/skills/'"${SKILL_NAME}"'/commands/*.md ~/.claude/commands/'
+        COMMANDS_INSTALL_LINE=$'\n# install slash command shims\ncp ~/.claude/skills/'"${SKILL_NAME}"'/commands/*.md ~/.claude/commands/'
     else
         COMMANDS_SETUP="mkdir -p ~/.claude/skills"
         COMMANDS_INSTALL_LINE=""
@@ -912,38 +919,38 @@ generate_release_notes() {
 
 Release date: $RELEASE_DATE
 
-## 本目录包含
+## What this directory contains
 
-### 分发包
-- \`${PROJECT_NAME}-${VERSION}.skill\` — 单文件 zip 分发
-- \`${PROJECT_NAME}-${VERSION}-source.tar.gz\` — 完整源码包
+### Distribution packages
+- \`${PROJECT_NAME}-${VERSION}.skill\` — single-file zip distribution
+- \`${PROJECT_NAME}-${VERSION}-source.tar.gz\` — full source tarball
 
-### 平摊文档与安装脚本
+### Flattened docs & install script
 - \`README.md\` / \`README_CN.md\` / \`INSTALL.md\` / \`CHANGELOG.md\` / \`CHANGELOG_CN.md\` / \`TEST-SCENARIOS.md\` / \`SKILL.md\` / \`LICENSE\` / \`CONTRIBUTING.md\` / \`CODE_OF_CONDUCT.md\` / \`SECURITY.md\`
-- \`install.sh\` — 平摊安装脚本（支持自举从同目录 .skill / tarball 解压）
+- \`install.sh\` — flattened installer (self-bootstraps from a sibling .skill / source tarball)
 
-## 快速安装
+## Quick install
 
-### 方式 A（推荐）：直接跑本目录 install.sh
+### Option A (recommended): run install.sh in this directory
 \`\`\`bash
 ./install.sh
 \`\`\`
 
-### 方式 B：只装 skill
+### Option B: skill only
 \`\`\`bash
 ${COMMANDS_SETUP}
 unzip -o ./${PROJECT_NAME}-${VERSION}.skill -d ~/.claude/skills/
 chmod +x ~/.claude/skills/${SKILL_NAME}/scripts/*.sh${COMMANDS_INSTALL_LINE}
 \`\`\`
 
-### 方式 C：完整解压 source tarball
+### Option C: extract the full source tarball
 \`\`\`bash
 tar xzf ./${PROJECT_NAME}-${VERSION}-source.tar.gz
 cd ${PROJECT_NAME}-${VERSION}
 ./install.sh
 \`\`\`
 
-完整命令见 \`INSTALL.md\`；本版本变更见 \`CHANGELOG.md\` 的 **$VERSION** 条目。
+Full command reference: \`INSTALL.md\`. This release's changes: the **$VERSION** entry in \`CHANGELOG.md\`.
 EOF
 
     # Inject CHANGELOG entry into RELEASE_NOTES
