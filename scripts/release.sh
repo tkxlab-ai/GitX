@@ -121,6 +121,52 @@ preflight_external_tools() {
 }
 
 preflight_checks() {
+    # --- Pre-flight: clean working tree (Codex v1.12.3 round-12 [high]) ---
+    # Trust boundary: build_source_tarball extracts HEAD via scrub-tarball.sh
+    # and run_sanity_scans covers the staging tree (= HEAD content). But
+    # flatten_top_docs + flatten_docs cp README and other top-level docs
+    # from PROJECT_ROOT (live working tree). A dirty working tree means
+    # the flattened artifact + full tarball ship CONTENT that the scan
+    # never saw. Fail-close here so the published artifact always matches
+    # the scanned source. Generic-safe: skipped when PROJECT_ROOT is not
+    # a git repo (downstream fixtures / non-git workflows). The contract
+    # is: commit (or stash) before release; this matches the standard
+    # commit-then-release discipline GitX itself already follows.
+    if git -C "$PROJECT_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+        # Two-part check (Codex round-12 [high] + round-13 [high]):
+        #   (1) tracked dirty   — diff-index --quiet HEAD
+        #   (2) untracked-but-not-gitignored — ls-files --others --exclude-standard
+        # gitignored files are intentionally allowed (HANDOFF.md, .gitx/,
+        # docs/superpowers/, etc.); they never enter the release artifact
+        # because release.sh / scrub-tarball.sh / git-archive all skip them.
+        # Catches the round-13 attack: an untracked `.release-flatten` or
+        # untracked top-level doc that would later be flattened into the
+        # release dir AFTER the source-tarball sanitize pass.
+        if ! git -C "$PROJECT_ROOT" diff-index --quiet HEAD -- 2>/dev/null; then
+            echo "❌ release.sh: working tree has uncommitted tracked changes — release aborted"
+            echo "   The sanitize pass covers HEAD content (via scrub-tarball.sh / git-archive)."
+            echo "   Releasing with a dirty tree would ship un-scanned README / doc content."
+            echo ""
+            echo "   Inspect:  git -C $PROJECT_ROOT status --short"
+            echo "   Resolve:  commit (preferred) or stash, then re-run release.sh"
+            exit 1
+        fi
+        _untracked=$(git -C "$PROJECT_ROOT" ls-files --others --exclude-standard 2>/dev/null | head -20)
+        if [ -n "$_untracked" ]; then
+            echo "❌ release.sh: untracked-not-gitignored files present — release aborted"
+            echo "   The sanitize/scan pass and source tarball derive from HEAD; any"
+            echo "   untracked file (e.g. an unintended .release-flatten or top-level"
+            echo "   doc) could be flattened into the release artifact after that scan,"
+            echo "   bypassing the trust boundary (Codex v1.12.3 round-13 [high])."
+            echo ""
+            echo "   Untracked (first 20):"
+            printf '%s\n' "$_untracked" | sed 's/^/     /'
+            echo ""
+            echo "   Resolve:  commit, delete, or add to .gitignore — then re-run."
+            exit 1
+        fi
+    fi
+
     # --- Pre-flight: VERSION sidecar consistency (S3-3) ---
     SKILL_MD_PATH="$PROJECT_ROOT/skills/$SKILL_NAME/SKILL.md"
     VERSION_FILE="$PROJECT_ROOT/skills/$SKILL_NAME/VERSION"
@@ -788,6 +834,107 @@ flatten_docs() {
         [ -f "$PROJECT_ROOT/$doc" ] && run cp "$PROJECT_ROOT/$doc" "$RELEASE_DIR/$doc"
     done
 
+    # v1.12.3 (Codex rounds 1, 2, 6 [medium]): README hero image is a relative
+    # repo-local path; users opening the FLATTENED release dir README — or
+    # extracting the full tarball derived from it — follow the relative path
+    # locally and need the asset(s) actually shipped at the referenced path.
+    #
+    # SYMMETRIC README-driven contract: producer (this loop) and validator
+    # (release-audit §0m) walk the SAME refs — every repo-local <img src=...>
+    # in README.md and README_CN.md — and the producer copies each referenced
+    # file to its same relative path under RELEASE_DIR. This unifies the
+    # earlier round-2 narrow (manifest-hero-only) and round-4 wide (validator
+    # walks every README img) contracts: cross-project safe (no decoy in
+    # docs/assets/ gets shipped — only what README actually references), and
+    # cannot mismatch (producer and validator derive from the same source).
+    # Absolute URLs / data: URIs / anchors are skipped (badges etc.). Defense
+    # in depth: reject `..` and absolute paths.
+    # Codex round-10 [high] trust boundary: flatten_docs runs AFTER
+    # run_sanity_scans on the staging tree, so any file pulled directly
+    # from PROJECT_ROOT now bypasses that scan and would land in the full
+    # tarball untouched. Triple containment:
+    #   (1) reject symlinks  — never follow a link out of the worktree
+    #   (2) require regular file existence
+    #   (3) require git-tracked — the file MUST already be in the
+    #       sanitize-covered source-of-truth (git ls-files); generic-safe
+    #       when PROJECT_ROOT is not a git repo (downstream fixtures).
+    _flatten_is_git_repo=0
+    if git -C "$PROJECT_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+        _flatten_is_git_repo=1
+    fi
+    for _ff_readme in "$PROJECT_ROOT/README.md" "$PROJECT_ROOT/README_CN.md"; do
+        [ -f "$_ff_readme" ] || continue
+        while IFS= read -r _ref; do
+            [ -n "$_ref" ] || continue
+            case "$_ref" in
+                /*|*..*) continue ;;
+            esac
+            _src="$PROJECT_ROOT/$_ref"
+            if [ -L "$_src" ]; then
+                echo "⚠️  flatten_docs: skipping symlink README img ref: $_ref" >&2
+                continue
+            fi
+            [ -f "$_src" ] || continue
+            if [ "$_flatten_is_git_repo" -eq 1 ]; then
+                if ! git -C "$PROJECT_ROOT" ls-files --error-unmatch -- "$_ref" >/dev/null 2>&1; then
+                    echo "⚠️  flatten_docs: skipping untracked README img ref: $_ref (would bypass sanitize)" >&2
+                    continue
+                fi
+                # Codex round-11 [high]: source tarball is built from `HEAD`
+                # (scrub-tarball.sh on the modern path) and run_sanity_scans
+                # scans THAT staging tree. A modified tracked file in the
+                # live working tree would pass ls-files yet differ from
+                # HEAD — round-10's working-tree cp would still land that
+                # dirty content in the full tarball unscanned. cat-file -p
+                # HEAD:<ref> emits the exact blob bytes that sanitize
+                # covered. Binary-safe (no locale interpretation in `>`).
+                run mkdir -p "$RELEASE_DIR/$(dirname "$_ref")"
+                if ! git -C "$PROJECT_ROOT" cat-file -p "HEAD:$_ref" > "$RELEASE_DIR/$_ref" 2>/dev/null; then
+                    echo "⚠️  flatten_docs: cat-file HEAD:$_ref failed; skipping (would publish dirty/unscanned content)" >&2
+                    rm -f "$RELEASE_DIR/$_ref"
+                    continue
+                fi
+            else
+                run mkdir -p "$RELEASE_DIR/$(dirname "$_ref")"
+                run cp "$_src" "$RELEASE_DIR/$_ref"
+            fi
+        done <<EOF_FF
+$(LC_ALL=C awk '
+  # Codex round-8 + round-9 extractor: covers both HTML and Markdown image
+  # syntaxes. \047 = single-quote (avoids shell escape hell inside this
+  # single-quoted awk program). Producer + validator MUST share this exact
+  # extractor or downstream README using non-default syntax will silently
+  # drift (round-6 / round-8 / round-9 regression class).
+  #   HTML : <[Ii][Mm][Gg] ... [Ss][Rr][Cc]=("..."|\047...\047) ...>
+  #   MD   : ![alt](path) — path may include optional "title" after a space
+  { line=$0
+    while (match(line,/<[Ii][Mm][Gg][^>]*[Ss][Rr][Cc]=("[^"]+"|\047[^\047]+\047)/)>0){
+      blk=substr(line,RSTART,RLENGTH)
+      if (match(blk,/[Ss][Rr][Cc]=("[^"]+"|\047[^\047]+\047)/)>0){
+        attr=substr(blk,RSTART,RLENGTH)
+        sub(/^[Ss][Rr][Cc]=/,"",attr)
+        sub(/^["\047]/,"",attr); sub(/["\047]$/,"",attr)
+        v=attr; sub(/#.*$/,"",v)
+        if(v!="" && v!~/^https?:\/\// && v!~/^data:/ && v!~/^#/) print v
+      }
+      line=substr(line,RSTART+RLENGTH)
+    }
+    line2=$0
+    while (match(line2,/!\[[^]]*\]\([^)]+\)/)>0){
+      blk2=substr(line2,RSTART,RLENGTH)
+      if (match(blk2,/\([^)]+\)/)>0){
+        v=substr(blk2,RSTART+1,RLENGTH-2)
+        sub(/[ \t]+[\047"][^\047"]*[\047"]$/,"",v)
+        sub(/#.*$/,"",v); sub(/^[ \t]+/,"",v); sub(/[ \t]+$/,"",v)
+        if(v!="" && v!~/^https?:\/\// && v!~/^data:/ && v!~/^#/) print v
+      }
+      line2=substr(line2,RSTART+RLENGTH)
+    }
+  }
+' "$_ff_readme" | sort -u)
+EOF_FF
+    done
+
     # v1.1.2: optional .release-flatten manifest for project-specific files
     # not in the standard 8-doc list. One path per line; comments (`#`) and
     # blank lines tolerated. Paths relative to PROJECT_ROOT. Resolves the
@@ -795,15 +942,66 @@ flatten_docs() {
     _RF_MANIFEST="$PROJECT_ROOT/.release-flatten"
     if [ -f "$_RF_MANIFEST" ]; then
         echo "📝 Reading .release-flatten manifest..."
+        # Codex v1.12.3 round-14 [high] trust boundary: `.release-flatten`
+        # can list arbitrary paths, including gitignored private content
+        # (e.g. docs/superpowers/, HANDOFF.md). Without an explicit check
+        # an attacker (or honest mistake) could ship private design docs.
+        # Reject paths that are:
+        #   (a) absolute / `..` traversal
+        #   (b) symlinks
+        #   (c) gitignored (`git check-ignore` returns 0)
+        #   (d) not git-tracked (file or any file inside dir)
+        # Generic-safe: skipped when PROJECT_ROOT is not a git repo.
+        _rf_is_git_repo=0
+        if git -C "$PROJECT_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+            _rf_is_git_repo=1
+        fi
         while IFS= read -r _rf_line || [ -n "$_rf_line" ]; do
             _rf_line="${_rf_line%%#*}"                         # strip whole-line + trailing comments
             _rf_line="${_rf_line#"${_rf_line%%[![:space:]]*}"}" # ltrim
             _rf_line="${_rf_line%"${_rf_line##*[![:space:]]}"}" # rtrim
             [ -z "$_rf_line" ] && continue
-            if [ -f "$PROJECT_ROOT/$_rf_line" ]; then
-                run cp "$PROJECT_ROOT/$_rf_line" "$RELEASE_DIR/$(basename "$_rf_line")"
-            elif [ -d "$PROJECT_ROOT/$_rf_line" ]; then
-                run cp -R "$PROJECT_ROOT/$_rf_line" "$RELEASE_DIR/$(basename "$_rf_line")"
+            case "$_rf_line" in
+                /*|*..*)
+                    echo "❌ .release-flatten: unsafe path (absolute or .. traversal): $_rf_line — release aborted" >&2
+                    exit 1
+                    ;;
+            esac
+            _rf_src="$PROJECT_ROOT/$_rf_line"
+            if [ -L "$_rf_src" ]; then
+                echo "❌ .release-flatten: '$_rf_line' is a symlink — release aborted" >&2
+                exit 1
+            fi
+            if [ "$_rf_is_git_repo" -eq 1 ]; then
+                # gitignored → would publish private content. Hard fail.
+                if git -C "$PROJECT_ROOT" check-ignore -q -- "$_rf_line" 2>/dev/null; then
+                    echo "❌ .release-flatten: '$_rf_line' is gitignored — refusing to publish private content (Codex round-14 [high])" >&2
+                    exit 1
+                fi
+                # not git-tracked → bypasses sanitize HEAD coverage.
+                if [ -f "$_rf_src" ]; then
+                    if ! git -C "$PROJECT_ROOT" ls-files --error-unmatch -- "$_rf_line" >/dev/null 2>&1; then
+                        echo "❌ .release-flatten: '$_rf_line' is not git-tracked — would bypass sanitize HEAD coverage" >&2
+                        exit 1
+                    fi
+                elif [ -d "$_rf_src" ]; then
+                    # require at least one tracked file under the dir
+                    if [ -z "$(git -C "$PROJECT_ROOT" ls-files --error-unmatch -- "$_rf_line/" 2>/dev/null | head -1)" ]; then
+                        echo "❌ .release-flatten: directory '$_rf_line' has no git-tracked files — would bypass sanitize" >&2
+                        exit 1
+                    fi
+                fi
+            fi
+            if [ -f "$_rf_src" ]; then
+                run cp "$_rf_src" "$RELEASE_DIR/$(basename "$_rf_line")"
+            elif [ -d "$_rf_src" ]; then
+                # Codex round-15 [high]: dir entry + `cp -R` would copy nested
+                # gitignored/untracked content (e.g. manifest "docs" sweeps
+                # docs/superpowers/). Until per-file enumeration of tracked
+                # files is implemented, reject directory entries; require
+                # explicit file paths in `.release-flatten`.
+                echo "❌ .release-flatten: '$_rf_line' is a directory — directory entries can leak nested gitignored content; list explicit file paths instead (Codex v1.12.3 round-15 [high])" >&2
+                exit 1
             else
                 echo "⚠️  .release-flatten: '$_rf_line' not found in PROJECT_ROOT — skipping" >&2
             fi

@@ -28,7 +28,7 @@ same standard it imposes on others: GitX releases GitX.
 </div>
 
 <!-- gitx:managed:build-metrics -->
-> 🛠 **Live build metrics** — Version **v1.11.0** · Released **2026-05-16** · Engineered with **Claude (Opus/Sonnet) · Codex · Gemini** across hundreds of sessions · Cumulative AI tokens since the first prototype (v0.9.4, 2026-04-22), estimated: **≈ 300M+ input/output + ≈ 3B+ cached** · Span: **~61 releases across 26 days** (2026-04-22 → 2026-05-18)
+> 🛠 **Live build metrics** — Version **v1.11.0** · Released **2026-05-16** · Engineered with **Claude (Opus/Sonnet) · Codex · Gemini** across hundreds of sessions · Cumulative AI tokens since the first prototype (v0.9.4, 2026-04-22), estimated: **≈ 300M+ input/output + ≈ 3B+ cached** · Span: **~63 releases across 28 days** (2026-04-22 → 2026-05-20)
 <!-- /gitx:managed:build-metrics -->
 
 **[Documentation](#table-of-contents) · [Changelog](CHANGELOG.md) · [Report a bug](https://github.com/tkxlab-ai/GitX/issues) · [Security](SECURITY.md)**
@@ -47,7 +47,7 @@ same standard it imposes on others: GitX releases GitX.
 | v1.9.7 | 2026-05-16 | gitx-sop credential-gate systemic fix; five-facet defense-in-depth |
 <!-- /gitx:managed:whats-new -->
 
-Full history (61 releases) → [`CHANGELOG.md`](CHANGELOG.md).
+Full history (63 releases) → [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
@@ -420,20 +420,20 @@ GitX did not begin as a release tool — it began as a refusal to ship on faith.
 
 **2026-05-15 — the discipline sprint.** Nine `v1.7.x` patch releases in a single day — a focused campaign that systematically closed a credential-gate class in the publish SOP and built five-facet defense-in-depth around private state. `v1.8.x` raised public-page completeness; `v1.9.8` root-caused README numeric rot and added `§0f`.
 
-**2026-05-16 — meta-skill rigor.** `v1.10.0` shipped the projen ghostwriter + `§0g/§0h/§0i`; `v1.10.1` converged a five-round dual-engine closure + five-facet private-state hardening; `v1.11.0` extracts docs into an independent bilingual pipeline with a hard fail-closed contract and pulls CI's shellcheck gate into the pipeline; `v1.12.0` converges a six-round `codex` adversarial review on the docs contract — origin-only hero, strict `H10`, manifest-driven enforcement; `v1.12.1` (this release) fixes the public CHANGELOG-link layout (Gotcha #80/#81), ships the CN changelog, and reorders Quick Start.
+**2026-05-16 — meta-skill rigor.** `v1.10.0` shipped the projen ghostwriter + `§0g/§0h/§0i`; `v1.10.1` converged a five-round dual-engine closure + five-facet private-state hardening; `v1.11.0` extracts docs into an independent bilingual pipeline with a hard fail-closed contract and pulls CI's shellcheck gate into the pipeline; `v1.12.0` converges a six-round `codex` adversarial review on the docs contract — origin-only hero, strict `H10`, manifest-driven enforcement; `v1.12.1` fixes the public CHANGELOG-link layout (Gotcha #80/#81), ships the CN changelog, and reorders Quick Start; `v1.12.2` closes a systemic docs-pipeline locale-blind + docs-audit blanket-skip blindspot that had hidden English-in-the-Chinese-README for ~every release; `v1.12.3` (this release) makes the README hero a relative repo-local path so each tag's README permanently points at its own asset, plus a manifest-driven flatten contract that narrows the cross-project release artifact surface.
 
 **Numbers at a glance:**
 
 | Metric | Value |
 |---|---|
-| Prototype → today | 2026-04-22 → 2026-05-18 (26 days) |
-| Releases | ~61 (v0.9.4 → v1.12.1) |
+| Prototype → today | 2026-04-22 → 2026-05-20 (28 days) |
+| Releases | ~63 (v0.9.4 → v1.12.3) |
 | Commits | 90 |
 | Test suites | full green — see [Testing](#testing) |
 | Audit checks | 240 (three-state, exactness-gated) |
 | Hardest day | 9 patch releases (2026-05-15 SOP sprint) |
 
-**Status:** stable & production-ready since `v1.0.0` (2026-04-29); current GA `v1.12.1`. Self-baked through its own pipeline every release.
+**Status:** stable & production-ready since `v1.0.0` (2026-04-29); current GA `v1.12.3`. Self-baked through its own pipeline every release.
 
 **Key decisions:** deterministic doc generation (projen, no LLM in loop) · fail-closed default with generic-safe SKIP · non-counting meta-gates (`§0i`, `§0j`) · five-facet symmetric parity for private state · bilingual via parallel locale files with structural-parity guards.
 

@@ -1459,6 +1459,99 @@ EOF_PL
     rm -rf "$_pl_tmp"
 fi
 
+# --- §0m flattened README img-src gate (non-counting, Codex v1.12.3 round-1 + round-4) ---
+# Why: README hero <img src="..."> is now a relative repo-local path
+# (`docs/assets/release-demo.jpeg`). github.com renders it via server-side
+# rewrite (relative → /<owner>/<repo>/raw/<branch>/...), so the public web
+# page resolves. But a user opening the FLATTENED release dir README — or
+# extracting the FULL tarball derived from it — follows the relative path
+# locally. §0l above only validates the source tarball layout.
+#
+# Strict superset of an earlier hero-only check (round-4): validate EVERY
+# repo-local <img src> in the README resolves under $DIR, not just the
+# manifest-declared hero_asset. The drift case the hero-only gate missed —
+# README points at docs/assets/other.png while manifest still declares
+# release-demo.jpeg — passes the hero-only gate (manifest asset is present)
+# but ships a broken README image. This wider gate fences both classes.
+# Absolute URLs / data: URIs / anchors are skipped (no false-FAIL on badges).
+# Non-counting (Gotcha #62). Generic-safe: no README → ➖ SKIP.
+FLATHERO_FAIL=0
+echo ""
+echo "§0m. flattened README img-src gate (non-counting)"
+# Codex round-5 fix: read README from $DIR (the FLATTENED release artifact
+# we are validating), NOT $PROJECT_ROOT (the live working-tree README). The
+# round-4 implementation mixed two versions — auditing an older release
+# (e.g. v1.12.2 with an absolute-URL hero) using the v1.12.3 working-tree
+# README produced a false fail. Reading from $DIR makes the gate evaluate
+# only what is actually in the artifact, supporting forensic / rollback
+# audits and correctly catching broken refs that the working-tree README
+# happens not to share.
+_fm_bad=0
+_fm_seen=0
+for _fm_readme in "$DIR/README.md" "$DIR/README_CN.md"; do
+    [ -f "$_fm_readme" ] || continue
+    _fm_seen=1
+    while IFS= read -r _ref; do
+        [ -n "$_ref" ] || continue
+        # Codex round-7 fix: reject `..` and absolute paths symmetric with
+        # release.sh:flatten_docs producer. Otherwise a README `<img
+        # src="../neighbor">` would pass `[ -e $DIR/../neighbor ]` because the
+        # parent dir exists, while the producer never copies it into the
+        # artifact — silently shipping a README whose image lives OUTSIDE the
+        # tarball.
+        case "$_ref" in
+            /*|*..*)
+                echo "  ❌ unsafe README img ref (absolute or .. traversal): $_ref (from $(basename "$_fm_readme"))" >&2
+                _fm_bad=1
+                continue
+                ;;
+        esac
+        if [ ! -e "$DIR/$_ref" ]; then
+            echo "  ❌ flattened artifact missing README img ref: $_ref (from $(basename "$_fm_readme"))" >&2
+            _fm_bad=1
+        fi
+    done <<EOF_FM
+$(LC_ALL=C awk '
+  # Codex round-8 + round-9 extractor (MUST match release.sh:flatten_docs):
+  # HTML <[Ii][Mm][Gg] [Ss][Rr][Cc]=("..."|\047...\047)> + Markdown ![](path).
+  # Drift between producer and this validator would re-open the round-6
+  # asymmetry — keep these awk programs byte-identical.
+  { line=$0
+    while (match(line,/<[Ii][Mm][Gg][^>]*[Ss][Rr][Cc]=("[^"]+"|\047[^\047]+\047)/)>0){
+      blk=substr(line,RSTART,RLENGTH)
+      if (match(blk,/[Ss][Rr][Cc]=("[^"]+"|\047[^\047]+\047)/)>0){
+        attr=substr(blk,RSTART,RLENGTH)
+        sub(/^[Ss][Rr][Cc]=/,"",attr)
+        sub(/^["\047]/,"",attr); sub(/["\047]$/,"",attr)
+        v=attr; sub(/#.*$/,"",v)
+        if(v!="" && v!~/^https?:\/\// && v!~/^data:/ && v!~/^#/) print v
+      }
+      line=substr(line,RSTART+RLENGTH)
+    }
+    line2=$0
+    while (match(line2,/!\[[^]]*\]\([^)]+\)/)>0){
+      blk2=substr(line2,RSTART,RLENGTH)
+      if (match(blk2,/\([^)]+\)/)>0){
+        v=substr(blk2,RSTART+1,RLENGTH-2)
+        sub(/[ \t]+[\047"][^\047"]*[\047"]$/,"",v)
+        sub(/#.*$/,"",v); sub(/^[ \t]+/,"",v); sub(/[ \t]+$/,"",v)
+        if(v!="" && v!~/^https?:\/\// && v!~/^data:/ && v!~/^#/) print v
+      }
+      line2=substr(line2,RSTART+RLENGTH)
+    }
+  }
+' "$_fm_readme" | sort -u)
+EOF_FM
+done
+if [ "$_fm_seen" -eq 0 ]; then
+    echo "  ➖ no README in flattened release dir — generic-safe SKIP"
+elif [ "$_fm_bad" -eq 0 ]; then
+    echo "  ✅ every repo-local README <img src> resolves in the flattened release dir"
+else
+    echo "     flattened README image(s) above will 404 for users opening the flattened artifact / full tarball" >&2
+    FLATHERO_FAIL=1
+fi
+
 # Per-section summary (P3-2)
 echo ""
 echo "═══ Per-Section Summary ═══"
@@ -1479,7 +1572,7 @@ rm -f "$_SEC_LOG"
 
 echo ""
 echo "═══════════════════════════════════════════"
-if [ "$FAIL" -eq 0 ] && [ "${EXACTNESS_FAIL:-0}" -eq 0 ] && [ "${SHELLCHECK_FAIL:-0}" -eq 0 ] && [ "${DOCS_AUDIT_FAIL:-0}" -eq 0 ] && [ "${PUBLAYOUT_FAIL:-0}" -eq 0 ]; then
+if [ "$FAIL" -eq 0 ] && [ "${EXACTNESS_FAIL:-0}" -eq 0 ] && [ "${SHELLCHECK_FAIL:-0}" -eq 0 ] && [ "${DOCS_AUDIT_FAIL:-0}" -eq 0 ] && [ "${PUBLAYOUT_FAIL:-0}" -eq 0 ] && [ "${FLATHERO_FAIL:-0}" -eq 0 ]; then
     echo "🎉 Deep Audit PASS  (✅$PASS / ❌$FAIL / ➖$SKIP / ⚠️$ADVISORY total $TOTAL)"
     echo "   上游发布未自动执行；如需发布，请人工复核产物、CHANGELOG 和仓库状态后再操作。"
     exit 0

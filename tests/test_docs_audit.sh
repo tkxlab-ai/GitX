@@ -524,22 +524,20 @@ else
 fi
 
 # --- T15-hero: H10 model — STRICT refs + manifest-driven origin gate ---
-# v1.12.1: the live README hero is now a TOP-OF-PAGE flag using an ABSOLUTE
-# raw URL (https://github.com/.../docs/assets/release-demo.jpeg); H10 skips
-# absolute URLs by design, and there is no longer any relative repo-local
-# hero <img>. So hero presence is enforced SOLELY by the manifest-driven
-# standalone hero_asset gate (unconditional, ref-independent). H10 strictness
-# is tested decoupled from the hero via a deliberately-injected broken ref.
+# v1.12.3: the live README hero is now a RELATIVE-PATH ref
+# (docs/assets/release-demo.jpeg); H10 strict resolves it under PROJECT_ROOT
+# (no longer skipped as an absolute URL). H10 strictness is still tested
+# independently via a deliberately-injected broken ref so the assertion
+# stays non-vacuous if the hero ref ever regresses to a skip.
 # (a)  declared hero_asset + asset absent                     → HARD-FAIL
-#      (standalone gate is unconditional — no relative ref needed).
+#      (standalone gate is unconditional — independent of any reference).
 # (a') declared + asset absent + EVERY hero ref stripped      → STILL HARD-FAIL
 #      (proves the gate is not contingent on any reference at all).
 # (b)  undeclared + an injected relative repo-local missing ref → HARD-FAIL
-#      (H10 strict — any *referenced* missing local ref fails; non-vacuous,
-#       decoupled from the now-absolute hero).
-# (b') undeclared + only the absolute-URL hero, no broken ref → CLEAN
-#      (absolute-URL hero is H10-skipped; undeclared ⇒ standalone gate no-op
-#       — the legitimate downstream-adopter case).
+#      (H10 strict — any *referenced* missing local ref fails; non-vacuous).
+# (b') undeclared + relative-path hero + asset RESTORED       → CLEAN
+#      (downstream-adopter that ships the asset their README points at —
+#       H10 strict resolves the relative ref under PROJECT_ROOT.)
 # (c)  near-miss with no extension                            → HARD-FAIL.
 CA=$(mktemp -d); CB=$(mktemp -d)
 trap 'rm -rf "$CA" "$CB"' EXIT
@@ -577,13 +575,18 @@ if [ -f "$AUDIT" ] && [ -f "$MANIFEST" ] && [ -f "$CA/references/docs-contract/m
   else
     fail "H10 not strict: referenced missing local ref passed (exit $rc_hb) — Codex no-ship class"
   fi
-  # (b') remove the injected broken ref → only absolute-URL hero remains → CLEAN
+  # (b') remove broken ref + restore the hero asset → undeclared + relative-path
+  # hero + asset present → CLEAN. The for-loop above wiped docs/assets for CA's
+  # (a/a') hard-fail setup; for the relative-path hero world the legitimate
+  # downstream-adopter case requires the asset to actually be present.
   sed -i.bak '/does-not-exist-xyz/d' "$CB/README.md" && rm -f "$CB/README.md.bak"
+  mkdir -p "$CB/docs/assets"
+  cp "$REAL_ROOT/docs/assets/release-demo.jpeg" "$CB/docs/assets/release-demo.jpeg"
   out_hbp=$(PROJECT_ROOT="$CB" bash "$AUDIT" 2>&1) && rc_hbp=0 || rc_hbp=$?
   if [ "$rc_hbp" -eq 0 ]; then
-    ok "H10 clean — undeclared + only the absolute-URL hero (downstream-adopter safe)"
+    ok "H10 clean — undeclared + relative-path hero + asset present (downstream-adopter safe)"
   else
-    fail "H10 wrongly failed an undeclared absolute-URL-hero scaffold (exit $rc_hbp): $(printf '%s' "$out_hbp" | grep H10 | head -1)"
+    fail "H10 wrongly failed undeclared adopter shipping their hero asset (exit $rc_hbp): $(printf '%s' "$out_hbp" | grep H10 | head -1)"
   fi
   # (c) near-miss with no extension still hard-fails (non-vacuous)
   printf '\n[nearmiss](docs/assets/release-demo)\n' >> "$CB/README.md"

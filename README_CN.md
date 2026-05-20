@@ -15,12 +15,12 @@
 [English](README.md) · [中文](README_CN.md)
 
 <p align="center">
-  <img src="https://github.com/tkxlab-ai/GitX/raw/main/docs/assets/release-demo.jpeg" alt="GitX 发版流水线" width="820">
+  <img src="docs/assets/release-demo.jpeg" alt="GitX 发版流水线" width="820">
 </p>
 
 <!-- gitx:managed:badges -->
 [![License](https://img.shields.io/badge/license-MIT-yellow.svg?style=for-the-badge)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-110%20suites%20%2F%200%20fail-brightgreen.svg?style=for-the-badge&logo=githubactions&logoColor=white)](tests/run_all.sh)
+[![Tests](https://img.shields.io/badge/tests-111%20suites%20%2F%200%20fail-brightgreen.svg?style=for-the-badge&logo=githubactions&logoColor=white)](tests/run_all.sh)
 [![Deep Audit](https://img.shields.io/badge/deep%20audit-246%2F0%2F1-brightgreen.svg?style=for-the-badge&logo=shieldsdotio&logoColor=white)](scripts/release-audit.sh)
 [![CLIs](https://img.shields.io/badge/CLI-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20OpenCode%20%C2%B7%20Gemini-6366f1.svg?style=for-the-badge&logo=anthropic&logoColor=white)](#快速开始)
 [![Shell](https://img.shields.io/badge/bash-3.2%2B%20POSIX-06b6d4.svg?style=for-the-badge&logo=gnubash&logoColor=white)](SKILL.md)
@@ -31,7 +31,7 @@
 </div>
 
 <!-- gitx:managed:build-metrics -->
-> 🛠 **实时构建指标** — 版本 **v1.12.2** · 发版日期 **2026-05-19** · 由 **Claude（Opus/Sonnet）· Codex · Gemini** 跨数百会话打造 · 自首个原型（v0.9.4，2026-04-22）起累计 AI token 估算：**≈ 3 亿+ 输入/输出 + ≈ 30 亿+ 缓存** · 跨度：**26 天 ~61 个发布**（2026-04-22 → 2026-05-18）
+> 🛠 **实时构建指标** — 版本 **v1.12.3** · 发版日期 **2026-05-20** · 由 **Claude（Opus/Sonnet）· Codex · Gemini** 跨数百会话打造 · 自首个原型（v0.9.4，2026-04-22）起累计 AI token 估算：**≈ 3 亿+ 输入/输出 + ≈ 30 亿+ 缓存** · 跨度：**28 天 ~63 个发布**（2026-04-22 → 2026-05-20）
 <!-- /gitx:managed:build-metrics -->
 
 **[文档](#目录) · [更新日志](CHANGELOG_CN.md) · [报告缺陷](https://github.com/tkxlab-ai/GitX/issues) · [安全](SECURITY.md)**
@@ -41,13 +41,15 @@
 ## 更新摘要
 
 <!-- gitx:managed:whats-new -->
-**v1.12.2 — 2026-05-19**
+**v1.12.3 — 2026-05-20**
 
-- **中文 README（`README_CN.md`）的「更新摘要 / 命令面」渲染成英文** —— `docs-pipeline` 的 `dp_whats_new` locale-blind（恒取英文 `Release/CHANGELOG.md`），`dp_command_surface` 硬编码一处英文标签。cn locale 现取手写真相源 `Release/CHANGELOG_CN.md`，「技能本体」标签本地化，中文页现读作中文。
-- **`docs-audit` H3（CN 英文长串探测器）不再整体跳过所有 `gitx:managed:` 区** —— 语言中立区（`badges` / `build-metrics` / `suite-count`）仍跳，但 `whats-new` + `command-surface` 散文现纳入扫描；中文 README 里出现英文长串即 fail 闸而非静默出货——隐藏此问题约每个版本的系统盲点已堵死。
+- **README hero 图：绝对 `raw/main` URL → 相对路径**（`docs/assets/release-demo.jpeg`）于双语 README。关闭 `Codex` 重提的 `[medium]`（Gotcha #78）—— 去掉不可复现的指向 `main` 的 URL；达成强复现：每个发布 tag 的 README 永远指向该 tag 自己的 hero 资产。`GitHub` 服务端在渲染时把相对 `img src` 改写为根相对 URL → `github.com` README 页面渲染正常、`raw` 取图路径解析通；经一次性分支 `experiment/relative-hero` 实证（`raw` 重定向至 `raw.githubusercontent.com` 200；`blob` 视图 HTML 输出改写后的 src）。
+- **平摊后的发布目录 + `full` 压缩包缺少 `docs/assets/release-demo.jpeg`** —— 新的相对路径 `hero` 引用在平摊后的产物里解析不到（`github.com` 因服务端改写仍正常，但用户在本地打开平摊后的 README 看到坏图）。`release.sh:flatten_docs()` 现把 `docs/assets/` 按 README 引用路径平摊；`Codex v1.12.3` 评审第一轮 `[medium]` 在公开 publish 前抓到。
+- **`tests/test_docs_audit.sh` 的 `T15-hero (b')`**：从"绝对 URL `hero` 被 `H10` 跳过"世界重写为"相对路径 `hero` + 资产在 `PROJECT_ROOT` 下 `RESTORE`"世界。`H10` 严格模式现解析相对引用（旧版被跳过）。测试 38/0 仍全绿；`H10` 严格性仍通过 (b) 的故意 `broken ref` 非空校验。
+- **`release-audit.sh` 新增 `§0m` 平摊 `hero-asset` 闸**（非计数）：`manifest` 声明的 `hero_asset` 必须在平摊产物中解析；同类问题再不会静默出货。`generic-safe`（无 `manifest` / 无 `hero_asset` → `SKIP`）。新增 `tests/test_release_dist_hero_asset.sh` 同时守静态契约（`release.sh` + audit gate 已接入）与功能产物布局（平摊目录 + `full` 压缩包均按声明路径携带 hero）。
 <!-- /gitx:managed:whats-new -->
 
-完整历史（61 个发布）→ [`CHANGELOG_CN.md`](CHANGELOG_CN.md)。
+完整历史（63 个发布）→ [`CHANGELOG_CN.md`](CHANGELOG_CN.md)。
 
 ---
 
@@ -369,7 +371,7 @@ GitX/
 纯 Bash 测试架，零外部测试依赖。`bash tests/run_all.sh` 跑全量；流水线将其作为发版闸再跑一次。
 
 <!-- gitx:managed:suite-count -->
-110
+111
 <!-- /gitx:managed:suite-count -->
 
 **真机测试结果** —— 全套件绿 · 冒烟 6/6 · 深度审计严格 PASS · `shasum -c` OK。上方精确套件数由实时测试树机器派生、每次发版复核（绝不手工 stale）。
@@ -403,20 +405,20 @@ GitX 的起点不是一个发版工具——而是拒绝凭信心发版。
 
 **2026-05-15 —— 纪律冲刺。** 单日发出九个 `v1.7.x` 补丁——一场系统性关闭发布 SOP 凭证门类缺陷、并围绕私有态构建五-facet 纵深防御的集中战役。`v1.8.x` 抬高公开页完整性；`v1.9.8` 根治 README 数值漂移并加 `§0f`。
 
-**2026-05-16 —— 元技能严苛。** `v1.10.0` 出 projen 代笔器 + `§0g/§0h/§0i`；`v1.10.1` 收敛五轮双引擎闭环 + 五-facet 私有态加固；`v1.11.0` 把文档抽成独立双语流水线、配硬 fail-closed 契约，并把 CI 的 shellcheck 闸搬进流水线本身；`v1.12.0` 收敛六轮 `codex` 对抗审——hero 仅 origin、`H10` 严格、manifest 驱动强制；`v1.12.1`（本版）修复公开 CHANGELOG 链接布局（Gotcha #80/#81）、补发 CN changelog、重排 Quick Start。
+**2026-05-16 —— 元技能严苛。** `v1.10.0` 出 projen 代笔器 + `§0g/§0h/§0i`；`v1.10.1` 收敛五轮双引擎闭环 + 五-facet 私有态加固；`v1.11.0` 把文档抽成独立双语流水线、配硬 fail-closed 契约，并把 CI 的 shellcheck 闸搬进流水线本身；`v1.12.0` 收敛六轮 `codex` 对抗审——hero 仅 origin、`H10` 严格、`manifest` 驱动强制；`v1.12.1` 修复公开 CHANGELOG 链接布局（Gotcha #80/#81）、补发 CN changelog、重排 Quick Start；`v1.12.2` 关闭隐藏在每个版本约一次的系统盲点（`docs-pipeline` locale-blind + `docs-audit` 整体跳过 `gitx:managed:` 区）；`v1.12.3`（本版）把 README hero 改为仓内相对路径——每个 tag 的 README 永远指向该 tag 自己的 hero 资产，并以 `manifest` 驱动收窄跨项目平摊产物面。
 
 **数字一览：**
 
 | 指标 | 值 |
 |---|---|
-| 原型 → 今 | 2026-04-22 → 2026-05-18（26 天） |
-| 发布 | ~61 个（v0.9.4 → v1.12.1） |
+| 原型 → 今 | 2026-04-22 → 2026-05-20（28 天） |
+| 发布 | ~63 个（v0.9.4 → v1.12.3） |
 | 提交 | 90 |
 | 测试套件 | 全绿 —— 见[测试](#测试) |
 | 审计检查 | 240（三态、精确性门控） |
 | 最硬一天 | 9 个补丁发布（2026-05-15 SOP 冲刺） |
 
-**状态：** 自 `v1.0.0`（2026-04-29）起稳定、production-ready；当前 GA `v1.12.1`。每次发版均经自身流水线自发版。
+**状态：** 自 `v1.0.0`（2026-04-29）起稳定、production-ready；当前 GA `v1.12.3`。每次发版均经自身流水线自发版。
 
 **塑造它的关键决策：** 确定性文档生成（projen，LLM 不进回路）· fail-closed 默认 + 缺工具通用 SKIP · 非计数 meta-gate（`§0i`、`§0j`）· 私有态五-facet 对称平价 · 双语用平行 locale 文件 + 结构平价守护。
 

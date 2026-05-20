@@ -66,6 +66,14 @@ Handoff_Logs.archive/
 REVIEW.md
 GitHub_STANDARD_ANALYSIS.md
 
+# ── Superpowers plans / specs — private design memory, never published ──
+# These are draft plans / proposed-content scratchpads that the handoff /
+# superpowers workflow drops here. They feed Codex review context for
+# upcoming work but are not part of the released skill. CLAUDE.md
+# documents them as gitignored + release-excluded; this is the .gitignore
+# half of that contract.
+docs/superpowers/
+
 # ── Claude Code / editor local state ─────────────────────────────────────
 .claude/
 memory/

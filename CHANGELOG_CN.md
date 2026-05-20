@@ -14,6 +14,16 @@
 
 ---
 
+## v1.12.3 — 2026-05-20
+
+### Fixed
+- **README hero 图：绝对 `raw/main` URL → 相对路径**（`docs/assets/release-demo.jpeg`）于双语 README。关闭 `Codex` 重提的 `[medium]`（Gotcha #78）—— 去掉不可复现的指向 `main` 的 URL；达成强复现：每个发布 tag 的 README 永远指向该 tag 自己的 hero 资产。`GitHub` 服务端在渲染时把相对 `img src` 改写为根相对 URL → `github.com` README 页面渲染正常、`raw` 取图路径解析通；经一次性分支 `experiment/relative-hero` 实证（`raw` 重定向至 `raw.githubusercontent.com` 200；`blob` 视图 HTML 输出改写后的 src）。
+- **平摊后的发布目录 + `full` 压缩包缺少 `docs/assets/release-demo.jpeg`** —— 新的相对路径 `hero` 引用在平摊后的产物里解析不到（`github.com` 因服务端改写仍正常，但用户在本地打开平摊后的 README 看到坏图）。`release.sh:flatten_docs()` 现把 `docs/assets/` 按 README 引用路径平摊；`Codex v1.12.3` 评审第一轮 `[medium]` 在公开 publish 前抓到。
+
+### Changed
+- **`tests/test_docs_audit.sh` 的 `T15-hero (b')`**：从"绝对 URL `hero` 被 `H10` 跳过"世界重写为"相对路径 `hero` + 资产在 `PROJECT_ROOT` 下 `RESTORE`"世界。`H10` 严格模式现解析相对引用（旧版被跳过）。测试 38/0 仍全绿；`H10` 严格性仍通过 (b) 的故意 `broken ref` 非空校验。
+- **`release-audit.sh` 新增 `§0m` 平摊 `hero-asset` 闸**（非计数）：`manifest` 声明的 `hero_asset` 必须在平摊产物中解析；同类问题再不会静默出货。`generic-safe`（无 `manifest` / 无 `hero_asset` → `SKIP`）。新增 `tests/test_release_dist_hero_asset.sh` 同时守静态契约（`release.sh` + audit gate 已接入）与功能产物布局（平摊目录 + `full` 压缩包均按声明路径携带 hero）。
+
 ## v1.12.2 — 2026-05-19
 
 ### Fixed

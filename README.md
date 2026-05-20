@@ -16,12 +16,12 @@ same standard it imposes on others: GitX releases GitX.
 [English](README.md) · [中文](README_CN.md)
 
 <p align="center">
-  <img src="https://github.com/tkxlab-ai/GitX/raw/main/docs/assets/release-demo.jpeg" alt="GitX release pipeline" width="820">
+  <img src="docs/assets/release-demo.jpeg" alt="GitX release pipeline" width="820">
 </p>
 
 <!-- gitx:managed:badges -->
 [![License](https://img.shields.io/badge/license-MIT-yellow.svg?style=for-the-badge)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-110%20suites%20%2F%200%20fail-brightgreen.svg?style=for-the-badge&logo=githubactions&logoColor=white)](tests/run_all.sh)
+[![Tests](https://img.shields.io/badge/tests-111%20suites%20%2F%200%20fail-brightgreen.svg?style=for-the-badge&logo=githubactions&logoColor=white)](tests/run_all.sh)
 [![Deep Audit](https://img.shields.io/badge/deep%20audit-246%2F0%2F1-brightgreen.svg?style=for-the-badge&logo=shieldsdotio&logoColor=white)](scripts/release-audit.sh)
 [![CLIs](https://img.shields.io/badge/CLI-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20OpenCode%20%C2%B7%20Gemini-6366f1.svg?style=for-the-badge&logo=anthropic&logoColor=white)](#quick-start)
 [![Shell](https://img.shields.io/badge/bash-3.2%2B%20POSIX-06b6d4.svg?style=for-the-badge&logo=gnubash&logoColor=white)](SKILL.md)
@@ -32,7 +32,7 @@ same standard it imposes on others: GitX releases GitX.
 </div>
 
 <!-- gitx:managed:build-metrics -->
-> 🛠 **Live build metrics** — Version **v1.12.2** · Released **2026-05-19** · Engineered with **Claude (Opus/Sonnet) · Codex · Gemini** across hundreds of sessions · Cumulative AI tokens since the first prototype (v0.9.4, 2026-04-22), estimated: **≈ 300M+ input/output + ≈ 3B+ cached** · Span: **~61 releases across 26 days** (2026-04-22 → 2026-05-18)
+> 🛠 **Live build metrics** — Version **v1.12.3** · Released **2026-05-20** · Engineered with **Claude (Opus/Sonnet) · Codex · Gemini** across hundreds of sessions · Cumulative AI tokens since the first prototype (v0.9.4, 2026-04-22), estimated: **≈ 300M+ input/output + ≈ 3B+ cached** · Span: **~63 releases across 28 days** (2026-04-22 → 2026-05-20)
 <!-- /gitx:managed:build-metrics -->
 
 **[Documentation](#table-of-contents) · [Changelog](CHANGELOG.md) · [Report a bug](https://github.com/tkxlab-ai/GitX/issues) · [Security](SECURITY.md)**
@@ -42,13 +42,15 @@ same standard it imposes on others: GitX releases GitX.
 ## What's New
 
 <!-- gitx:managed:whats-new -->
-**v1.12.2 — 2026-05-19**
+**v1.12.3 — 2026-05-20**
 
-- The Chinese README (`README_CN.md`) rendered an **English** What's New / Command Surface — `docs-pipeline`'s `dp_whats_new` was locale-blind (it always sourced the English `Release/CHANGELOG.md`) and `dp_command_surface` hard-coded one English label. The cn locale now sources the hand-authored `Release/CHANGELOG_CN.md`, and the "skill itself" label is localized, so a Chinese page reads as Chinese.
-- `docs-audit` H3 (the CN long-English-run detector) no longer blanket-skips every `gitx:managed:` region: language-neutral regions (`badges` / `build-metrics` / `suite-count`) stay skipped, but `whats-new` + `command-surface` prose is now scanned, so an English-in-a-Chinese-README regression fails the gate instead of shipping silently — the systemic blindspot that hid this for ~every release is closed.
+- README hero img: absolute `raw/main` URL → relative path (`docs/assets/release-demo.jpeg`) on both EN and CN README. Closes Codex's re-raised [medium] (Gotcha #78) by removing the non-reproducible main-pinned URL; strong reproducibility achieved — every release tag's README now points at that tag's own hero asset. GitHub server-side rewrites relative img src → root-relative URL on render, so github.com README pages render correctly and the raw fetch path resolves; verified via throwaway branch experiment/relative-hero (raw redirect to raw.githubusercontent.com 200; blob view HTML emits the rewritten src).
+- Flattened release dir + full tarball were missing `docs/assets/release-demo.jpeg` — the new relative hero ref was unresolved in the flattened artifact (github.com worked via server-side rewrite, but users opening the flattened README locally saw a broken image). `release.sh:flatten_docs()` now carries `docs/assets/` at the README-referenced path; caught by Codex v1.12.3 review round-1 [medium] before public publish.
+- `tests/test_docs_audit.sh` T15-hero (b'): rewrite from the "absolute-URL hero is H10-skipped" world to the "relative-path hero + asset restored under PROJECT_ROOT" world. H10 strict now resolves the relative ref (was previously skipped). Test 38/0 still all-green; H10 strictness still non-vacuously tested via the deliberately-injected broken ref in (b).
+- `release-audit.sh` adds `§0m flattened hero-asset gate` (non-counting): the manifest-declared `hero_asset` MUST resolve under the flattened release dir so the same class never silently ships again. Generic-safe — no manifest or no `hero_asset` declared → SKIP. New `tests/test_release_dist_hero_asset.sh` fences both static contract (release.sh + audit gate wired) and functional dist layout (flattened dir + full tarball carry the hero at the declared path).
 <!-- /gitx:managed:whats-new -->
 
-Full history (61 releases) → [`CHANGELOG.md`](CHANGELOG.md).
+Full history (63 releases) → [`CHANGELOG.md`](CHANGELOG.md).
 
 ---
 
@@ -373,7 +375,7 @@ Every gate reports one of five states; the meaning is fixed project-wide so outp
 Pure-bash harness, zero external test dependencies. `bash tests/run_all.sh` runs everything; the pipeline re-runs it as a release gate.
 
 <!-- gitx:managed:suite-count -->
-110
+111
 <!-- /gitx:managed:suite-count -->
 
 **Real-Machine Test Results** — full suite green · smoke 6/6 · Deep Audit strict PASS · `shasum -c` OK. The exact suite count above is machine-derived from the live test tree and re-verified every release (it never goes stale by hand).
@@ -407,20 +409,20 @@ GitX did not begin as a release tool — it began as a refusal to ship on faith.
 
 **2026-05-15 — the discipline sprint.** Nine `v1.7.x` patch releases in a single day — a focused campaign that systematically closed a credential-gate class in the publish SOP and built five-facet defense-in-depth around private state. `v1.8.x` raised public-page completeness; `v1.9.8` root-caused README numeric rot and added `§0f`.
 
-**2026-05-16 — meta-skill rigor.** `v1.10.0` shipped the projen ghostwriter + `§0g/§0h/§0i`; `v1.10.1` converged a five-round dual-engine closure + five-facet private-state hardening; `v1.11.0` extracts docs into an independent bilingual pipeline with a hard fail-closed contract and pulls CI's shellcheck gate into the pipeline; `v1.12.0` converges a six-round `codex` adversarial review on the docs contract — origin-only hero, strict `H10`, manifest-driven enforcement; `v1.12.1` (this release) fixes the public CHANGELOG-link layout (Gotcha #80/#81), ships the CN changelog, and reorders Quick Start.
+**2026-05-16 — meta-skill rigor.** `v1.10.0` shipped the projen ghostwriter + `§0g/§0h/§0i`; `v1.10.1` converged a five-round dual-engine closure + five-facet private-state hardening; `v1.11.0` extracts docs into an independent bilingual pipeline with a hard fail-closed contract and pulls CI's shellcheck gate into the pipeline; `v1.12.0` converges a six-round `codex` adversarial review on the docs contract — origin-only hero, strict `H10`, manifest-driven enforcement; `v1.12.1` fixes the public CHANGELOG-link layout (Gotcha #80/#81), ships the CN changelog, and reorders Quick Start; `v1.12.2` closes a systemic docs-pipeline locale-blind + docs-audit blanket-skip blindspot that had hidden English-in-the-Chinese-README for ~every release; `v1.12.3` (this release) makes the README hero a relative repo-local path so each tag's README permanently points at its own asset, plus a manifest-driven flatten contract that narrows the cross-project release artifact surface.
 
 **Numbers at a glance:**
 
 | Metric | Value |
 |---|---|
-| Prototype → today | 2026-04-22 → 2026-05-18 (26 days) |
-| Releases | ~61 (v0.9.4 → v1.12.1) |
+| Prototype → today | 2026-04-22 → 2026-05-20 (28 days) |
+| Releases | ~63 (v0.9.4 → v1.12.3) |
 | Commits | 90 |
 | Test suites | full green — see [Testing](#testing) |
 | Audit checks | 240 (three-state, exactness-gated) |
 | Hardest day | 9 patch releases (2026-05-15 SOP sprint) |
 
-**Status:** stable & production-ready since `v1.0.0` (2026-04-29); current GA `v1.12.1`. Self-baked through its own pipeline every release.
+**Status:** stable & production-ready since `v1.0.0` (2026-04-29); current GA `v1.12.3`. Self-baked through its own pipeline every release.
 
 **Key decisions:** deterministic doc generation (projen, no LLM in loop) · fail-closed default with generic-safe SKIP · non-counting meta-gates (`§0i`, `§0j`) · five-facet symmetric parity for private state · bilingual via parallel locale files with structural-parity guards.
 

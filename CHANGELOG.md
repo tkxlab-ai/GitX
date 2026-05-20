@@ -2,6 +2,16 @@
 
 All notable changes per release, newest first. Chinese parallel: [`CHANGELOG_CN.md`](CHANGELOG_CN.md).
 
+## v1.12.3 — 2026-05-20
+
+### Fixed
+- README hero img: absolute `raw/main` URL → relative path (`docs/assets/release-demo.jpeg`) on both EN and CN README. Closes Codex's re-raised [medium] (Gotcha #78) by removing the non-reproducible main-pinned URL; strong reproducibility achieved — every release tag's README now points at that tag's own hero asset. GitHub server-side rewrites relative img src → root-relative URL on render, so github.com README pages render correctly and the raw fetch path resolves; verified via throwaway branch experiment/relative-hero (raw redirect to raw.githubusercontent.com 200; blob view HTML emits the rewritten src).
+- Flattened release dir + full tarball were missing `docs/assets/release-demo.jpeg` — the new relative hero ref was unresolved in the flattened artifact (github.com worked via server-side rewrite, but users opening the flattened README locally saw a broken image). `release.sh:flatten_docs()` now carries `docs/assets/` at the README-referenced path; caught by Codex v1.12.3 review round-1 [medium] before public publish.
+
+### Changed
+- `tests/test_docs_audit.sh` T15-hero (b'): rewrite from the "absolute-URL hero is H10-skipped" world to the "relative-path hero + asset restored under PROJECT_ROOT" world. H10 strict now resolves the relative ref (was previously skipped). Test 38/0 still all-green; H10 strictness still non-vacuously tested via the deliberately-injected broken ref in (b).
+- `release-audit.sh` adds `§0m flattened hero-asset gate` (non-counting): the manifest-declared `hero_asset` MUST resolve under the flattened release dir so the same class never silently ships again. Generic-safe — no manifest or no `hero_asset` declared → SKIP. New `tests/test_release_dist_hero_asset.sh` fences both static contract (release.sh + audit gate wired) and functional dist layout (flattened dir + full tarball carry the hero at the declared path).
+
 ## v1.12.2 — 2026-05-19
 
 ### Fixed
