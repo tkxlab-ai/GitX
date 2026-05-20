@@ -24,18 +24,25 @@ jobs:
       - name: Dual-source consistency check
         run: |
           set -e
+          # Generic-safe (v1.12.4 fix): the dual-source mirror is a
+          # DEVELOPMENT-time invariant of the private source tree. The
+          # public release artifact (this repo's main = SOP-published
+          # source tarball) is the already-resolved single canonical
+          # state with skills/ intentionally absent. Skip when absent;
+          # enforce only when present. Pre-v1.12.4 the absence was a
+          # hard FAIL which broke every public CI run since v1.12.0.
           if [ ! -d "skills/gitx-release/scripts" ]; then
-            echo "❌ skills/gitx-release/scripts is required for dual-source consistency"
-            exit 1
+            echo "skip: skills/gitx-release/scripts absent (public release artifact layout)"
+            exit 0
           fi
           drift=$(diff -rq scripts/ skills/gitx-release/scripts/ 2>&1 \
             | grep -v "^Only in.*scripts: release-" || true)
           if [ -n "$drift" ]; then
-            echo "❌ Dual-source drift detected:"
+            echo "Dual-source drift detected:"
             echo "$drift"
             exit 1
           fi
-          echo "✅ Dual-source consistent"
+          echo "Dual-source consistent"
 
   test:
     name: test-suite
