@@ -41,13 +41,13 @@ if [ -f "$RS" ]; then
     else
         fail "gate NOT wired in correct main-sequence position (vacuous)"
     fi
-    printf '%s\n' "$_blk" | grep -q 'cmp -s' \
+    grep -q 'cmp -s' <<<"$_blk" \
         && ok "gate byte-compares (cmp -s) tarball vs Release/CHANGELOG" \
         || fail "gate does not byte-compare — content rot can slip"
-    [ "$(printf '%s\n' "$_blk" | grep -c 'exit 1')" -ge 2 ] \
+    [ "$(grep -c 'exit 1' <<<"$_blk")" -ge 2 ] \
         && ok "gate is fail-closed (exit 1 on missing AND on mismatch)" \
         || fail "gate not fail-closed on both missing and mismatch"
-    printf '%s\n' "$_blk" | grep -q '\[ -f "\$_cp_src" \] || continue' \
+    grep -q '\[ -f "\$_cp_src" \] || continue' <<<"$_blk" \
         && ok "CN parallel is generic-safe (skip when source absent)" \
         || fail "CN not generic-safe — would FAIL projects without CHANGELOG_CN"
 else

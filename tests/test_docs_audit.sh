@@ -179,7 +179,7 @@ if [ -f "$AUDIT" ]; then
   # set -e-safe rc capture (Gotcha #3/#52): AND-OR list so a non-zero audit
   # does not abort the test before rc is read.
   _h3m_out=$(PROJECT_ROOT="$TMP_H3M" bash "$AUDIT" 2>&1) && rc_h3m=0 || rc_h3m=$?
-  if [ "$rc_h3m" -ne 0 ] && printf '%s\n' "$_h3m_out" | grep -q 'docs-audit H3.*README_CN'; then
+  if [ "$rc_h3m" -ne 0 ] && grep -q 'docs-audit H3.*README_CN' <<<"$_h3m_out"; then
     ok "H3 fires on English INSIDE README_CN whats-new managed region (blindspot closed)"
   else
     fail "H3 did NOT catch EN inside CN whats-new region (rc=$rc_h3m) — v1.12.2 blindspot regression"
@@ -236,7 +236,7 @@ ln -s "$REAL_ROOT/tests" "$TMP_GS/tests"
 perl -0pi -e 's{(<!-- gitx:managed:whats-new -->\n).*?(\n<!-- /gitx:managed:whats-new -->)}{${1}**v9.9.9 — 2026-09-09**\n\n- alpha bravo charlie delta echo foxtrot golf hotel india juliet\n${2}}s' "$TMP_GS/README_CN.md"
 if [ -f "$AUDIT" ]; then
   _gs_out=$(PROJECT_ROOT="$TMP_GS" bash "$AUDIT" 2>&1) && : || :
-  if printf '%s\n' "$_gs_out" | grep -q 'docs-audit H3.*README_CN'; then
+  if grep -q 'docs-audit H3.*README_CN' <<<"$_gs_out"; then
     fail "H3 fired on a downstream WITHOUT CHANGELOG_CN — newly breaks dependents (generic-safe regression)"
   else
     ok "H3 generic-safe: no CHANGELOG_CN → whats-new region not scanned (dependent not newly broken)"
@@ -380,7 +380,7 @@ if [ -f "$AUDIT" ] && [ -f "$MANIFEST" ]; then
   else
     fail "H5 should pass on clean repo (CN absent), got exit $rc_h5"
   fi
-  if printf '%s\n' "$out_h5" | grep -q "H5"; then
+  if grep -q "H5" <<<"$out_h5"; then
     ok "H5 line present in docs-audit output"
   else
     fail "H5 line missing from docs-audit output"
@@ -412,7 +412,7 @@ if [ -f "$AUDIT" ]; then
   else
     fail "H6 should have fired on managed-region drift but got exit 0"
   fi
-  if printf '%s\n' "$out_h6" | grep -q "H6"; then
+  if grep -q "H6" <<<"$out_h6"; then
     ok "H6 line present in docs-audit output on drift"
   else
     fail "H6 line missing from docs-audit output on drift"
@@ -456,7 +456,7 @@ if [ -f "$AUDIT" ] && [ -f "$MANIFEST" ]; then
     else
       fail "H7 should pass with shellcheck present and clean scripts (exit $rc_h7)"
     fi
-    if printf '%s\n' "$out_h7" | grep -q "H7"; then
+    if grep -q "H7" <<<"$out_h7"; then
       ok "H7 line present in docs-audit output"
     else
       fail "H7 line missing from docs-audit output"
@@ -493,7 +493,7 @@ if [ -f "$AUDIT" ]; then
   else
     fail "H10 should have fired on broken local ref but got exit 0"
   fi
-  if printf '%s\n' "$out_h10b" | grep -q "H10"; then
+  if grep -q "H10" <<<"$out_h10b"; then
     ok "H10 line present in docs-audit output on broken ref"
   else
     fail "H10 line missing from docs-audit output on broken ref"
@@ -513,7 +513,7 @@ if [ -f "$AUDIT" ] && [ -f "$MANIFEST" ]; then
   else
     fail "H10 should pass on clean real repo but got exit $rc_h10c"
   fi
-  if printf '%s\n' "$out_h10c" | grep -q "H10"; then
+  if grep -q "H10" <<<"$out_h10c"; then
     ok "H10 token present in clean-repo docs-audit success line"
   else
     fail "H10 token missing from clean-repo docs-audit success line"
@@ -550,7 +550,7 @@ if [ -f "$AUDIT" ] && [ -f "$MANIFEST" ] && [ -f "$CA/references/docs-contract/m
   # CLONE-A keeps the declared hero_asset (as in the real repo).
   # (a) declared + asset removed → standalone gate hard-fail (ref-independent)
   out_ha=$(PROJECT_ROOT="$CA" bash "$AUDIT" 2>&1) && rc_ha=0 || rc_ha=$?
-  if [ "$rc_ha" -ne 0 ] && printf '%s\n' "$out_ha" | grep -q 'declared hero_asset missing'; then
+  if [ "$rc_ha" -ne 0 ] && grep -q 'declared hero_asset missing' <<<"$out_ha"; then
     ok "H10 hard-fails when declared hero_asset absent (origin enforcement)"
   else
     fail "H10 must enforce declared hero_asset presence but did not (exit $rc_ha)"
@@ -559,7 +559,7 @@ if [ -f "$AUDIT" ] && [ -f "$MANIFEST" ] && [ -f "$CA/references/docs-contract/m
   sed -i.bak '/release-demo\.jpeg/d' "$CA/README.md" "$CA/README_CN.md" 2>/dev/null
   rm -f "$CA/README.md.bak" "$CA/README_CN.md.bak"
   out_hap=$(PROJECT_ROOT="$CA" bash "$AUDIT" 2>&1) && rc_hap=0 || rc_hap=$?
-  if [ "$rc_hap" -ne 0 ] && printf '%s\n' "$out_hap" | grep -q 'declared hero_asset missing'; then
+  if [ "$rc_hap" -ne 0 ] && grep -q 'declared hero_asset missing' <<<"$out_hap"; then
     ok "H10 enforces declared hero_asset even with ZERO hero refs (unconditional)"
   else
     fail "H10 declared-hero enforcement contingent on a reference (exit $rc_hap)"
@@ -570,7 +570,7 @@ if [ -f "$AUDIT" ] && [ -f "$MANIFEST" ] && [ -f "$CA/references/docs-contract/m
   # (b) undeclared + injected relative repo-local MISSING ref → STRICT hard-fail
   printf '\n[broken](docs/assets/does-not-exist-xyz.svg)\n' >> "$CB/README.md"
   out_hb=$(PROJECT_ROOT="$CB" bash "$AUDIT" 2>&1) && rc_hb=0 || rc_hb=$?
-  if [ "$rc_hb" -ne 0 ] && printf '%s\n' "$out_hb" | grep -q 'unresolved local ref.*does-not-exist-xyz'; then
+  if [ "$rc_hb" -ne 0 ] && grep -q 'unresolved local ref.*does-not-exist-xyz' <<<"$out_hb"; then
     ok "H10 strict: hard-fails on a referenced missing repo-local ref (non-vacuous)"
   else
     fail "H10 not strict: referenced missing local ref passed (exit $rc_hb) — Codex no-ship class"
@@ -586,12 +586,12 @@ if [ -f "$AUDIT" ] && [ -f "$MANIFEST" ] && [ -f "$CA/references/docs-contract/m
   if [ "$rc_hbp" -eq 0 ]; then
     ok "H10 clean — undeclared + relative-path hero + asset present (downstream-adopter safe)"
   else
-    fail "H10 wrongly failed undeclared adopter shipping their hero asset (exit $rc_hbp): $(printf '%s' "$out_hbp" | grep H10 | head -1)"
+    fail "H10 wrongly failed undeclared adopter shipping their hero asset (exit $rc_hbp): $(grep H10 <<<"$out_hbp" | head -1)"
   fi
   # (c) near-miss with no extension still hard-fails (non-vacuous)
   printf '\n[nearmiss](docs/assets/release-demo)\n' >> "$CB/README.md"
   out_hc=$(PROJECT_ROOT="$CB" bash "$AUDIT" 2>&1) && rc_hc=0 || rc_hc=$?
-  if [ "$rc_hc" -ne 0 ] && printf '%s\n' "$out_hc" | grep -q 'release-demo'; then
+  if [ "$rc_hc" -ne 0 ] && grep -q 'release-demo' <<<"$out_hc"; then
     ok "H10 still hard-fails on near-miss release-demo (no ext) — non-vacuous"
   else
     fail "H10 non-vacuity broken: near-miss release-demo did not hard-fail (exit $rc_hc)"
@@ -614,10 +614,10 @@ trap - EXIT
 SK="$REAL_ROOT/skills/gitx-release"
 if [ -f "$SK/scripts/docs-audit.sh" ] && [ -f "$SK/references/docs-contract/manifest.txt" ]; then
   out_sk=$(PROJECT_ROOT="$SK" bash "$SK/scripts/docs-audit.sh" 2>&1) && rc_sk=0 || rc_sk=$?
-  if [ "$rc_sk" -eq 0 ] && ! printf '%s\n' "$out_sk" | grep -q 'declared hero_asset missing'; then
+  if [ "$rc_sk" -eq 0 ] && ! grep -q 'declared hero_asset missing' <<<"$out_sk"; then
     ok "bundled skill self-audit clean — hero_asset not mirrored (Codex regression)"
   else
-    fail "bundled skill self-audit broken by mirrored hero_asset (exit $rc_sk): $(printf '%s' "$out_sk" | grep -i hero | head -1)"
+    fail "bundled skill self-audit broken by mirrored hero_asset (exit $rc_sk): $(grep -i hero <<<"$out_sk" | head -1)"
   fi
   if ! grep -q '^hero_asset:' "$SK/references/docs-contract/manifest.txt"; then
     ok "skill mirror manifest omits root-only hero_asset: declaration"
@@ -632,7 +632,7 @@ fi
 # --- T16: non-counting guarantee — output has no Deep-Audit-shaped tally (Gotcha #62) ---
 if [ -f "$AUDIT" ] && [ -f "$MANIFEST" ]; then
   out_nc=$(PROJECT_ROOT="$REAL_ROOT" bash "$AUDIT" 2>&1)
-  if printf '%s\n' "$out_nc" | grep -qE '[0-9]+ / [❌➖✅] *[0-9]+|✅ *[0-9]+ */ *❌ *[0-9]+ */ *➖ *[0-9]+'; then
+  if grep -qE '[0-9]+ / [❌➖✅] *[0-9]+|✅ *[0-9]+ */ *❌ *[0-9]+ */ *➖ *[0-9]+' <<<"$out_nc"; then
     fail "non-counting violated: docs-audit output contains a Deep-Audit-style tally"
   else
     ok "non-counting holds: docs-audit output contains no tally (Gotcha #62)"

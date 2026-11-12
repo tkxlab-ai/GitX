@@ -127,7 +127,7 @@ mkdir -p "$FIXTURE/A_skc" "$FIXTURE/A_home"
 setup_vendored "$FIXTURE/A_skc" "2026-05-08"
 setup_system_at_date "$FIXTURE/A_home" "2026-05-08"
 RES=$(run_status "$FIXTURE/A_skc" "$FIXTURE/A_home")
-if echo "$RES" | grep -qE "VERDICT=same"; then
+if grep -qE "VERDICT=same" <<<"$RES"; then
     ok "case A (same date): verdict=same ($RES)"
 else
     fail "case A: expected verdict=same, got '$RES'"
@@ -138,7 +138,7 @@ mkdir -p "$FIXTURE/B_skc" "$FIXTURE/B_home"
 setup_vendored "$FIXTURE/B_skc" "2026-05-08"
 setup_system_at_date "$FIXTURE/B_home" "2026-05-10"
 RES=$(run_status "$FIXTURE/B_skc" "$FIXTURE/B_home")
-if echo "$RES" | grep -qE "VERDICT=system_newer"; then
+if grep -qE "VERDICT=system_newer" <<<"$RES"; then
     ok "case B (system newer): verdict=system_newer ($RES)"
 else
     fail "case B: expected verdict=system_newer, got '$RES'"
@@ -149,7 +149,7 @@ mkdir -p "$FIXTURE/C_skc" "$FIXTURE/C_home"
 setup_vendored "$FIXTURE/C_skc" "2026-05-10"
 setup_system_at_date "$FIXTURE/C_home" "2026-05-08"
 RES=$(run_status "$FIXTURE/C_skc" "$FIXTURE/C_home")
-if echo "$RES" | grep -qE "VERDICT=vendored_newer"; then
+if grep -qE "VERDICT=vendored_newer" <<<"$RES"; then
     ok "case C (vendored newer): verdict=vendored_newer ($RES)"
 else
     fail "case C: expected verdict=vendored_newer, got '$RES'"
@@ -160,7 +160,7 @@ mkdir -p "$FIXTURE/D_skc" "$FIXTURE/D_home"
 setup_vendored "$FIXTURE/D_skc" "2026-05-08"
 # Don't setup system
 RES=$(run_status "$FIXTURE/D_skc" "$FIXTURE/D_home")
-if echo "$RES" | grep -qE "VERDICT=system_absent"; then
+if grep -qE "VERDICT=system_absent" <<<"$RES"; then
     ok "case D (system absent): verdict=system_absent ($RES)"
 else
     fail "case D: expected verdict=system_absent, got '$RES'"

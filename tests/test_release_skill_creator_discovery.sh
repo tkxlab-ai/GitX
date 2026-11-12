@@ -64,7 +64,7 @@ sed -n '/^_discover_skill_creator()/,/^}$/p' "$RELEASE_SH" > "$FN_FILE"
 mkdir -p "$FIXTURE/homeA/.claude/plugins/cache/claude-plugins-official/skill-creator/abc123hash/skills/skill-creator/scripts"
 touch "$FIXTURE/homeA/.claude/plugins/cache/claude-plugins-official/skill-creator/abc123hash/skills/skill-creator/scripts/package_skill.py"
 RESULT=$(HOME="$FIXTURE/homeA" bash -c "set -u; SKILL_CREATOR=''; $(cat "$FN_FILE"); _discover_skill_creator; echo \"\${SKILL_CREATOR:-NONE}\"")
-if echo "$RESULT" | grep -qE "/.claude/plugins/cache/.*/abc123hash/.*/skill-creator$"; then
+if grep -qE "/.claude/plugins/cache/.*/abc123hash/.*/skill-creator$" <<<"$RESULT"; then
     ok "behavior A: planted cache hash dir → SKILL_CREATOR resolves correctly"
 else
     fail "behavior A: planted cache failed. Got: $RESULT"
@@ -74,7 +74,7 @@ fi
 mkdir -p "$FIXTURE/homeB/.claude/skills/skill-creator/scripts"
 touch "$FIXTURE/homeB/.claude/skills/skill-creator/scripts/package_skill.py"
 RESULT=$(HOME="$FIXTURE/homeB" bash -c "set -u; SKILL_CREATOR=''; $(cat "$FN_FILE"); _discover_skill_creator; echo \"\${SKILL_CREATOR:-NONE}\"")
-if echo "$RESULT" | grep -qE "/homeB/.claude/skills/skill-creator$"; then
+if grep -qE "/homeB/.claude/skills/skill-creator$" <<<"$RESULT"; then
     ok "behavior B: cache empty + ~/.claude/skills/ exists → fallback discovered"
 else
     fail "behavior B: fallback failed. Got: $RESULT"

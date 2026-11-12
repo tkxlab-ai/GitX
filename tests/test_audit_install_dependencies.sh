@@ -109,11 +109,20 @@ chmod +x "$RD/install.sh"
 audit_out=$(PROJECT_ROOT="$FIXA" PROJECT_NAME=demo SKILL_NAME=demo-skill \
             bash "$AUDIT_SH" v0.0.1 2>&1 || true)
 
-if echo "$audit_out" | grep -qE "MISSING-CUSTOM-FILE\.md|install\.sh.*depends.*missing|install\.sh.*缺失"; then
+if grep -qE "MISSING-CUSTOM-FILE\.md|install\.sh.*depends.*missing|install\.sh.*缺失" <<<"$audit_out"; then
     ok "[case A] audit FAILs and names the missing dependency 'MISSING-CUSTOM-FILE.md'"
 else
     fail "[case A] audit silent on missing install.sh dependency (claudemex bug regression)"
     echo "$audit_out" | tail -20 | sed 's/^/       /'
+fi
+# Why: on bash 3.2 a parse error inside §11k ("bad substitution") can still
+# leave the dependency name echoed elsewhere; the ❌ dependency line proves
+# §11k actually ran to completion.
+if grep -q 'install\.sh 依赖缺失' <<<"$audit_out" && ! grep -q 'bad substitution' <<<"$audit_out"; then
+    ok "[case A] §11k ran to completion (❌ dependency line present, no bad substitution)"
+else
+    fail "[case A] §11k did not complete (missing ❌ dependency line or bad substitution)"
+    grep -E 'bad substitution|§11k' <<<"$audit_out" | sed 's/^/       /'
 fi
 rm -rf "$FIXA"
 
@@ -132,18 +141,18 @@ chmod +x "$RD/install.sh"
 audit_out=$(PROJECT_ROOT="$FIXB" PROJECT_NAME=demo SKILL_NAME=demo-skill \
             bash "$AUDIT_SH" v0.0.1 2>&1 || true)
 
-if echo "$audit_out" | grep -qE "PRESENT-FILE.*missing|PRESENT-FILE.*缺失"; then
+if grep -qE "PRESENT-FILE.*missing|PRESENT-FILE.*缺失" <<<"$audit_out"; then
     fail "[case B] audit incorrectly flagged a present file as missing"
-elif echo "$audit_out" | grep -qE 'install\.sh.*依赖.*✅|install\.sh.*deps.*✅|✅.*install\.sh.*依赖|✅.*install\.sh.*dependenc'; then
+elif grep -qE 'install\.sh.*依赖.*✅|install\.sh.*deps.*✅|✅.*install\.sh.*依赖|✅.*install\.sh.*dependenc' <<<"$audit_out"; then
     ok "[case B] audit passes when install.sh dependencies all resolve"
 else
     # As long as it doesn't FALSELY fail on PRESENT-FILE we accept this case.
     # (Other audit gates may still FAIL on the minimal fixture — only §11k matters here.)
-    if ! echo "$audit_out" | grep -qE "PRESENT-FILE"; then
+    if ! grep -qE "PRESENT-FILE" <<<"$audit_out"; then
         ok "[case B] audit does not flag PRESENT-FILE as missing (gate accepts resolved deps)"
     else
         fail "[case B] audit references PRESENT-FILE in unexpected way"
-        echo "$audit_out" | grep PRESENT-FILE | sed 's/^/       /'
+        grep PRESENT-FILE <<<"$audit_out" | sed 's/^/       /'
     fi
 fi
 rm -rf "$FIXB"
@@ -161,7 +170,7 @@ chmod +x "$RD/install.sh"
 audit_out=$(PROJECT_ROOT="$FIXC" PROJECT_NAME=demo SKILL_NAME=demo-skill \
             bash "$AUDIT_SH" v0.0.1 2>&1 || true)
 # Should not flag any false-positive missing dep
-if echo "$audit_out" | grep -qE 'install\.sh.*missing.*dep|install\.sh.*缺失.*依赖'; then
+if grep -qE 'install\.sh.*missing.*dep|install\.sh.*缺失.*依赖' <<<"$audit_out"; then
     fail "[case C] empty install.sh wrongly flagged for missing deps"
 else
     ok "[case C] install.sh with no SELF_DIR refs → §11k is a no-op (no false positives)"
@@ -185,9 +194,9 @@ EOF
 chmod +x "$RD/install.sh"
 audit_out=$(PROJECT_ROOT="$FIXD" PROJECT_NAME=demo SKILL_NAME=demo-skill \
             bash "$AUDIT_SH" v0.0.1 2>&1 || true)
-if echo "$audit_out" | grep -q "example-doc\.md"; then
+if grep -q "example-doc\.md" <<<"$audit_out"; then
     fail "[case D] commented-out \$SELF_DIR/example-doc.md wrongly flagged as missing dep"
-    echo "$audit_out" | grep example-doc | sed 's/^/       /'
+    grep example-doc <<<"$audit_out" | sed 's/^/       /'
 else
     ok "[case D] commented \$SELF_DIR/ reference correctly ignored (no false positive)"
 fi
@@ -207,11 +216,17 @@ EOF
 chmod +x "$RD/install.sh"
 audit_out=$(PROJECT_ROOT="$FIXE" PROJECT_NAME=demo SKILL_NAME=demo-skill \
             bash "$AUDIT_SH" v0.0.1 2>&1 || true)
-if echo "$audit_out" | grep -q "MISSING-BRACE-FILE\.md"; then
+if grep -q "MISSING-BRACE-FILE\.md" <<<"$audit_out"; then
     ok "[case E] brace-form \"\${SELF_DIR}/...\" reference correctly caught as missing"
 else
     fail "[case E] brace-form reference SLIPPED past the gate (claudemex bug class still live)"
     echo "$audit_out" | tail -10 | sed 's/^/       /'
+fi
+if grep -q 'install\.sh 依赖缺失' <<<"$audit_out" && ! grep -q 'bad substitution' <<<"$audit_out"; then
+    ok "[case E] §11k ran to completion (❌ dependency line present, no bad substitution)"
+else
+    fail "[case E] §11k did not complete (missing ❌ dependency line or bad substitution)"
+    grep -E 'bad substitution|§11k' <<<"$audit_out" | sed 's/^/       /'
 fi
 rm -rf "$FIXE"
 

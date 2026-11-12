@@ -19,6 +19,32 @@ SKILL_NAME="gitx-release"
 SKILL_NAME_LEGACY="git-release-pipeline"
 SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# --- Integrity verification (v1.0.8 supply-chain hardening) ---
+# Runs BEFORE sourcing anything: the output helper below is itself bundle
+# code, so a tampered helper must be rejected before it can execute. Plain
+# echo here because the styled helpers are not loaded yet; the success text
+# is replayed at checkpoint 1 once they are.
+if [ -f "$SELF_DIR/checksums.txt" ]; then
+    if command -v shasum >/dev/null 2>&1; then
+        _SHA_VERIFY="shasum -a 256 -c"
+    elif command -v sha256sum >/dev/null 2>&1; then
+        _SHA_VERIFY="sha256sum -c"
+    else
+        echo "❌ checksums.txt present but neither shasum nor sha256sum is available" >&2
+        echo "❌ Cannot verify integrity -- refusing to install." >&2
+        exit 1
+    fi
+    if ! (cd "$SELF_DIR" && $_SHA_VERIFY checksums.txt >/dev/null 2>&1); then
+        echo "❌ Integrity check FAILED -- bundle appears tampered or incomplete" >&2
+        (cd "$SELF_DIR" && $_SHA_VERIFY checksums.txt 2>&1 || true) | grep -E 'FAILED|missing' | sed 's/^/     /' >&2
+        exit 1
+    fi
+    _CHK_COUNT=$(awk 'END{print NR}' "$SELF_DIR/checksums.txt")
+    _INTEGRITY_MSG="checksums.txt verified (${_CHK_COUNT}/${_CHK_COUNT})"
+else
+    _INTEGRITY_MSG="dev-tree install (no checksums.txt) -- integrity check skipped"
+fi
+
 # --- Unified install output helper (TKX standard) ---
 # Master copy lives in Git_Release_Skill/scripts/lib/; vendored byte-identical
 # into each TKX skill bundle. Enforces same banner / checkpoint / summary
@@ -103,33 +129,14 @@ else
     _INSTALL_MODE="install"
 fi
 
-# 6 checkpoints: Integrity / Preflight / Install canonical / Symlinks /
-# Legacy cleanup / Validation.
-install_style_init 6
+# 7 checkpoints: Integrity / Preflight / Install canonical / Symlinks /
+# Legacy cleanup / Validation / PATH shim.
+install_style_init 7
 install_banner_top "$SKILL_NAME" "$_INSTALL_VERSION" "$_INSTALL_MODE" "$SELF_DIR"
 
-# --- Checkpoint 1/6: Integrity verification (v1.0.8 supply-chain hardening) ---
+# --- Checkpoint 1/6: Integrity verification (verified above, before sourcing) ---
 install_checkpoint "$_TKX_E_LOCK" "Integrity verification"
-if [ -f "$SELF_DIR/checksums.txt" ]; then
-    if command -v shasum >/dev/null 2>&1; then
-        _SHA_VERIFY="shasum -a 256 -c"
-    elif command -v sha256sum >/dev/null 2>&1; then
-        _SHA_VERIFY="sha256sum -c"
-    else
-        install_step_fail "checksums.txt present but neither shasum nor sha256sum is available"
-        install_step_fail "Cannot verify integrity -- refusing to install."
-        exit 1
-    fi
-    if ! (cd "$SELF_DIR" && $_SHA_VERIFY checksums.txt >/dev/null 2>&1); then
-        install_step_fail "Integrity check FAILED -- bundle appears tampered or incomplete"
-        (cd "$SELF_DIR" && $_SHA_VERIFY checksums.txt 2>&1 || true) | grep -E 'FAILED|missing' | sed 's/^/     /' >&2
-        exit 1
-    fi
-    _CHK_COUNT=$(awk 'END{print NR}' "$SELF_DIR/checksums.txt")
-    install_step_ok "checksums.txt verified (${_CHK_COUNT}/${_CHK_COUNT})"
-else
-    install_step_ok "dev-tree install (no checksums.txt) -- integrity check skipped"
-fi
+install_step_ok "$_INTEGRITY_MSG"
 
 # --- Checkpoint 2/6: Preflight ---
 install_checkpoint "$_TKX_E_SEARCH" "Preflight"
@@ -178,6 +185,7 @@ if [ "$DRY_RUN" -eq 1 ]; then
     if [ -f "$SELF_DIR/agents/codex-commands.txt" ]; then
         install_step_ok "codex commands: $(tr '\n' ' ' < "$SELF_DIR/agents/codex-commands.txt" | sed 's/[[:space:]]*$//')"
     fi
+    install_step_ok "PATH shim: $HOME/.agents/bin/gitx-marketplace → $CANONICAL/scripts/gitx-marketplace.sh"
     if [ -d "$CANONICAL" ] || [ -L "$CLAUDE_LINK" ]; then
         if [ "$FORCE" -eq 1 ]; then
             install_step_warn "WOULD overwrite existing installation (--force)"
@@ -337,6 +345,47 @@ else
     exit 1
 fi
 
+# --- Checkpoint 7/7: Install PATH shim (v1.13.0) ---
+install_checkpoint "$_TKX_E_LINK" "PATH shim (gitx-marketplace)"
+install_marketplace_path_shim() {
+    local bindir="$HOME/.agents/bin"
+    local target="$CANONICAL/scripts/gitx-marketplace.sh"
+    if [ ! -x "$target" ]; then
+        install_step_fail "gitx-marketplace.sh not executable at $target"
+        return 1
+    fi
+    mkdir -p "$bindir"
+    local shim="$bindir/gitx-marketplace"
+    # Reject if exists as a directory (safety catch-all before FORCE branch).
+    # Prevents user confusion if someone manually mkdir'd $shim by mistake.
+    if [ -d "$shim" ] && [ ! -L "$shim" ]; then
+        install_step_fail "$shim exists as a directory. Refusing to recursively remove. Inspect and 'rm -rf $shim' manually if intended."
+        return 1
+    fi
+    # Reject if exists as regular file (not symlink) — prevent overwriting user files silently.
+    # --force overrides the refusal (rm + ln); without --force, surface as failure with rm hint.
+    if [ -e "$shim" ] && [ ! -L "$shim" ]; then
+        if [ "$FORCE" = "1" ]; then
+            rm -f "$shim"
+        else
+            install_step_fail "$shim exists as a regular file (not a symlink). Refusing to overwrite without --force. Either rerun with --force or rm '$shim' manually."
+            return 1
+        fi
+    fi
+    # Warn if replacing an existing symlink to a different target
+    if [ -L "$shim" ] && [ "$(readlink "$shim" 2>/dev/null)" != "$target" ]; then
+        printf '    %s (warn) replacing existing symlink: %s → %s\n' "$_TKX_BULLET" "$shim" "$(readlink "$shim")" >&2
+    fi
+    ln -sfn "$target" "$shim"
+    install_step_ok "PATH shim: ~/.agents/bin/gitx-marketplace → $target"
+    case ":$PATH:" in
+        *":$bindir:"*) ;;
+        *) printf '    %s Add to PATH: export PATH="$HOME/.agents/bin:$PATH"\n' "$_TKX_BULLET" ;;
+    esac
+    return 0
+}
+install_marketplace_path_shim || exit 1
+
 # --- Success banner + CLI table + next hints ---
 install_banner_bottom "$SKILL_NAME" "$_INSTALL_VERSION"
 install_cli_table_begin
@@ -345,6 +394,7 @@ install_cli_row "Codex CLI"   "\$gitx-release"          "$CANONICAL"
 install_cli_row "Codex CLI"   "\$git-release-pipeline"  "(deprecated alias, /skills lists both)"
 install_cli_row "OpenCode"    "say \"gitx release\""     "$OPENCODE_LINK"
 install_cli_row "Gemini CLI"  "say \"gitx release\""     "$CANONICAL"
+install_cli_row "PATH"        "gitx-marketplace"        "$HOME/.agents/bin/gitx-marketplace"
 install_cli_table_end
 install_next_block \
     "Run /gitx-release in any skill project to ship a new version" \

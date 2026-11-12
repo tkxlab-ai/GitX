@@ -179,7 +179,7 @@ while IFS= read -r _f; do
     # legacy-marketplace-add removal.
     case "$_f" in
         */Release/*|*/CHANGELOG.md|*/CHANGELOG_CN.md|*/.git/*) continue ;;
-        */GOTCHAS.md|*/Handoff_Logs/*|*/Handoff_Decisions/*|*/Handoff_Logs.archive/*|*/HANDOFF.md|*/HANDOFF.md.bak|*/HANDOFF.md.pre-v2-backup|*/HANDOFF.archive.md) continue ;;
+        */GOTCHAS.md|*/Handoff_Logs/*|*/Handoff_Decisions/*|*/Handoff_Logs.archive/*|*/HANDOFF.md|*/HANDOFF.md.bak|*/HANDOFF.md.pre-v2-backup|*/HANDOFFX.md|*/HANDOFFX.md.bak|*/HANDOFFX.md.pre-v2-backup|*/HANDOFFX.archive.md|*/Handoffx_Logs/*|*/Handoffx_Decisions/*|*/Handoffx_Logs.archive/*|*/HANDOFF.archive.md) continue ;;
     esac
     _stale=1; fail "stale per-repo marketplace add in $_f"
 # INVARIANT: the `case` block above is the SOLE authoritative exemption.
@@ -211,7 +211,7 @@ done < <(grep -rlE "$_needle" \
 # by semantic containment — regex `/\.git/` ≡ glob `*/.git/*` on the same
 # literal, not byte-identical syntax), making subset true by construction.
 _pf_line=$(grep -nE '\$ROOT" 2>/dev/null \| grep -vE ' "${BASH_SOURCE[0]}" | tail -1)
-if printf '%s' "$_pf_line" | grep -qE 'GOTCHAS|Handoff_|HANDOFF|CHANGELOG'; then
+if grep -qE 'GOTCHAS|Handoff_|HANDOFF|CHANGELOG' <<<"$_pf_line"; then
     fail "guard #10 pre-filter carries a name-specific token (must live in the authoritative case only): $_pf_line"
 else
     ok "guard #10 pre-filter is a provable subset of the case (Release/.git only)"
@@ -225,10 +225,10 @@ fi
 # Only two real backup names exist (.bak, .pre-v2-backup); list them.
 # Anchor uses a bracket-class bridge so THIS check never self-matches.
 _case_line=$(grep -nE 'HANDOFF[.]archive[.]md\) continue' "${BASH_SOURCE[0]}" | tail -1)
-if printf '%s' "$_case_line" | grep -qE '\*/HANDOFF\.md\.\*'; then
+if grep -qE '\*/HANDOFF\.md\.\*' <<<"$_case_line"; then
     fail "guard #10 case uses unanchored '*/HANDOFF.md.*' (dir-class over-exemption); list backups explicitly"
-elif printf '%s' "$_case_line" | grep -qF '*/HANDOFF.md.bak' \
-  && printf '%s' "$_case_line" | grep -qF '*/HANDOFF.md.pre-v2-backup'; then
+elif grep -qF '*/HANDOFF.md.bak' <<<"$_case_line" \
+  && grep -qF '*/HANDOFF.md.pre-v2-backup' <<<"$_case_line"; then
     ok "guard #10 case exempts HANDOFF backups explicitly (no cross-/ wildcard)"
 else
     fail "guard #10 case missing explicit HANDOFF backup arms"

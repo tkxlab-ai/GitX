@@ -29,7 +29,7 @@ fi
 # ── Test 2: §8 mismatched-target branch checks INLINE mode ─────────────────
 # When INLINE=1 AND latest_target dir exists, branch should SKIP, not FAIL.
 block=$(awk '/^# --- §8 Release\/latest/,/^# --- §9/' "$AUDIT")
-if echo "$block" | grep -qE 'INLINE.*[0-9]|INLINE.*==.*"1"|\$\{INLINE:?-?[0-9]*\}'; then
+if grep -qE 'INLINE.*[0-9]|INLINE.*==.*"1"|\$\{INLINE:?-?[0-9]*\}' <<<"$block"; then
     ok "§8 branch references INLINE variable"
 else
     fail "§8 does NOT reference INLINE (still strict in all modes)"
@@ -38,7 +38,7 @@ fi
 # ── Test 3: standalone mode (INLINE=0) must keep strict check ──────────────
 # There must still be a FAIL=$((FAIL+1)) path inside §8's mismatched-target
 # branch so that post-release standalone audit catches wrong latest.
-if echo "$block" | grep -q 'FAIL=\$((FAIL+1))'; then
+if grep -q 'FAIL=\$((FAIL+1))' <<<"$block"; then
     ok "§8 still has FAIL path for standalone wrong-target"
 else
     fail "§8 lost FAIL path entirely — standalone would not catch wrong latest"
@@ -57,14 +57,14 @@ fi
 # PROJECT_ROOT check, but if argv parsing is broken we would instead see
 # the "Usage:" error (meaning VERSION was empty because --inline consumed it).
 usage_err=$(bash "$AUDIT" --inline v99.99.99 2>&1 | head -3 || true)
-if echo "$usage_err" | grep -qE 'Usage:'; then
+if grep -qE 'Usage:' <<<"$usage_err"; then
     fail "audit --inline before version causes usage error (argv parsing broken)"
 else
     ok "audit --inline v<ver> parses argv correctly"
 fi
 
 usage_err2=$(bash "$AUDIT" v99.99.99 --inline 2>&1 | head -3 || true)
-if echo "$usage_err2" | grep -qE 'Usage:'; then
+if grep -qE 'Usage:' <<<"$usage_err2"; then
     fail "audit v<ver> --inline causes usage error (argv parsing broken)"
 else
     ok "audit v<ver> --inline parses argv correctly"

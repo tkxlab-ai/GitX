@@ -96,29 +96,31 @@ printf 'v0.0.1\n' > "$FIXTURE/project/VERSION"
 
 if env -u PROJECT_NAME -u SKILL_NAME PROJECT_ROOT="$FIXTURE/project" bash "$FIXTURE/scripts/gitx-release.sh" --version v0.0.2 > "$FIXTURE/stdout.txt" 2>&1; then
     log_file=$(find "$FIXTURE/project/Release/logs" -name 'gitx-release-*.log' -type f | head -1)
-    release_log=$(find "$FIXTURE/project/Release/project-v0.0.2" -name 'gitx-release-*.log' -type f | head -1)
-    release_log_sum="${release_log}.sha256"
+    log_sum="${log_file}.sha256"
+    # v1.13.0: the diagnostic log must NOT be copied into the distributable
+    # release dir (absolute paths + fixture bait fail the all-files sanitizer on
+    # a standalone re-audit); its digest sidecar lives next to it in Release/logs/.
+    stray_log=$(find "$FIXTURE/project/Release/project-v0.0.2" \( -name 'gitx-release-*.log' -o -name 'gitx-release-*.sha256' \) -type f | head -1)
     if command -v shasum >/dev/null 2>&1; then
-        log_sum_ok=$(cd "$(dirname "$release_log")" && shasum -a 256 -c "$(basename "$release_log_sum")" >/dev/null 2>&1; echo $?)
+        log_sum_ok=$(cd "$(dirname "$log_file")" && shasum -a 256 -c "$(basename "$log_sum")" >/dev/null 2>&1; echo $?)
     elif command -v sha256sum >/dev/null 2>&1; then
-        log_sum_ok=$(cd "$(dirname "$release_log")" && sha256sum -c "$(basename "$release_log_sum")" >/dev/null 2>&1; echo $?)
+        log_sum_ok=$(cd "$(dirname "$log_file")" && sha256sum -c "$(basename "$log_sum")" >/dev/null 2>&1; echo $?)
     else
         log_sum_ok=1
     fi
     if [ -n "$log_file" ] \
-        && [ -n "$release_log" ] \
-        && [ -f "$release_log_sum" ] \
+        && [ -f "$log_sum" ] \
+        && [ -z "$stray_log" ] \
         && grep -q 'event=gitx_release_start' "$log_file" \
         && grep -q 'project_root=' "$log_file" \
         && grep -q 'skill_name=demo-skill' "$log_file" \
         && grep -q 'version=v0.0.2' "$log_file" \
         && grep -q 'fake release invoked: v0.0.2' "$log_file" \
         && grep -q 'exit_code=0' "$log_file" \
-        && grep -q 'exit_code=0' "$release_log" \
         && [ "$log_sum_ok" -eq 0 ]; then
-        ok "GitX wrapper writes diagnostic logs globally and inside the release dir"
+        ok "GitX wrapper writes the diagnostic log + digest in Release/logs only (none inside the release dir)"
     else
-        fail "GitX wrapper did not write the expected diagnostic log"
+        fail "GitX wrapper did not write the expected diagnostic log (or leaked it into the release dir)"
     fi
 else
     fail "GitX wrapper logging fixture failed: $(cat "$FIXTURE/stdout.txt")"
@@ -337,6 +339,67 @@ if [ "$dangling_status" -eq 1 ] \
     ok "GitX wrapper refuses same-version release from dangling latest state"
 else
     fail "GitX wrapper did not safely refuse dangling latest state: $(cat "$DANGLING_FIXTURE/stdout.txt")"
+fi
+
+# ---- post-release Gitea hook: wrapper-level status contract -----------------
+# Each fixture carries .gitx/gitea-release-target and points GITEA_RELEASE_BIN
+# at a recorder that logs its argv and exits $2 (the hook's strict standalone
+# failure). The wrapper's own exit status must come from release.sh alone.
+GITEA_FIXTURES=""
+_gitea_fixture() {
+    local g="$1" release_rc="$2" rec_rc="$3"
+    GITEA_FIXTURES="$GITEA_FIXTURES $g"
+    mkdir -p "$g/project/skills/demo-skill" "$g/project/Release" "$g/project/.gitx" "$g/scripts/lib" "$g/bin"
+    cp "$WRAPPER" "$g/scripts/gitx-release.sh"
+    cp "$PROJECT_ROOT/scripts/lib/detect-project.sh" "$g/scripts/lib/detect-project.sh"
+    chmod +x "$g/scripts/gitx-release.sh"
+    printf '#!/bin/bash\nmkdir -p "$PROJECT_ROOT/Release/project-$1"\nexit %s\n' "$release_rc" > "$g/scripts/release.sh"
+    chmod +x "$g/scripts/release.sh"
+    printf '#!/bin/bash\nprintf "%%s\\n" "$*" >> "%s/rec.log"\nexit %s\n' "$g" "$rec_rc" > "$g/bin/gitea-rec.sh"
+    chmod +x "$g/bin/gitea-rec.sh"
+    printf -- '---\nname: demo-skill\ndescription: Demo skill for the GitX Gitea hook test.\n---\n' \
+        > "$g/project/skills/demo-skill/SKILL.md"
+    printf 'v0.0.1\n' > "$g/project/skills/demo-skill/VERSION"
+    printf 'v0.0.1\n' > "$g/project/VERSION"
+    echo "git.example.internal/rel/demo" > "$g/project/.gitx/gitea-release-target"
+}
+_run_gitea_fixture() {
+    local g="$1"; shift
+    set +e
+    env -u PROJECT_NAME -u SKILL_NAME -u SKIP_GITEA_RELEASE GITEA_RELEASE_BIN="$g/bin/gitea-rec.sh" \
+        PROJECT_ROOT="$g/project" bash "$g/scripts/gitx-release.sh" "$@" > "$g/stdout.txt" 2>&1
+    gitea_status=$?
+    set -e
+}
+
+GITEA_OK=$(mktemp -d)
+trap 'rm -rf "$FIXTURE" "$FAIL_FIXTURE" "$POST_FIXTURE" "$DUP_FIXTURE" "$DANGLING_FIXTURE" $GITEA_FIXTURES' EXIT
+_gitea_fixture "$GITEA_OK" 0 1
+_run_gitea_fixture "$GITEA_OK" --version v0.0.2
+if [ "$gitea_status" -eq 0 ] \
+    && [ "$(cat "$GITEA_OK/rec.log" 2>/dev/null)" = "--version v0.0.2" ] \
+    && grep -q '⚠️  gitea release step failed (exit 1)' "$GITEA_OK/stdout.txt"; then
+    ok "Gitea hook failure (exit 1) → wrapper still exits 0 with a ⚠️ warning"
+else
+    fail "Gitea hook failure changed the wrapper status ($gitea_status) or lacked the warning: $(cat "$GITEA_OK/stdout.txt")"
+fi
+
+GITEA_RELFAIL=$(mktemp -d)
+_gitea_fixture "$GITEA_RELFAIL" 1 0
+_run_gitea_fixture "$GITEA_RELFAIL" --version v0.0.2
+if [ "$gitea_status" -eq 1 ] && [ ! -e "$GITEA_RELFAIL/rec.log" ]; then
+    ok "failed release (release.sh exit 1) → Gitea hook never called"
+else
+    fail "failed release still reached the Gitea hook (status $gitea_status): $(cat "$GITEA_RELFAIL/stdout.txt")"
+fi
+
+GITEA_SKIP=$(mktemp -d)
+_gitea_fixture "$GITEA_SKIP" 0 0
+_run_gitea_fixture "$GITEA_SKIP" --version v0.0.2 --skip-gitea-release
+if [ "$gitea_status" -eq 0 ] && [ ! -e "$GITEA_SKIP/rec.log" ]; then
+    ok "--skip-gitea-release → Gitea hook not called, wrapper exit 0"
+else
+    fail "--skip-gitea-release did not bypass the Gitea hook (status $gitea_status): $(cat "$GITEA_SKIP/stdout.txt")"
 fi
 
 echo ""

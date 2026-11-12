@@ -190,8 +190,14 @@ else
     fail "release.sh does not produce TOKEN_USAGE.md"
 fi
 
-# ── Test 11: release.sh §2.8 checksums covers TOKEN_USAGE.md (5 files) ──
-if awk '/2\.8 checksums/,/RELEASE_NOTES/' "$RELEASE_SH" | grep -qE 'TOKEN_USAGE\.md'; then
+# ── Test 11: release.sh §2.8 checksums covers TOKEN_USAGE.md ─────────────
+# Behavioral: run the real generate_checksums() on a release dir holding it.
+GC_FN=$(awk '/^generate_checksums\(\) \{/,/^}/' "$RELEASE_SH")
+GC_DIR=$(mktemp -d)
+echo '# t' > "$GC_DIR/TOKEN_USAGE.md"
+    # shellcheck disable=SC2034  # DRY_RUN/RELEASE_DIR are read by the eval'd generate_checksums
+(DRY_RUN=0; RELEASE_DIR="$GC_DIR"; eval "$GC_FN"; generate_checksums) >/dev/null 2>&1 || true
+if [ -n "$GC_FN" ] && awk '{print $2}' "$GC_DIR/checksums.txt" 2>/dev/null | grep -qxF 'TOKEN_USAGE.md'; then
     ok "release.sh §2.8 checksums includes TOKEN_USAGE.md"
 else
     fail "release.sh §2.8 checksums missing TOKEN_USAGE.md coverage"

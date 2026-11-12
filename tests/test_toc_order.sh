@@ -32,7 +32,7 @@ check() {
            | grep -Fxf <(printf '%s\n' "$toc") || true)
     if [ -z "$toc" ]; then fail "$(basename "$f"): no ToC entries parsed"; return; fi
     if [ "$toc" = "$body" ]; then
-        ok "$(basename "$f"): ToC order == body section order ($(printf '%s\n' "$toc" | grep -c .) entries)"
+        ok "$(basename "$f"): ToC order == body section order ($(grep -c . <<<"$toc") entries)"
     else
         fail "$(basename "$f"): ToC order ≠ body order — first divergence:
    ToC : $(diff <(printf '%s\n' "$toc") <(printf '%s\n' "$body") | grep -m1 '^<' | sed 's/^< //')

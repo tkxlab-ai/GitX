@@ -44,6 +44,9 @@ is_allowed_legacy_path() {
         # project's historical name; never shipped to the public mirror.
         ./HANDOFF.md.pre-v2-backup|./HANDOFF.md.bak) return 0 ;;
         ./GOTCHAS.md|./Handoff_Logs/*|./Handoff_Decisions/*|./Handoff_Logs.archive/*) return 0 ;;
+        ./HANDOFFX.md|./HANDOFFX.archive.md) return 0 ;;
+        ./HANDOFFX.md.pre-v2-backup|./HANDOFFX.md.bak) return 0 ;;
+        ./Handoffx_Logs/*|./Handoffx_Decisions/*|./Handoffx_Logs.archive/*) return 0 ;;
         ./tests/test_rebrand_single_canonical_name.sh) return 0 ;;
         # gitignored cache / private dirs — never tracked, never shipped.
         # .github-publish-wt: the gitx-sop per-release publish worktree
@@ -57,6 +60,11 @@ is_allowed_legacy_path() {
         # name — same defensive class as .github-publish-wt (five-facet
         # symmetric parity; never tracked, never in any tarball).
         ./graphify-out/*|./CLAUDE.md) return 0 ;;
+        # superpowers SDD controller workspace (briefs / review packages that
+        # embed full diffs, incl. install.sh's legacy-name cleanup constant):
+        # gitignored, .sanitize-ignore'd, rsync-excluded, audit-detected —
+        # same five-facet private-state class as .omc/ and graphify-out/.
+        ./.superpowers/*) return 0 ;;
         # gitignored Syncthing conflict quarantine — pre-3e55e14 snapshots
         # of CHANGELOG.md / VERSION / release.sh that may legitimately
         # reference the legacy name in their preserved historical content.
@@ -69,8 +77,10 @@ is_allowed_legacy_path() {
         ./REVIEW.md|./GitHub_STANDARD_ANALYSIS.md) return 0 ;;
         # install.sh + codex-commands.txt INTENTIONALLY mention the legacy
         # name — install.sh for cleanup of prior installs, codex-commands.txt
-        # for the deprecated-alias grace period.
-        ./install.sh) return 0 ;;
+        # for the deprecated-alias grace period. The bundled mirror install.sh
+        # (skills/gitx-release/install.sh) carries the same deprecated-alias
+        # declaration for backward compatibility (line 365).
+        ./install.sh|./skills/gitx-release/install.sh) return 0 ;;
         */agents/codex-commands.txt) return 0 ;;
         # INSTALL.md documents the user-facing migration path: legacy
         # paths to delete during uninstall + deprecated-alias note. The
@@ -171,7 +181,8 @@ if [ "${#violators[@]}" -eq 0 ]; then
     ok "no non-allowed source files reference legacy 'git-release-pipeline'"
 else
     fail "${#violators[@]} files still reference legacy 'git-release-pipeline':"
-    printf '       %s\n' "${violators[@]}" | head -10
+    _lines=$(printf '       %s\n' "${violators[@]}")
+    head -10 <<<"$_lines"
 fi
 
 # ── Test 7: brand is "GitX" (v1.7.0 pure-brand rename) ──
@@ -222,7 +233,7 @@ if [ -d "$ROOT/skills/gitx-release/scripts" ]; then
         ok "dual-source scripts/ byte-identical to skills/gitx-release/scripts/"
     else
         fail "dual-source drift after rename:"
-        echo "$drift" | head -5 | sed 's/^/       /'
+        head -5 <<<"$drift" | sed 's/^/       /'
     fi
 fi
 

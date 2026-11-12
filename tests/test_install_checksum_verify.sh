@@ -42,12 +42,17 @@ build_fixture() {
         mkdir -p "$fix/scripts/lib"
         cp "$ROOT/scripts/lib/"* "$fix/scripts/lib/"
     fi
-    # Compute checksums for a representative subset (matching what the
-    # real release pipeline puts in Release/<ver>/checksums.txt).
-    (cd "$fix" && shasum -a 256 install.sh SKILL.md VERSION | LC_ALL=C sort > checksums.txt)
+    # Hash what the real pipeline hashes for the install path, including the
+    # helper install.sh sources — a tampered helper must fail verification.
+    (cd "$fix" && shasum -a 256 install.sh SKILL.md VERSION scripts/lib/install-output-style.sh \
+        | LC_ALL=C sort > checksums.txt)
     if [ "$tamper" = "tamper" ]; then
         # Tamper after checksums computed
         echo "# tampered after sign-off" >> "$fix/install.sh"
+    elif [ "$tamper" = "tamper-helper" ]; then
+        # Observable marker: proves whether install.sh executed the helper
+        # before (or despite) the integrity check.
+        echo 'touch "$HOME/.helper-ran"' >> "$fix/scripts/lib/install-output-style.sh"
     fi
     echo "$fix"
 }
@@ -71,7 +76,7 @@ DRY_HOME=$(mktemp -d)
 TAMPER_OUT=$(HOME="$DRY_HOME" bash "$BAD/install.sh" 2>&1 || true)
 # Note: we run NOT --dry-run, but with HOME redirected, so even if write
 # happens, it lands in $DRY_HOME, not the user's real home.
-if echo "$TAMPER_OUT" | grep -qiE 'checksum|sha256|integrity|tamper|mismatch'; then
+if grep -qiE 'checksum|sha256|integrity|tamper|mismatch' <<<"$TAMPER_OUT"; then
     ok "tampered file → install.sh prints checksum failure message"
 else
     fail "tampered file → install.sh did not mention checksum failure"
@@ -84,6 +89,32 @@ else
     fail "tampered file → install wrote to disk anyway (no abort)"
 fi
 rm -rf "$BAD" "$DRY_HOME"
+
+# ── Test 2b: tampered helper → verified BEFORE it is sourced ──────────
+BADH=$(build_fixture "tamper-helper")
+DRY_HOME=$(mktemp -d)
+set +e
+HELPER_OUT=$(HOME="$DRY_HOME" bash "$BADH/install.sh" --dry-run 2>&1)
+HELPER_RC=$?
+set -e
+if [ "$HELPER_RC" = "1" ]; then
+    ok "tampered helper → install.sh --dry-run exit 1"
+else
+    fail "tampered helper → install.sh --dry-run exit $HELPER_RC (expected 1)"
+fi
+if [ ! -e "$DRY_HOME/.helper-ran" ]; then
+    ok "tampered helper → helper never executed (marker absent)"
+else
+    fail "tampered helper → helper code RAN before integrity check (marker present)"
+fi
+if grep -q 'Integrity check FAILED' <<<"$HELPER_OUT" \
+   && ! grep -q 'Installation' <<<"$HELPER_OUT"; then
+    ok "tampered helper → 'Integrity check FAILED', no banner"
+else
+    fail "tampered helper → wrong output (want FAILED message, no banner)"
+    echo "$HELPER_OUT" | tail -5 | sed 's/^/       /'
+fi
+rm -rf "$BADH" "$DRY_HOME"
 
 # ── Test 3: no checksums.txt → install behaves as dev-tree (no verification) ──
 NOCK=$(mktemp -d)

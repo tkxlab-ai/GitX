@@ -73,7 +73,7 @@ fi
 # --- T5: --help output contains --check ---
 if [ -f "$PIPELINE" ]; then
   HELP_OUT=$(bash "$PIPELINE" --help 2>/dev/null || true)
-  if printf '%s\n' "$HELP_OUT" | grep -qF -- '--check'; then
+  if grep -qF -- '--check' <<<"$HELP_OUT"; then
     ok "--help output contains '--check'"
   else
     fail "--help output does NOT contain '--check'"
@@ -84,10 +84,11 @@ fi
 
 # --- T3-locale: --locale flag parsed; inventory locale-invariant; --print-target ---
 # --locale cn accepted (not a usage-error exit 2)
-bash "$PIPELINE" --locale cn --print-regions >/tmp/dp_lc.out 2>/tmp/dp_lc.err && rc=0 || rc=$?
+DPT=$(mktemp -d "${TMPDIR:-/tmp}/dp_test.XXXXXX"); trap 'rm -rf "$DPT"' EXIT
+bash "$PIPELINE" --locale cn --print-regions >"$DPT/lc.out" 2>"$DPT/lc.err" && rc=0 || rc=$?
 [ "$rc" -eq 0 ] && ok "--locale cn accepted (rc=0)" || fail "--locale cn rc=$rc (expected 0)"
 # inventory must be the same 5 regions regardless of locale
-lc=$(tr ' ' '\n' </tmp/dp_lc.out | sort | tr '\n' ' ')
+lc=$(tr ' ' '\n' <"$DPT/lc.out" | sort | tr '\n' ' ')
 [ "$lc" = "badges build-metrics command-surface suite-count whats-new " ] \
   && ok "inventory locale-invariant under cn" || fail "inventory changed under cn: '$lc'"
 bash "$PIPELINE" --locale en --print-regions >/dev/null 2>&1 && ok "--locale en accepted" || fail "--locale en rc=$?"
@@ -95,25 +96,24 @@ bash "$PIPELINE" --locale en --print-regions >/dev/null 2>&1 && ok "--locale en 
 bash "$PIPELINE" --locale bogus --print-regions >/dev/null 2>&1 && rc=$? || rc=$?
 [ "$rc" -eq 2 ] && ok "unknown --locale → usage exit 2 (fail-closed)" || fail "unknown locale rc=$rc (expected 2)"
 # --print-target: cn → README_CN.md, en → README.md
-bash "$PIPELINE" --locale cn --print-target >/tmp/dp_tgt.out 2>/dev/null && \
-  grep -qx 'README_CN.md' /tmp/dp_tgt.out && ok "cn → README_CN.md" || fail "cn target wrong: $(cat /tmp/dp_tgt.out 2>/dev/null)"
+bash "$PIPELINE" --locale cn --print-target >"$DPT/tgt.out" 2>/dev/null && \
+  grep -qx 'README_CN.md' "$DPT/tgt.out" && ok "cn → README_CN.md" || fail "cn target wrong: $(cat "$DPT/tgt.out" 2>/dev/null)"
 bash "$PIPELINE" --locale en --print-target 2>/dev/null | grep -qx 'README.md' \
   && ok "en → README.md" || fail "en target wrong"
 # bare --print-target (no --locale) → exactly two lines: README.md then README_CN.md
-bash "$PIPELINE" --print-target >/tmp/dp_tgt_bare.out 2>/dev/null && rc_bare=0 || rc_bare=$?
+bash "$PIPELINE" --print-target >"$DPT/tgt_bare.out" 2>/dev/null && rc_bare=0 || rc_bare=$?
 if [ "$rc_bare" -eq 0 ] \
-  && grep -qx 'README.md' /tmp/dp_tgt_bare.out \
-  && grep -qx 'README_CN.md' /tmp/dp_tgt_bare.out \
-  && [ "$(wc -l < /tmp/dp_tgt_bare.out)" -eq 2 ]; then
+  && grep -qx 'README.md' "$DPT/tgt_bare.out" \
+  && grep -qx 'README_CN.md' "$DPT/tgt_bare.out" \
+  && [ "$(wc -l < "$DPT/tgt_bare.out")" -eq 2 ]; then
   ok "bare --print-target → two lines: README.md and README_CN.md"
 else
-  fail "bare --print-target wrong: rc=$rc_bare output='$(cat /tmp/dp_tgt_bare.out 2>/dev/null)'"
+  fail "bare --print-target wrong: rc=$rc_bare output='$(cat "$DPT/tgt_bare.out" 2>/dev/null)'"
 fi
 # --locale with no value → exit 2 (missing-value fail-closed)
 bash "$PIPELINE" --locale >/dev/null 2>&1 && rc_noval=0 || rc_noval=$?
 [ "$rc_noval" -eq 2 ] && ok "--locale (no value) → exit 2 (missing-value fail-closed)" \
   || fail "--locale (no value) rc=$rc_noval (expected 2)"
-rm -f /tmp/dp_lc.out /tmp/dp_lc.err /tmp/dp_tgt.out /tmp/dp_tgt_bare.out
 
 # --- T4-changelog-parity: --changelog-parity mode ---
 P="$PIPELINE"
@@ -124,7 +124,7 @@ mkdir -p "$TMPD/Release"
 printf '## v1.0.0 — 2026-01-01\n\n### Added\n- x\n' > "$TMPD/Release/CHANGELOG.md"
 # no CHANGELOG_CN.md created → absent case
 out=$(PROJECT_ROOT="$TMPD" bash "$P" --changelog-parity 2>&1) && rc=0 || rc=$?
-{ [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -qi 'absent'; } \
+{ [ "$rc" -eq 0 ] && grep -qi 'absent' <<<"$out"; } \
   && ok "changelog-parity clean-absent (rc=0, 'absent' msg)" \
   || fail "changelog-parity absent-handling wrong (rc=$rc, out=$out)"
 rm -rf "$TMPD"
@@ -139,6 +139,33 @@ PROJECT_ROOT="$TMPD" bash "$P" --changelog-parity >/dev/null 2>&1 && rc=0 || rc=
 printf '## v1.0.0 — 2026-01-01\n\n### Added\n- english text\n' > "$TMPD/Release/CHANGELOG.md"
 printf '## v1.0.0 — 2026-01-01\n\n### Added\n- 中文文本\n'        > "$TMPD/Release/CHANGELOG_CN.md"
 PROJECT_ROOT="$TMPD" bash "$P" --changelog-parity >/dev/null 2>&1 && ok "changelog-parity passes structural match (prose differs)" || fail "parity false-negative on structural match"
+rm -rf "$TMPD"
+
+# F1: parity must be locale-pinned and never vacuous (non-UTF-8 locale made
+# sed/awk abort inside $(…), both sides empty, compare equal -> false green).
+TMPD=$(mktemp -d)
+mkdir -p "$TMPD/Release"
+printf '## v1.0.0 — 2026-01-01\n\n### A\n- x\n' > "$TMPD/Release/CHANGELOG.md"
+printf '## v1.0.0 — 2026-01-01\n\n- y\n'        > "$TMPD/Release/CHANGELOG_CN.md"
+err=$(PROJECT_ROOT="$TMPD" bash "$P" --changelog-parity 2>&1 >/dev/null) && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && grep -q 'differs at v1.0.0' <<<"$err"; } \
+  && ok "changelog-parity (a) missing CN subsection -> exit 1 'differs at v1.0.0'" \
+  || fail "changelog-parity (a) rc=$rc err=$err"
+# (b) invalid UTF-8 byte on a ### line: under a UTF-8 locale awk aborts on BOTH
+# sides (empty == empty -> vacuous green). EN has an extra ### B, so only a
+# locale-pinned (LC_ALL=C) comparison can see the real difference.
+printf '## v1.0.0 — 2026-01-01\n\n### A\xff\n### B\n- x\n' > "$TMPD/Release/CHANGELOG.md"
+printf '## v1.0.0 — 2026-01-01\n\n### A\xff\n- y\n'        > "$TMPD/Release/CHANGELOG_CN.md"
+err=$(PROJECT_ROOT="$TMPD" env LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 bash "$P" --changelog-parity 2>&1 >/dev/null) && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && grep -qE 'differs at v1.0.0|no versions parsed' <<<"$err"; } \
+  && ok "changelog-parity (b) invalid-UTF-8 line not vacuous under UTF-8 locale (exit 1)" \
+  || fail "changelog-parity (b) vacuous green under UTF-8 locale (rc=$rc err=$err)"
+printf '## version one\n\n### A\n' > "$TMPD/Release/CHANGELOG.md"
+printf '## version one\n\n### A\n' > "$TMPD/Release/CHANGELOG_CN.md"
+err=$(PROJECT_ROOT="$TMPD" bash "$P" --changelog-parity 2>&1 >/dev/null) && rc=0 || rc=$?
+{ [ "$rc" -eq 1 ] && grep -q 'no versions parsed' <<<"$err"; } \
+  && ok "changelog-parity (c) zero parsed versions -> exit 1 'no versions parsed'" \
+  || fail "changelog-parity (c) rc=$rc err=$err"
 rm -rf "$TMPD"
 
 # --- T2.5: badges + build-metrics @machine SUB-TOKEN rewrite (§2b/H4) ---
@@ -256,9 +283,10 @@ printf -- '---\nname: ignored\n---\n' > "$_WCS/skills/demo-skill/SKILL.md"
 touch "$_WCS/skills/demo-skill/commands/demo-skill-init.md"
 touch "$_WCS/skills/demo-skill/commands/demo-skill-sop.md"
 _dp_lib_test "$_WCS" '
-  dp_command_surface | grep -qF "/demo-skill\` — the skill" &&
-  dp_command_surface | grep -qF "/demo-skill-init" &&
-  dp_command_surface | grep -qF "/demo-skill-sop"
+  _o=$(dp_command_surface)
+  grep -qF "/demo-skill\` — the skill" <<<"$_o" &&
+  grep -qF "/demo-skill-init" <<<"$_o" &&
+  grep -qF "/demo-skill-sop" <<<"$_o"
 ' >/dev/null 2>&1 \
   && ok  "dp_command_surface: standard-layout skills/<skill>/commands/ shims listed (f)" \
   || fail "dp_command_surface: standard-layout skills/<skill>/commands/ shims listed (f)"
@@ -268,8 +296,9 @@ rm -rf "$_WCS"
 _WG=$(mktemp -d); mkdir -p "$_WG/.claude-plugin"
 printf '{\n  "name": "myplugin"\n}\n' > "$_WG/.claude-plugin/plugin.json"
 _dp_lib_test "$_WG" '
-  dp_install | grep -q "marketplace add" &&
-  dp_install | grep -q "myplugin@tkx-skills"
+  _o=$(dp_install)
+  grep -q "marketplace add" <<<"$_o" &&
+  grep -q "myplugin@tkx-skills" <<<"$_o"
 ' >/dev/null 2>&1 \
   && ok  "dp_install: marketplace-add + plugin install <name>@tkx-skills when plugin present (g)" \
   || fail "dp_install: marketplace-add + plugin install <name>@tkx-skills when plugin present (g)"
@@ -278,8 +307,9 @@ rm -rf "$_WG"
 # (h) dp_install: generic-safe (no .claude-plugin) → bash install.sh, no marketplace
 _WH=$(mktemp -d)
 _dp_lib_test "$_WH" '
-  dp_install | grep -q "bash install.sh" &&
-  ! dp_install | grep -qi "marketplace"
+  _o=$(dp_install)
+  grep -q "bash install.sh" <<<"$_o" &&
+  ! grep -qi "marketplace" <<<"$_o"
 ' >/dev/null 2>&1 \
   && ok  "dp_install: generic-safe (no .claude-plugin) → bash install.sh, no marketplace (h)" \
   || fail "dp_install: generic-safe (no .claude-plugin) → bash install.sh, no marketplace (h)"
@@ -304,11 +334,13 @@ rm -rf "$_WJ"
 _WK=$(mktemp -d)
 printf '## v9.9.9 — 2026-09-09\n\n### Added\n- alpha bullet\n- beta thing\n\n### Changed\n- gamma thing\n\n## v9.9.8 — 2026-08-08\n- old\n' > "$_WK/CHANGELOG.md"
 _dp_lib_test "$_WK" '
-  dp_whats_new | head -1 | grep -q "v9.9.9 — 2026-09-09" &&
-  dp_whats_new | grep -q "alpha bullet" &&
-  dp_whats_new | grep -q "gamma thing" &&
-  ! dp_whats_new | grep -q "## v9.9.8" &&
-  ! dp_whats_new | grep -q "^old$"
+  _o=$(dp_whats_new)
+  _h=$(head -1 <<<"$_o")
+  grep -q "v9.9.9 — 2026-09-09" <<<"$_h" &&
+  grep -q "alpha bullet" <<<"$_o" &&
+  grep -q "gamma thing" <<<"$_o" &&
+  ! grep -q "## v9.9.8" <<<"$_o" &&
+  ! grep -q "^old$" <<<"$_o"
 ' >/dev/null 2>&1 \
   && ok  "dp_whats_new: top entry correct, no next-entry bleed (k)" \
   || fail "dp_whats_new: top entry correct, no next-entry bleed (k)"
@@ -318,11 +350,12 @@ rm -rf "$_WK"
 _WK7=$(mktemp -d)
 printf '## v9.9.9 — 2026-09-09\n- one\n- two\n- three\n- four\n- five\n- six\n- seven\n- eight\n\n## v9.9.8 — 2026-08-08\n- nextentry\n' > "$_WK7/CHANGELOG.md"
 _dp_lib_test "$_WK7" '
-  cnt=$(dp_whats_new | grep -c "^- ")
+  _o=$(dp_whats_new)
+  cnt=$(grep -c "^- " <<<"$_o")
   [ "$cnt" = 6 ] &&
-  dp_whats_new | grep -q "^- six" &&
-  ! dp_whats_new | grep -q "^- seven" &&
-  ! dp_whats_new | grep -q "nextentry"
+  grep -q "^- six" <<<"$_o" &&
+  ! grep -q "^- seven" <<<"$_o" &&
+  ! grep -q "nextentry" <<<"$_o"
 ' >/dev/null 2>&1 \
   && ok  "dp_whats_new: >=7 bullets caps at exactly 6 (6th in, 7th out) (k)" \
   || fail "dp_whats_new: >=7 bullets caps at exactly 6 (6th in, 7th out) (k)"
@@ -332,9 +365,10 @@ rm -rf "$_WK7"
 _WKR=$(mktemp -d)
 printf '## v9.9.9 — 2026-09-09\r\n\r\n- crlf bullet one\r\n- crlf bullet two\r\n' > "$_WKR/CHANGELOG.md"
 _dp_lib_test "$_WKR" '
-  ! dp_whats_new | LC_ALL=C grep -q $'"'"'\r'"'"' &&
-  dp_whats_new | grep -q "crlf bullet one" &&
-  dp_whats_new | grep -q "crlf bullet two"
+  _o=$(dp_whats_new)
+  ! LC_ALL=C grep -q $'"'"'\r'"'"' <<<"$_o" &&
+  grep -q "crlf bullet one" <<<"$_o" &&
+  grep -q "crlf bullet two" <<<"$_o"
 ' >/dev/null 2>&1 \
   && ok  "dp_whats_new: CRLF CHANGELOG → zero \\r in output (k)" \
   || fail "dp_whats_new: CRLF CHANGELOG → zero \\r in output (k)"

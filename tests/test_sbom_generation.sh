@@ -44,12 +44,18 @@ else
 fi
 
 # ── Test 3: checksums.txt includes sbom.cyclonedx.json ────────────────────
-if grep -qE 'sbom\.cyclonedx\.json' "$RELEASE_SH" \
-   && grep -qE 'CHK_FILES.*sbom|sbom.*CHK_FILES' "$RELEASE_SH"; then
+# Behavioral: run the real generate_checksums() on a release dir holding an SBOM.
+GC_FN=$(awk '/^generate_checksums\(\) \{/,/^}/' "$RELEASE_SH")
+GC_DIR=$(mktemp -d)
+echo '{}' > "$GC_DIR/sbom.cyclonedx.json"
+    # shellcheck disable=SC2034  # DRY_RUN/RELEASE_DIR are read by the eval'd generate_checksums
+(DRY_RUN=0; RELEASE_DIR="$GC_DIR"; eval "$GC_FN"; generate_checksums) >/dev/null 2>&1 || true
+if [ -n "$GC_FN" ] && awk '{print $2}' "$GC_DIR/checksums.txt" 2>/dev/null | grep -qxF 'sbom.cyclonedx.json'; then
     ok "release.sh adds sbom.cyclonedx.json to checksums.txt"
 else
-    fail "SBOM not included in checksums.txt CHK_FILES"
+    fail "SBOM not included in checksums.txt"
 fi
+rm -rf "$GC_DIR"
 
 # ── Test 4: audit has § check for SBOM ────────────────────────────────────
 if grep -qE 'sbom\.cyclonedx\.json|SBOM' "$AUDIT_SH"; then

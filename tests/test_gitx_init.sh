@@ -92,7 +92,7 @@ if [ -x "$WRAPPER" ]; then
         if grep -qE "project type:[[:space:]]+$t\b" <<<"$out"; then
             ok "--type=$t --dry-run reports 'project type: $t'"
         else
-            fail "--type=$t --dry-run did not report 'project type: $t' (got: $(echo "$out" | head -1))"
+            fail "--type=$t --dry-run did not report 'project type: $t' (got: $(head -1 <<<"$out"))"
         fi
         rm -rf "$empty_dir"
     done
@@ -111,7 +111,7 @@ if [ -x "$WRAPPER" ]; then
     out="$( cd "$fx" && "$WRAPPER" --type=auto --dry-run </dev/null 2>&1 )"
     grep -qE "project type:[[:space:]]+skill\b" <<<"$out" \
         && ok "auto-detect: skills/*/SKILL.md → skill" \
-        || fail "auto-detect skill failed (got: $(echo "$out" | head -1))"
+        || fail "auto-detect skill failed (got: $(head -1 <<<"$out"))"
     rm -rf "$fx"
 
     # 6b: mac-only fixture (Package.swift)
@@ -119,7 +119,7 @@ if [ -x "$WRAPPER" ]; then
     out="$( cd "$fx" && "$WRAPPER" --type=auto --dry-run </dev/null 2>&1 )"
     grep -qE "project type:[[:space:]]+mac\b" <<<"$out" \
         && ok "auto-detect: Package.swift → mac" \
-        || fail "auto-detect mac failed (got: $(echo "$out" | head -1))"
+        || fail "auto-detect mac failed (got: $(head -1 <<<"$out"))"
     rm -rf "$fx"
 
     # 6c: both fixtures
@@ -128,7 +128,7 @@ if [ -x "$WRAPPER" ]; then
     out="$( cd "$fx" && "$WRAPPER" --type=auto --dry-run </dev/null 2>&1 )"
     grep -qE "project type:[[:space:]]+both\b" <<<"$out" \
         && ok "auto-detect: skill + mac signals → both" \
-        || fail "auto-detect both failed (got: $(echo "$out" | head -1))"
+        || fail "auto-detect both failed (got: $(head -1 <<<"$out"))"
     rm -rf "$fx"
 
     # 6d: neither + non-TTY → exit 3
@@ -222,7 +222,7 @@ if [ -x "$WRAPPER" ]; then
     if [ -e "$fx/.gitx" ] || [ -e "$fx/RELEASE_GUIDELINE.md" ]; then
         fail "--dry-run wrote files: $(find "$fx" -maxdepth 1 ! -name 'skills' ! -name '.' ! -name '..' -ls 2>/dev/null)"
     elif ! grep -qE '(would|preview|dry-run).*\.gitx' <<<"$out"; then
-        fail "--dry-run output did not preview .gitx actions (got: $(echo "$out" | head -2 | tr '\n' '|'))"
+        fail "--dry-run output did not preview .gitx actions (got: $(head -2 <<<"$out" | tr '\n' '|'))"
     else
         ok "--dry-run writes nothing + previews actions"
     fi
@@ -311,7 +311,7 @@ if [ -x "$WRAPPER" ]; then
         me_repo="$(jq -r .source.repo "$me")"
         if [ "$me_src" != "github" ]; then
             fail "marketplace-entry source.source='$me_src', expected 'github'"
-        elif ! echo "$me_repo" | grep -qE '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$'; then
+        elif ! grep -qE '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' <<<"$me_repo"; then
             fail "marketplace-entry source.repo='$me_repo' not owner/repo shape"
         elif [ "$(jq -r .name "$me")" != "foo-bar" ]; then
             fail "marketplace-entry name != plugin.json name"
@@ -356,7 +356,7 @@ if [ -x "$WRAPPER" ]; then
         fail "hostile dir: marketplace-entry.json is not valid JSON"
     else
         h_repo="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["source"]["repo"])' "$me")"
-        if echo "$h_repo" | grep -qE '^tkxlab-ai/[a-z0-9-]+$'; then
+        if grep -qE '^tkxlab-ai/[a-z0-9-]+$' <<<"$h_repo"; then
             ok "hostile dir: both JSON valid, source.repo=$h_repo (kebab)"
         else
             fail "hostile dir: source.repo='$h_repo' not ^tkxlab-ai/[a-z0-9-]+$"
@@ -463,6 +463,92 @@ for audit_sh in "$ROOT/scripts/release-audit.sh" "$ROOT/skills/gitx-release/scri
         fi
     fi
 done
+
+# === SECURITY 1: symlinked write targets are refused (exit 5), victims untouched ===
+if [ -x "$WRAPPER" ]; then
+    fx="$(mktemp -d)"; victim="$(mktemp)"; printf 'KEEP\n' > "$victim"
+    ln -s "$victim" "$fx/RELEASE_GUIDELINE.md"
+    ( cd "$fx" && "$WRAPPER" --type=empty </dev/null >/dev/null 2>"$fx/err" )
+    st=$?
+    if [ "$st" -eq 5 ] && grep -qi symlink "$fx/err" && [ "$(cat "$victim")" = "KEEP" ]; then
+        ok "symlinked RELEASE_GUIDELINE.md refused (exit 5), victim unchanged"
+    else
+        fail "symlinked RELEASE_GUIDELINE.md: exit=$st victim=$(cat "$victim")"
+    fi
+    rm -rf "$fx" "$victim"
+
+    fx="$(mktemp -d)"; outside="$(mktemp -d)"
+    ln -s "$outside" "$fx/.claude-plugin"
+    ( cd "$fx" && "$WRAPPER" --type=empty </dev/null >/dev/null 2>"$fx/err" )
+    st=$?
+    if [ "$st" -eq 5 ] && grep -qi symlink "$fx/err" && [ -z "$(ls -A "$outside")" ]; then
+        ok "symlinked .claude-plugin refused (exit 5), outside dir unchanged"
+    else
+        fail "symlinked .claude-plugin: exit=$st outside=$(ls -A "$outside" | tr '\n' ' ')"
+    fi
+    rm -rf "$fx" "$outside"
+fi
+
+# === SECURITY 2: --force backs up old .gitx/ files, preserves marketplace-target ===
+if [ -x "$WRAPPER" ]; then
+    fx="$(mktemp -d)"
+    mkdir -p "$fx/.gitx"; printf 'OLD' > "$fx/.gitx/policy.md"; printf 'o/r\n' > "$fx/.gitx/marketplace-target"
+    ( cd "$fx" && "$WRAPPER" --type=empty --force </dev/null >/dev/null 2>&1 )
+    st=$?
+    bk="$(ls -d "$fx"/.gitx/.previous-* 2>/dev/null | head -1)"
+    if [ "$st" -eq 0 ] && [ -n "$bk" ] && [ "$(cat "$bk/policy.md" 2>/dev/null)" = "OLD" ] \
+       && [ "$(cat "$fx/.gitx/marketplace-target")" = "o/r" ] && ! grep -q '^OLD$' "$fx/.gitx/policy.md"; then
+        ok "--force backs up old .gitx/ files to .previous-<ts>/, keeps marketplace-target"
+    else
+        fail "--force backup: exit=$st backup=${bk:-none}"
+    fi
+    rm -rf "$fx"
+fi
+
+# === SECURITY 3: template values with sed metachars render literally ===
+if [ -x "$WRAPPER" ]; then
+    base="$(mktemp -d)"; fx="$base/a&b"; mkdir -p "$fx"
+    ( cd "$fx" && "$WRAPPER" --type=empty </dev/null >/dev/null 2>&1 )
+    st=$?
+    if [ "$st" -eq 0 ] && grep -qF 'a&b' "$fx/RELEASE_GUIDELINE.md" \
+       && ! grep -qF 'a{{PROJECT_NAME}}b' "$fx/RELEASE_GUIDELINE.md"; then
+        ok "project dir 'a&b' rendered literally in RELEASE_GUIDELINE.md"
+    else
+        fail "'a&b' dir not rendered literally (exit=$st)"
+    fi
+    rm -rf "$base"
+fi
+
+# === SECURITY 4: two quick --force runs → distinct backups, run-1 policy preserved ===
+if [ -x "$WRAPPER" ]; then
+    fx="$(mktemp -d)"
+    ( cd "$fx" && "$WRAPPER" --type=empty </dev/null >/dev/null 2>&1 )
+    ( cd "$fx" && "$WRAPPER" --type=empty --force </dev/null >/dev/null 2>&1 ); r1=$?
+    ( cd "$fx" && "$WRAPPER" --type=empty --force </dev/null >/dev/null 2>&1 ); r2=$?
+    n="$(ls -d "$fx"/.gitx/.previous-* 2>/dev/null | wc -l | tr -d ' ')"
+    miss=0; for b in "$fx"/.gitx/.previous-*; do [ -s "$b/policy.md" ] || miss=1; done
+    if [ "$r1" -eq 0 ] && [ "$r2" -eq 0 ] && [ "$n" -eq 2 ] && [ "$miss" -eq 0 ] \
+       && [ -s "$fx/.gitx/policy.md" ] && [ -s "$fx/.gitx/marketplace-entry.json" ]; then
+        ok "two rapid --force runs: rc=0/0, 2 distinct backups each holding policy.md"
+    else
+        fail "rapid --force: rc=$r1/$r2 backups=$n missing_policy=$miss"
+    fi
+    rm -rf "$fx"
+fi
+
+# === SECURITY 5: newline in project dir name rejected (exit 2) ===
+if [ -x "$WRAPPER" ]; then
+    base="$(mktemp -d)"; fx="$base/ok
+|;w PWNED;#"; mkdir -p "$fx"
+    ( cd "$fx" && "$WRAPPER" --type=empty </dev/null >/dev/null 2>&1 )
+    st=$?
+    if [ "$st" -eq 2 ] && [ ! -e "$fx/RELEASE_GUIDELINE.md" ]; then
+        ok "newline in project dir name rejected (exit 2)"
+    else
+        fail "newline project dir: exit=$st"
+    fi
+    rm -rf "$base"
+fi
 
 # === summary ===
 echo "Results: ✅$PASS passed / ❌$FAIL failed"

@@ -34,22 +34,22 @@ _BLOCK=$(awk '/^build_full_tarball\(\) \{/,/^\}/' "$RELEASE_SH")
 if [ -z "$_BLOCK" ]; then
     fail "build_full_tarball() not found in release.sh"
 else
-    if echo "$_BLOCK" | grep -qE 'gzip -n'; then
+    if grep -qE 'gzip -n' <<<"$_BLOCK"; then
         ok "build_full_tarball: pipes through gzip -n"
     else
         fail "build_full_tarball: missing gzip -n (header timestamp will vary)"
     fi
-    if echo "$_BLOCK" | grep -qE 'touch -t'; then
+    if grep -qE 'touch -t' <<<"$_BLOCK"; then
         ok "build_full_tarball: normalizes mtime via touch -t"
     else
         fail "build_full_tarball: missing touch -t (file mtimes will vary)"
     fi
-    if echo "$_BLOCK" | grep -qE 'LC_ALL=C *sort'; then
+    if grep -qE 'LC_ALL=C *sort' <<<"$_BLOCK"; then
         ok "build_full_tarball: enforces deterministic file order (LC_ALL=C sort)"
     else
         fail "build_full_tarball: missing LC_ALL=C sort (filesystem order is unstable)"
     fi
-    if echo "$_BLOCK" | grep -qE -- '--owner=0.*--group=0.*--numeric-owner|--numeric-owner.*--owner=0'; then
+    if grep -qE -- '--owner=0.*--group=0.*--numeric-owner|--numeric-owner.*--owner=0' <<<"$_BLOCK"; then
         ok "build_full_tarball: tar uses --owner=0 --group=0 --numeric-owner"
     else
         fail "build_full_tarball: tar missing owner normalization (uid/gid leak between machines)"

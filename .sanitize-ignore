@@ -1,0 +1,105 @@
+# .sanitize-ignore — explicit whitelist for release-sanitize.sh (S3-1)
+#
+# Format: one path (relative to scanned root) per line; '#' starts comment; blank OK.
+# Paths are matched via case glob against the relative file path.
+#
+# Rule of thumb: only add entries you can defend in a security review.
+# Prefer fixing the source over adding a line here.
+
+# ── Intentional test fixtures ────────────────────────────────────────────
+# These files carry planted patterns so the scanner's detectors can be tested.
+# They are self-documenting test data; the strings are not real credentials.
+tests/test_sanitize.sh
+tests/test_no_force_bypass.sh
+tests/test_credential_patterns.sh
+tests/test_sanitize_ignore_hardening.sh
+tests/test_sanitize_output_format.sh
+
+# v1.13.0: marketplace BDD fixtures (intentional sample plugin entries, NOT live data)
+tests/fixtures/marketplace*.json
+tests/fixtures/plugin-entry-*.json
+
+# ── Business contact (by design, not a leak) ─────────────────────────────
+# SECURITY.md intentionally exposes a real contact email so reporters can
+# reach maintainers. Not a secret.
+SECURITY.md
+
+# ── Internal dev docs (gitignored, never shipped) ────────────────────────
+# These files are listed in .gitignore and excluded by release.sh rsync —
+# they never enter a release artifact. Whitelisted here only so that
+# `release-sanitize.sh .` (local self-check on repo root) exits clean.
+.omc/*
+.superpowers/*
+REVIEW.md
+GitHub_STANDARD_ANALYSIS.md
+HANDOFF.md
+HANDOFF.archive.md
+HANDOFF.md.bak
+HANDOFF.md.pre-v2-backup
+GOTCHAS.md
+Handoff_Logs/*
+Handoff_Decisions/*
+Handoff_Logs.archive/*
+# handoffx v4 (2026-11) renamed the set to HANDOFFX.md / Handoffx_*; both
+# generations stay listed because stale tarballs and backups still carry the old names.
+HANDOFFX.md
+HANDOFFX.archive.md
+HANDOFFX.md.bak
+HANDOFFX.md.pre-v2-backup
+Handoffx_Logs/*
+Handoffx_Decisions/*
+Handoffx_Logs.archive/*
+# gitx-sop per-release publish worktree (own .git, public-mirror only):
+# gitignored + release.sh --exclude'd; whitelisted so a whole-repo
+# self-check stays clean while the worktree transiently exists.
+.github-publish-wt/*
+# pyenv local pin (codex P2, v1.9.6): gitignored + release.sh --exclude'd;
+# listed here so the whole-repo self-check stays clean (five-facet parity).
+.python-version
+# graphify knowledge graph + local Claude instruction: gitignored +
+# release.sh --exclude'd. graphify-out/ is built from the private
+# working-memory set above; CLAUDE.md is local Claude Code instruction.
+# Whitelisted so a whole-repo self-check stays clean (same parity).
+CLAUDE.md
+graphify-out/*
+
+# ── superpowers spec/plan docs (internal design records) ─────────────────
+# Tracked by git for cross-machine sync (Syncthing) but never enter the
+# source tarball or .skill bundle (release.sh rsync excludes docs/super-).
+# Contain a placeholder security-contact email and Co-Authored-By
+# signatures (Anthropic's noreply identity) that are documentation, not real PII.
+docs/superpowers/specs/*
+docs/superpowers/plans/*
+
+# ── Syncthing conflict quarantine (.gitignored) ──────────────────────────
+.syncthing-quarantine-*/*
+
+# ── gitx-sop SOP template (intentional git-identity literal) ─────────────
+# GitHub's noreply address is its reserved non-routable identity used in the
+# generated SOP's `git config user.email` step — documentation, not PII.
+# Template is de-hardcoded (placeholders only), TDD-guarded, reviewed.
+references/gitx-sop/*
+skills/gitx-release/references/gitx-sop/*
+
+# ── Generated release artifacts (not source input) ───────────────────────
+# release.sh scans the staged source and the fresh .skill bundle separately.
+# Historical Release/* outputs are ignored for whole-repo local self-checks.
+Release/*
+
+# .gitx/ policy pack (GITHUB_RELEASE_SOP.md, marketplace-entry.json, …):
+# gitignored + release.sh --exclude'd private working memory (CLAUDE.md).
+# Its `git config user.email` (GitHub's noreply address) is the SOP's documented
+# public-safe publish identity, never shipped. Whitelisted so the whole-repo
+# self-check stays clean — same class as .github-publish-wt/* / .omc/*.
+.gitx/*
+
+# ── gitx-marketplace helper (intentional git-identity literal) ───────────
+# scripts/gitx-marketplace.sh sets `git config user.email` to GitHub's noreply address
+# on its mktemp clone of the marketplace repo to author register/bump PRs —
+# the SAME GitHub-reserved non-routable identity used by the gitx-sop SOP
+# template (allowlisted above for references/gitx-sop/*). v1.13.0 ships a
+# 16-assertion BDD suite (test_gitx_marketplace.sh) and 12-assertion wrapper
+# hook suite (test_gitx_release_marketplace_hook.sh) that exercise these
+# code paths, so a real PII regression would be caught upstream of release.
+scripts/gitx-marketplace.sh
+skills/gitx-release/scripts/gitx-marketplace.sh

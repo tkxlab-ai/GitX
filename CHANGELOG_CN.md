@@ -14,6 +14,50 @@
 
 ---
 
+## v1.13.0 — 2026-11-02
+
+### Added
+- `gitx-marketplace` 命令行（`register` / `bump` / `list` 三个子命令），用于
+  把当前技能自助注册到 TKX 中央 marketplace。
+- `gitx-release` 发版后自动 best-effort 同步钩子——当 `.gitx/marketplace-target`
+  存在时自动 bump marketplace 版本。
+- `--skip-marketplace` 包装层标志，单次发版跳过 marketplace 同步。
+- 可选的发版后 Gitea 发布步骤（`scripts/gitx-gitea-release.sh`）：项目中存在
+  `.gitx/gitea-release-target` 标记（`HOST[:SSH_PORT]/OWNER/REPO`）时，
+  `gitx-release` 先校验 `checksums.txt`，再把平摊后的发版目录作为 `main` 分支并打版本标签，
+  经 SSH 推送到私有 Gitea 发布仓库，然后创建 Gitea 的 Release 条目并附上 `.skill`、
+  全量压缩包、`checksums.txt`、`install.sh`。创建 Release 条目需要 `~/.netrc` 中
+  有该主机的条目（绝不存进仓库）；钩子尽力而为、不影响发版结果，单次可用
+  `--skip-gitea-release` 跳过。
+- `推送并发布` / `push and publish` 触发词（SKILL.md）：说出这句话后，AI 先
+  `git push origin main`（只接受快进推送，被拒即停），再跑
+  `scripts/gitx-gitea-release.sh --version vX.Y.Z`，远端同版本标签已存在但
+  校验和不同时自动改用 `--force`。脚本本身仍不推送；GitHub 侧仍由用户手动。
+
+### Changed
+- `install.sh` 增加创建 `~/.agents/bin/gitx-marketplace` PATH 软链接。
+- SOP 新增 Phase 9（marketplace 注册 / bump / opt-out 三种模式）。
+- 私有态防护同时识别 handoffx v4 布局（`HANDOFFX.md`、`Handoffx_Logs/`、`Handoffx_Decisions/` 及其 `.archive`/`.bak` 形式）：staging 排除、Deep Audit §5 fail-closed 正则、脱敏白名单新旧两代并列；检查项数不变。
+
+### Breaking / Migration
+面向使用 GitX 发版的技能维护者：
+- 脱敏扫描器现在扫描**每一个**文本文件（不再按扩展名白名单），并对二进制文件做凭证扫描。SVG / CSS / lock 文件可能出现新命中（例如压缩 SVG 路径中的点分数字串会被识别为 IPv4 地址），此前未扫描的 dotfile（如 `.sanitize-ignore` 的注释）也会命中。逃生口：`.sanitize-ignore` 条目。
+- 仅限 GitX 自身的豁免（`tests/fixtures/`、`evals/data/`、`references/TEST-SCENARIOS.md`、扫描器自身文件）在 GitX 之外不再生效。vendor 了旧版 `release-sanitize.sh` / `scan-credentials.sh` 的项目（例如放在 `skills/<name>/scripts/` 下）须重新 vendor v1.13.0 版本，或将其加入白名单。
+- `.sanitize-ignore` 首段规则：首个路径段中的通配需要 ≥2 个字面前导字符**且**含 `/`；`CHANGELOG*.md`、`README*.md`、`.env*` 现在会 exit 1——请改写为限定目录的模式或字面文件名。不允许以 `/` 开头，不允许 `..` / `./` 段。
+- Deep Audit §5 在任意深度拒绝 `.omc/`、`memory/`、`.superpowers/`；在归档根目录拒绝 `REVIEW.md` / `GitHub_STANDARD_ANALYSIS.md`；`HANDOFF.md` / `GOTCHAS.md` / `Handoff_*` 在根目录（原有）和嵌套位置（新增）均拒绝。
+- `gitx-sop` 校验 `--project` / `--repo` / `--private-host`（`[A-Za-z0-9._&/-]`，不含换行）；目录名含空格或非 ASCII 字符时需显式传这些参数。`gitx-init` 拒绝含换行的项目名 / 版本号，并对所有模板值做转义。
+- `install.sh` 先校验 `checksums.txt` 再做任何事，因此被篡改的安装包连 `--help` 也会 exit 1；`checksums.txt` 现在列出每一个随包发布的文件。
+- 一键 `gitx-release.sh` 在 git 仓库中恢复可用，并拒绝符号链接形式的 `VERSION` / `Release` 路径。
+
+### Tests
+- `tests/run_all.sh` 以隔离方式运行每个套件：`env -i` + 显式白名单（`PATH HOME TMPDIR LANG LC_ALL LC_CTYPE TERM USER SHELL CI`）、每套件独立 `TMPDIR`、日志捕获，并按套件自己的 summary 行判定——没有 summary、summary 报有失败、或 0 条断言（且无 skip）的套件即使 exit 0 也判 FAIL。失败套件的日志与临时目录保留在调用方 `TMPDIR` 下的 `gitx-tests.*` 并打印路径；输出末两行不变。
+- 测试不再写固定 `/tmp` 路径；`echo "$x" | grep` / `| head` 管道（268 处）改为 here-string——`set -o pipefail` 下生产者的 SIGPIPE 会在输出超过管道缓冲时把已匹配的断言翻成 false。
+- 新增 `tests/test_run_all_harness.sh`（15 个基于夹具套件的行为用例）和 `tests/test_harness_hygiene.sh`（静态守护：禁止 `tests/` 内的 `/tmp` 字面和 echo/printf 进 grep/head 的管道，含反斜杠续行与 `| VAR=value grep` 形态；扫描自身）。套件数 118 → 120。
+
+### Why
+v1.12.0 引入中央 marketplace 发布后，每次版本 bump 都要手动 `jq` + PR + merge。
+v1.13.0 把它收敛为首次 `gitx-marketplace register` + 之后自动同步。
+
 ## v1.12.3 — 2026-05-20
 
 ### Fixed
@@ -415,6 +459,12 @@
 
 ### 🧪 验证
 - **78 套件 / 0 失败**（76 基线 + 2 新测试）；dual-source diff 清洁；自发版通过端到端审计。
+
+### 📌 影响
+
+- **依赖此 wrapper 的所有项目**:从此次发布起,如果你的项目根有 `scripts/scrub-tarball.sh`(可执行 + git repo),`gitx-release.sh` 会自动用它打 source tarball,不必再依赖 wrapper 的硬编码 exclude 列表。
+- **没有 `scripts/scrub-tarball.sh` 的项目**:行为不变。但建议 vendor 一份(参考 1by1 项目)以获得 `.gitignore`/`.gitattributes` 自动遵守 + byte-determinism。
+- 历史已发布 tarball:不动(immutability);若已知含泄漏,各项目自行 hotfix(参考 1by1 commits `b21c23c` / `5358672`)。
 
 ### 🔗 关联
 - Gotcha #32 / #33 同步新增 HANDOFF 条目；mac-release v0.1.0 self-bake 暴露的所有 friction 已闭合。

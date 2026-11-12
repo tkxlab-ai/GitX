@@ -23,10 +23,10 @@ for a in "$A" "$B"; do [ -f "$a" ] || continue
   grep -qE 'EXACTNESS_FAIL.*-eq 0|EXACTNESS_FAIL.*!= *1|EXACTNESS_FAIL\}? *-ne 1' "$a" && ok "§0i wired into final exit ($lab)" || fail "$a EXACTNESS_FAIL not gating exit"
   # STATIC: §0i must extract 'checks' and ' PASS' patterns (full citation set, mirrors §0f)
   dai_block="$(awk '/--- §0i deep-audit-exactness/,/^fi$/{print}' "$a")"
-  printf '%s\n' "$dai_block" | grep -qF 'checks' \
+  grep -qF 'checks' <<<"$dai_block" \
     && ok "§0i source extracts 'checks' citations ($lab)" \
     || fail "$a §0i source missing 'checks' extraction (badge-only — FIX A regression)"
-  printf '%s\n' "$dai_block" | grep -qF ' PASS' \
+  grep -qF ' PASS' <<<"$dai_block" \
     && ok "§0i source extracts ' PASS' citations ($lab)" \
     || fail "$a §0i source missing ' PASS' extraction (badge-only — FIX A regression)"
 done

@@ -19,9 +19,11 @@ echo "=== test_release_pipeline_smoke.sh ==="
 
 # ── 1. Create a self-contained fixture project in a temp dir ──────────────────
 FIXTURE=$(mktemp -d)
-trap 'rm -rf "$FIXTURE"' EXIT
-FAKE_HOME="$FIXTURE/home"
-mkdir -p "$FAKE_HOME"
+# Why HOME lives outside the fixture: release.sh stages the project root, so a
+# HOME inside it shipped tool caches (pip http-v2 bodies) that the
+# full-coverage sanitizer (v1.13.0) rightly flags.
+FAKE_HOME=$(mktemp -d)
+trap 'rm -rf "$FIXTURE" "$FAKE_HOME"' EXIT
 
 VERSION="v0.0.1"
 SKILL="my-skill"
@@ -270,7 +272,7 @@ else
     fail "release.sh exited $rc"
     echo ""
     echo "--- release.sh output (first 120 lines) ---"
-    echo "$output" | head -120
+    head -120 <<<"$output"
     echo "---"
 fi
 
@@ -296,6 +298,42 @@ if [ -f "$RELEASE_DIR/checksums.txt" ]; then
     ok "checksums.txt exists"
 else
     fail "checksums.txt missing"
+fi
+
+# 3d-2. checksums.txt covers every shipped loose file, not just the built
+# artifacts — install.sh installs SKILL.md / scripts/ loose, so an unhashed
+# loose file is an unverified install path.
+CHK="$RELEASE_DIR/checksums.txt"
+CHK_NAMES=$(awk '{print $2}' "$CHK" 2>/dev/null || true)
+for want in SKILL.md install.sh CHANGELOG.md sbom.cyclonedx.json TOKEN_USAGE.md \
+            RELEASE_NOTES.md scripts/lib/detect-project.sh \
+            "${PROJ_NAME}-${VERSION}.skill" "${PROJ_NAME}-${VERSION}-source.tar.gz" \
+            "${PROJ_NAME}-${VERSION}-full.tar.gz"; do
+    if grep -qxF "$want" <<<"$CHK_NAMES"; then
+        ok "checksums.txt lists $want"
+    else
+        fail "checksums.txt does NOT list $want"
+    fi
+done
+_bad=$(grep -E '(^|/)checksums\.txt$|\.log$|\.sha256$' <<<"$CHK_NAMES" || true)
+if [ -z "$_bad" ]; then
+    ok "checksums.txt excludes checksums.txt / *.log / *.sha256"
+else
+    fail "checksums.txt lists excluded entries: $_bad"
+fi
+if (cd "$RELEASE_DIR" && shasum -a 256 -c checksums.txt >/dev/null 2>&1); then
+    ok "shasum -a 256 -c checksums.txt passes in release dir"
+else
+    fail "shasum -a 256 -c checksums.txt FAILED in release dir"
+fi
+# The manifest embedded in the full tarball is a pre-tarball snapshot: it
+# cannot contain the tarball's own hash (Gotcha #26).
+_INNER=$(tar -xzOf "$RELEASE_DIR/${PROJ_NAME}-${VERSION}-full.tar.gz" \
+         "${PROJ_NAME}-${VERSION}/checksums.txt" 2>/dev/null || true)
+if [ -n "$_INNER" ] && ! grep -q 'full\.tar\.gz' <<<"$_INNER"; then
+    ok "embedded checksums.txt in full tarball omits the full tarball"
+else
+    fail "embedded checksums.txt missing or lists the full tarball"
 fi
 
 # 3e. RELEASE_NOTES.md exists

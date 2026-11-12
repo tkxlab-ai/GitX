@@ -30,20 +30,20 @@ fi
 # Find the else-branch (absent) handler
 absent_branch=$(echo "$block" | awk '/^else/,/^fi/')
 
-if echo "$absent_branch" | grep -q 'SKIP=\$((SKIP+1))'; then
+if grep -q 'SKIP=\$((SKIP+1))' <<<"$absent_branch"; then
     ok "§8 absent-latest increments SKIP"
 else
     fail "§8 absent-latest does NOT increment SKIP (still hard-FAIL)"
 fi
 
-if echo "$absent_branch" | grep -q 'FAIL=\$((FAIL+1))'; then
+if grep -q 'FAIL=\$((FAIL+1))' <<<"$absent_branch"; then
     fail "§8 absent-latest STILL increments FAIL (should be SKIP only)"
 else
     ok "§8 absent-latest does NOT increment FAIL"
 fi
 
 # ── Test 2: absent-latest emits ➖ marker, not ❌ ───────────────────────────
-if echo "$absent_branch" | grep -q '➖'; then
+if grep -q '➖' <<<"$absent_branch"; then
     ok "§8 absent-latest uses ➖ SKIP marker"
 else
     fail "§8 absent-latest missing ➖ SKIP marker"
@@ -57,13 +57,13 @@ fi
 # Match any `latest_target` equality check followed by an `fi` terminator.
 mismatch_branch=$(echo "$block" | awk '/latest_target.*=.*(VERSION|EXPECTED_LATEST)/,/^[[:space:]]*fi/' | tail -n +2)
 
-if echo "$mismatch_branch" | grep -q '❌.*latest_target\|Release/latest → \$latest_target'; then
+if grep -q '❌.*latest_target\|Release/latest → \$latest_target' <<<"$mismatch_branch"; then
     ok "§8 mismatched-target branch still uses ❌ marker"
 else
     fail "§8 mismatched-target branch lost ❌ marker — invariant regression"
 fi
 
-if echo "$mismatch_branch" | grep -q 'FAIL=\$((FAIL+1))'; then
+if grep -q 'FAIL=\$((FAIL+1))' <<<"$mismatch_branch"; then
     ok "§8 mismatched-target branch still increments FAIL"
 else
     fail "§8 mismatched-target branch no longer increments FAIL — invariant regression"

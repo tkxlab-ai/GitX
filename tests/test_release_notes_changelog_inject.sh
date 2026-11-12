@@ -58,10 +58,10 @@ VERSION=v9.9.9
 SAFE_VERSION=$(printf '%s' "$VERSION" | sed 's/\./\\./g')
 extracted=$(awk "/^## $SAFE_VERSION /,/^---$/" "$TMP/CHANGELOG.md" | sed '$d')
 
-if echo "$extracted" | grep -q "Added Foo" \
-   && echo "$extracted" | grep -q "Fixed Bar" \
-   && ! echo "$extracted" | grep -q "Old stuff" \
-   && ! echo "$extracted" | grep -q "v8.8.8"; then
+if grep -q "Added Foo" <<<"$extracted" \
+   && grep -q "Fixed Bar" <<<"$extracted" \
+   && ! grep -q "Old stuff" <<<"$extracted" \
+   && ! grep -q "v8.8.8" <<<"$extracted"; then
     ok "awk extraction isolates target version block"
 else
     fail "awk extraction recipe is wrong"

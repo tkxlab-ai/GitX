@@ -27,7 +27,7 @@ required_tools=(rsync tar gzip unzip awk sed grep find diff)
 for t in "${required_tools[@]}"; do
     # Match either explicit `command -v <tool>` or the tool listed in a
     # for-loop array of tool names that's then iterated through `command -v`.
-    if echo "$block" | grep -qE "command -v ($t|\"\$[a-zA-Z_]+\")|for [a-zA-Z_]+ in[^;]*\b$t\b" ; then
+    if grep -qE "command -v ($t|\"\$[a-zA-Z_]+\")|for [a-zA-Z_]+ in[^;]*\b$t\b" <<<"$block" ; then
         ok "preflight probes for '$t'"
     else
         fail "preflight does not probe for '$t'"
@@ -35,7 +35,7 @@ for t in "${required_tools[@]}"; do
 done
 
 # Sha probe: at least one of shasum/sha256sum
-if echo "$block" | grep -qE 'shasum|sha256sum'; then
+if grep -qE 'shasum|sha256sum' <<<"$block"; then
     ok "preflight probes for shasum/sha256sum (any one)"
 else
     fail "preflight does not probe for SHA tool"
@@ -44,7 +44,7 @@ fi
 # Static: function emits a labelled "Missing required external tools" message
 # (verifies the user-facing error contract — exact wording matters for
 # operator triage and downstream documentation).
-if echo "$block" | grep -qE 'Missing required external tools'; then
+if grep -qE 'Missing required external tools' <<<"$block"; then
     ok "preflight prints labelled 'Missing required external tools' message"
 else
     fail "preflight does not print the labelled missing-deps message"
@@ -52,7 +52,7 @@ fi
 
 # Static: preflight is invoked from main flow before destructive ops
 main_flow=$(awk '/^# ============================================================$/,0' "$RELEASE")
-if echo "$main_flow" | grep -qE '^preflight_external_tools$|^preflight_external_tools '; then
+if grep -qE '^preflight_external_tools$|^preflight_external_tools ' <<<"$main_flow"; then
     ok "preflight_external_tools called from main flow"
 else
     fail "preflight_external_tools defined but never called"

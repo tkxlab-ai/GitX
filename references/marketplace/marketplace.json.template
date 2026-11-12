@@ -12,8 +12,8 @@
         "source": "github",
         "repo": "tkxlab-ai/GitX"
       },
-      "description": "GitX \u2014 cross-project release pipeline.",
-      "version": "1.12.3",
+      "description": "GitX — cross-project release pipeline.",
+      "version": "1.13.0",
       "author": {
         "name": "TKXLAB.AI"
       },
@@ -25,5 +25,6 @@
         "skill"
       ]
     }
-  ]
+  ],
+  "version": "1.13.0"
 }

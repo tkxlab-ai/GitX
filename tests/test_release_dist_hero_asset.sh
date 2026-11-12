@@ -132,12 +132,14 @@ fi
 # --- T2h: release.sh preflight aborts on dirty working tree (Codex round-12+13 [high]) ---
 # Trust boundary: sanitize covers HEAD content; flatten cp's docs from
 # working tree. Two-part check:
-#   (1) tracked dirty  — diff-index --quiet HEAD (round-12)
+#   (1) tracked dirty  — diff-index --name-only HEAD minus the wrapper
+#       allowlist, failing closed when diff-index itself errors (round-12 + v1.13.0)
 #   (2) untracked-not-gitignored — ls-files --others --exclude-standard (round-13)
 # Either non-empty → fail-close.
 if [ -f "$RELEASE" ] \
    && grep -qE 'release.sh: working tree has uncommitted tracked changes' "$RELEASE" \
-   && grep -qE 'diff-index --quiet HEAD' "$RELEASE"; then
+   && grep -qE 'if ! _dirty=\$\(git -C "\$PROJECT_ROOT" diff-index --name-only HEAD' "$RELEASE" \
+   && grep -qE 'release.sh: cannot verify clean working tree' "$RELEASE"; then
     ok "release.sh preflight aborts on dirty tracked working tree (Codex round-12 [high] trust boundary)"
 else
     fail "release.sh MUST preflight-abort on dirty tracked working tree (round-12 fix) — un-scanned content would ship"

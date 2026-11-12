@@ -159,7 +159,7 @@ fi
 # ── Test 6: list-unreviewed subcommand ───────────────────────────────────
 if [ -x "$CACHED" ]; then
     result=$(CACHE_DIR="$CACHE_DIR" "$CACHED" list-unreviewed 2>/dev/null || true)
-    if [ -n "$result" ] && echo "$result" | grep -qE '\.unreviewed$'; then
+    if [ -n "$result" ] && grep -qE '\.unreviewed$' <<<"$result"; then
         ok "list-unreviewed enumerates pending files"
     else
         fail "list-unreviewed should output unreviewed paths; got: $result"

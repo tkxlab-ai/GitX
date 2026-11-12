@@ -89,10 +89,10 @@ else
 fi
 
 # === BEHAVIOR 1: banner top renders skill + version + bar lines ===
-OUT=$(bash -c "source '$HELPER'; install_banner_top demo v0.1.0 install /tmp/src")
-if echo "$OUT" | grep -q "demo Installation  v0.1.0" \
-   && echo "$OUT" | grep -q "Source : /tmp/src" \
-   && echo "$OUT" | grep -q "Mode   : install"; then
+OUT=$(bash -c "source '$HELPER'; install_banner_top demo v0.1.0 install /nonexistent/src")
+if grep -q "demo Installation  v0.1.0" <<<"$OUT" \
+   && grep -q "Source : /nonexistent/src" <<<"$OUT" \
+   && grep -q "Mode   : install" <<<"$OUT"; then
     ok "banner_top renders skill+version+source+mode"
 else
     fail "banner_top output incomplete: $OUT"
@@ -106,9 +106,9 @@ install_checkpoint X 'First'
 install_checkpoint X 'Second'
 install_checkpoint X 'Third'
 ")
-if echo "$OUT" | grep -q "Checkpoint 1/3 — First" \
-   && echo "$OUT" | grep -q "Checkpoint 2/3 — Second" \
-   && echo "$OUT" | grep -q "Checkpoint 3/3 — Third"; then
+if grep -q "Checkpoint 1/3 — First" <<<"$OUT" \
+   && grep -q "Checkpoint 2/3 — Second" <<<"$OUT" \
+   && grep -q "Checkpoint 3/3 — Third" <<<"$OUT"; then
     ok "checkpoint counter increments 1/3 -> 2/3 -> 3/3"
 else
     fail "checkpoint counter broken: $OUT"
@@ -122,8 +122,8 @@ install_checkpoint X 'A'
 install_style_init 5
 install_checkpoint X 'B'
 ")
-if echo "$OUT" | grep -q "Checkpoint 1/2 — A" \
-   && echo "$OUT" | grep -q "Checkpoint 1/5 — B"; then
+if grep -q "Checkpoint 1/2 — A" <<<"$OUT" \
+   && grep -q "Checkpoint 1/5 — B" <<<"$OUT"; then
     ok "install_style_init resets counter + total"
 else
     fail "init does not reset state: $OUT"
@@ -141,9 +141,9 @@ install_step_fail 'fail' 2>&1
 install_banner_bottom demo v0
 ")
 # In ASCII mode there should be NO multi-byte emoji codepoints.
-if echo "$OUT" | grep -q '\[lock\]' && echo "$OUT" | grep -q '\[OK\]' \
-   && echo "$OUT" | grep -q '\[!\]' && echo "$OUT" | grep -q '\[X\]' \
-   && echo "$OUT" | grep -q '\[done\]'; then
+if grep -q '\[lock\]' <<<"$OUT" && grep -q '\[OK\]' <<<"$OUT" \
+   && grep -q '\[!\]' <<<"$OUT" && grep -q '\[X\]' <<<"$OUT" \
+   && grep -q '\[done\]' <<<"$OUT"; then
     ok "ASCII-only mode swaps all 5 sentinel emoji to bracket markers"
 else
     fail "ASCII mode incomplete swap: $OUT"
@@ -151,7 +151,7 @@ fi
 
 # === BEHAVIOR 5: banner_bottom renders party emoji + skill + version ===
 OUT=$(bash -c "source '$HELPER'; install_banner_bottom demo v1.0")
-if echo "$OUT" | grep -qE "(🎉|\[done\]).*demo v1.0 installed"; then
+if grep -qE "(🎉|\[done\]).*demo v1.0 installed" <<<"$OUT"; then
     ok "banner_bottom renders success line"
 else
     fail "banner_bottom output unexpected: $OUT"
@@ -160,7 +160,7 @@ fi
 # === BEHAVIOR 6: cli_row pads cli name and aligns columns ===
 OUT=$(bash -c "source '$HELPER'; install_cli_row 'Claude Code' '/foo' '~/.claude/skills/foo'")
 # Format: [Claude Code ] /foo                   ~/.claude/skills/foo
-if echo "$OUT" | grep -qE '\[Claude Code +\] /foo +~/\.claude/skills/foo'; then
+if grep -qE '\[Claude Code +\] /foo +~/\.claude/skills/foo' <<<"$OUT"; then
     ok "cli_row pads CLI name + aligns invocation column"
 else
     fail "cli_row alignment broken: $OUT"
@@ -168,9 +168,9 @@ fi
 
 # === BEHAVIOR 7: next_block renders bullets ===
 OUT=$(bash -c "source '$HELPER'; install_next_block 'hint A' 'hint B'")
-if echo "$OUT" | grep -q "Next:" \
-   && echo "$OUT" | grep -q "• hint A" \
-   && echo "$OUT" | grep -q "• hint B"; then
+if grep -q "Next:" <<<"$OUT" \
+   && grep -q "• hint A" <<<"$OUT" \
+   && grep -q "• hint B" <<<"$OUT"; then
     ok "next_block renders 'Next:' header + bullets"
 else
     fail "next_block output broken: $OUT"
@@ -191,7 +191,7 @@ fi
 # Coerced to 0 means "checkpoint header omits n/total" — graceful, no noise.
 STDERR=$(bash -c "source '$HELPER'; install_style_init abc; install_checkpoint X 'Title'" 2>&1 >/dev/null)
 STDOUT=$(bash -c "source '$HELPER'; install_style_init abc; install_checkpoint X 'Title'" 2>/dev/null)
-if [ -z "$STDERR" ] && echo "$STDOUT" | grep -qE "Checkpoint 1 - Title|Checkpoint 1 — Title"; then
+if [ -z "$STDERR" ] && grep -qE "Checkpoint 1 - Title|Checkpoint 1 — Title" <<<"$STDOUT"; then
     ok "install_style_init coerces non-numeric arg silently (no stderr noise)"
 else
     fail "install_style_init non-numeric arg leaks: stderr='$STDERR' stdout='$STDOUT'"
@@ -210,7 +210,7 @@ fi
 ASCII_OUT=$(TKX_INSTALL_NO_EMOJI=1 bash -c "
 source '$HELPER'
 install_style_init 2
-install_banner_top demo v0 install /tmp/src
+install_banner_top demo v0 install /nonexistent/src
 install_checkpoint \"\$_TKX_E_LOCK\" 'Integrity'
 install_step_ok 'pass'
 install_checkpoint \"\$_TKX_E_CHECK\" 'Done'
@@ -221,14 +221,14 @@ install_cli_table_end
 install_next_block 'hint A' 'hint B'
 install_next_hint 'hint C'
 " 2>&1)
-if printf '%s' "$ASCII_OUT" | LC_ALL=C grep -qE '[^[:print:][:space:]]'; then
+if LC_ALL=C grep -qE '[^[:print:][:space:]]' <<<"$ASCII_OUT"; then
     fail "ASCII mode emits non-ASCII bytes (em-dash / bullet / emoji leaked through)"
-    printf '%s' "$ASCII_OUT" | LC_ALL=C grep -nE '[^[:print:][:space:]]' | head -3 | sed 's/^/       /' >&2
+    LC_ALL=C grep -nE '[^[:print:][:space:]]' <<<"$ASCII_OUT" | head -3 | sed 's/^/       /' >&2
 else
     ok "ASCII mode output is pure ASCII (no em-dash / bullet / emoji bytes)"
 fi
 # Also assert the ASCII substitute characters are present (dash + bullet swap real).
-if echo "$ASCII_OUT" | grep -qE 'Checkpoint 1/2 - Integrity' && echo "$ASCII_OUT" | grep -qE '^    \* hint A'; then
+if grep -qE 'Checkpoint 1/2 - Integrity' <<<"$ASCII_OUT" && grep -qE '^    \* hint A' <<<"$ASCII_OUT"; then
     ok "ASCII mode swaps em-dash to '-' and bullet to '*'"
 else
     fail "ASCII mode missing expected dash/bullet substitutes"
@@ -236,7 +236,7 @@ fi
 
 # === BEHAVIOR 10: double-source is a no-op (idempotent) ===
 OUT=$(bash -c "source '$HELPER'; source '$HELPER'; install_style_init 1; install_checkpoint X done")
-if echo "$OUT" | grep -q "Checkpoint 1/1 — done"; then
+if grep -q "Checkpoint 1/1 — done" <<<"$OUT"; then
     ok "double-source is idempotent"
 else
     fail "double-source broke state: $OUT"

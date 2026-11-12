@@ -25,9 +25,11 @@ compatibility: macOS/Linux, bash 3.2+ (POSIX shell), git 2.x, optional python3 +
 | **补跑审计** | `audit <version>` | `scripts/release-audit.sh` | 对已有 `Release/<ver>/` 重新跑 40+ 项静态审查（断网也能跑）|
 | **sanity 扫描** | `scan <dir>` | `scripts/release-sanitize.sh` | 扫指定目录的 6 类敏感信息（凭证 / 绝对用户路径 / 真实邮箱 / 公网 IP / MAC / SSH-GPG 指纹） |
 | **项目初始化** | `/gitx-init` · 项目初始化 · `init guideline` | `scripts/gitx-init.sh` | 在当前项目根生成 `.gitx/` 政策包 + `RELEASE_GUIDELINE.md`；auto-detect skill / mac / both / empty（v1.6.0+）|
+| **marketplace 同步** | `/gitx-marketplace` · `gitx-marketplace register/bump/list` | `scripts/gitx-marketplace.sh` | 把当前技能加入 / 更新中央 marketplace。首次手动 `register --repo OWNER/REPO`；之后 `gitx-release` 自动 bump（v1.13.0+）|
 | **GitHub 发版 SOP** | `/gitx-sop` · `推 GitHub` | `scripts/gitx-sop.sh` | 在当前项目根生成 `.gitx/GITHUB_RELEASE_SOP.md`（GitHub 公开镜像发布 runbook，占位符渲染，**只生成不执行 git/gh**）（v1.7.0+）|
+| **推送并发布** | `推送并发布` · `使用 GitX 推送并发布` · `push and publish` | 无新脚本（AI 依次执行两条现有命令） | ① `git push origin main`（只接受 fast-forward，被拒即停）→ ② `scripts/gitx-gitea-release.sh --version <ver>`，远端同版本 tag 字节不同时自动改用 `--force`；不碰 GitHub。详见下方「推送并发布」（v1.13.0+）|
 
-`/gitx-release` 每次正式运行都会写入本地诊断日志：`Release/logs/gitx-release-<timestamp>-<version>.log`。成功后同一份日志和 `.sha256` 校验文件也会复制进 `Release/<project>-<version>/gitx-release-<timestamp>-<version>.log`，和本次 release 产物绑定。日志包含项目、skill、版本、子流程输出和退出码；默认不联网、不自动回传，需要 debug 时由用户或 CI artifact 主动提供。
+`/gitx-release` 每次正式运行都会写入本地诊断日志：`Release/logs/gitx-release-<timestamp>-<version>.log`，成功后在同目录生成 `.sha256` 摘要。日志**不**进入 `Release/<project>-<version>/`——那是可分发产物目录（已审计、每个文件都在 `checksums.txt` 里），而日志含绝对路径等本机信息，会被 sanitizer 拦下（v1.13.0 起）。日志包含项目、skill、版本、子流程输出和退出码；默认不联网、不自动回传，需要 debug 时由用户或 CI artifact 主动提供。
 
 ## 关键约束
 
@@ -41,24 +43,49 @@ compatibility: macOS/Linux, bash 3.2+ (POSIX shell), git 2.x, optional python3 +
 
 ### 发版（`release <version>`）
 
-`scripts/release.sh` 把发版管线拆为 12 个命名函数（主流程 ~25 行），严格按以下顺序调用：
+`scripts/release.sh` 把发版管线拆为 15 个命名函数（主流程 ~25 行），严格按以下顺序调用：
 
 | # | 函数 | 说明 |
 |---|------|------|
-| 1 | `preflight_checks` | version 验证 + SKILL.md 一致性 + CHANGELOG gate |
+| 1 | `preflight_checks` | version 验证 + SKILL.md 一致性 + CHANGELOG gate + clean-tree 预检（wrapper 自己写的 VERSION/CHANGELOG 经 `_GITX_WRAPPER_DIRTY_OK` 放行） |
 | 2 | `run_tests` | 跑 tests/run_all.sh（全绿才继续） |
 | 3 | `check_dual_source` | 根 scripts/ 与 skill scripts/ byte-identical |
 | 4 | `build_skill_package` | .skill 打包（skill-creator 优先 / zip fallback） |
-| 5 | `build_source_tarball` | staging + rsync + 可复现 tarball（mtime 归一 + sorted） |
-| 6 | `run_sanity_scans` | 先扫 staging 目录，再扫 .skill 解压内容（release-sanitize.sh） |
-| 7 | `flatten_docs` | 平摊 9 份文档 + scripts/ + references/ + assets/ + install.sh |
-| 8 | `generate_attestations` | SBOM (emit-sbom.sh) + TOKEN_USAGE (emit-token-usage.sh) + checksums |
-| 9 | `generate_release_notes` | 三安装路径 + CHANGELOG inject |
-| 10 | `update_changelog` | 平摊 Release/CHANGELOG.md |
-| 11 | `run_deep_audit` | release-audit.sh --inline（40+ 项全绿才继续） |
-| 12 | `update_latest_symlink` | `ln -sfn` 原子更新 Release/latest |
+| 5 | `build_source_tarball` | staging + rsync（gitignored 路径剪除）/ scrub-tarball 路径 + 可复现 tarball（mtime 归一 + sorted） |
+| 6 | `assert_changelog_tarball_parity` | tarball 内 CHANGELOG 与 Release/ 真相源字节一致 |
+| 7 | `run_sanity_scans` | 先扫 staging 目录，再扫 .skill 解压内容（release-sanitize.sh） |
+| 8 | `flatten_docs` | 平摊 9 份文档 + scripts/ + references/ + assets/ + install.sh |
+| 9 | `generate_attestations` | SBOM (emit-sbom.sh) + TOKEN_USAGE (emit-token-usage.sh) |
+| 10 | `generate_release_notes` | 三安装路径 + CHANGELOG inject |
+| 11 | `update_changelog` | 平摊 Release/CHANGELOG.md |
+| 12 | `generate_checksums` | checksums.txt 覆盖 release dir 内所有出货文件（含 scripts/、references/、CHANGELOG），install.sh 据此校验 |
+| 13 | `build_full_tarball` | 全量 tarball + 把自身 hash 追加进外层 checksums.txt |
+| 14 | `run_deep_audit` | release-audit.sh --inline（40+ 项全绿才继续） |
+| 15 | `update_latest_symlink` | `ln -sfn` 原子更新 Release/latest |
+| post | `invoke_gitea_release`（wrapper） | post-release: publish to a private Gitea release repo — opt-in via `.gitx/gitea-release-target`；尽力而为，失败只 ⚠️ 警告，不改 wrapper 退出码 |
 
-入口 wrapper 会在调用 `release.sh` 前创建 `Release/logs/gitx-release-*.log`，并用 `tee` 保存完整输出。release 成功时，wrapper 会把日志复制到 `Release/<project>-<version>/`；release gate 失败时，日志仍保留在 `Release/logs/`，用于跨项目问题复盘。
+入口 wrapper 会在调用 `release.sh` 前创建 `Release/logs/gitx-release-*.log`，并用 `tee` 保存完整输出。无论 release 成功与否，日志和它的 `.sha256` 都只留在 `Release/logs/`，不进入 `Release/<project>-<version>/`（v1.13.0 起；Gitea 发布步骤也以"目录内每个文件都在 checksums.txt 里"为前提）。
+
+wrapper 用法：`gitx-release.sh [--dry-run] [--version vX.Y.Z] [--skip-marketplace] [--skip-gitea-release]`。`--skip-*` 只跳过本次；要长期关闭，删除对应 marker（`rm .gitx/marketplace-target` / `rm .gitx/gitea-release-target`）。
+
+#### Gitea release repo（可选，v1.13.0+）
+
+在项目里放一个 `.gitx/gitea-release-target`（gitignored、本机专用、拒绝软链）即开启；没有它就什么都不做。内容只有一行，语法 `HOST[:SSH_PORT]/OWNER/REPO`，例如 `<gitea-host>:2222/my-releases/MySkill`（SSH 端口默认 22；不允许 `://`、空白、`password`/`token` 字样）。release 成功后 wrapper 调 `scripts/gitx-gitea-release.sh --version vX.Y.Z`：
+- 先校验 `checksums.txt`，再把平摊后的 `Release/<project>-<version>/` 作为 `main` 的一次提交 + 注解 tag `vX.Y.Z` 经 SSH 推到 `ssh://git@HOST:PORT/OWNER/REPO.git`（这是约束 1 的显式 opt-in 例外）；
+- 再经 `https://HOST/api/v1` 创建 Gitea Release，附 `.skill` / `-full.tar.gz` / `checksums.txt` / `install.sh`。这一步需要 `~/.netrc` 里有该 host 的 `machine` 条目（密码或 token；**绝不**存进仓库）；没有则跳过并 ⚠️ 提示。
+
+运维前提：① host key 必须已在 `known_hosts`——先手动 `ssh -p PORT git@<gitea-host>` 一次（BatchMode 不会提示确认）；② API 固定为 `https://HOST`（443 端口），marker 里的端口只用于 SSH。
+
+失败不影响本地 release；按警告里的命令单独重跑（`bash scripts/gitx-gitea-release.sh --version vX.Y.Z`）。只有两种情况才加 `--force`：① 远端 tag 已存在但 checksums 不同；② tag 一致，但 Gitea Release 的附件已过期（stale）或缺少 `checksums.txt` 附件。
+
+#### 推送并发布（v1.13.0+）
+
+用户说 `推送并发布` / `使用 GitX 推送并发布` / `push and publish` 时，AI 依次做两件事，中间不再追问。这是约束 1「不自动 git push」的第二个显式 opt-in 例外：只在用户说出这句话时执行，脚本本身仍然不推。
+
+1. **推送源码仓**：`git push origin main`。前提：工作树干净、当前在 `main`。只接受 fast-forward；被拒就停下报告，**不** `--force`、不 `--no-verify`、不推 tag，也不进入第 2 步（源码还没上去的产物不能先发出去）。
+2. **发布到 Gitea 发布仓**：`bash scripts/gitx-gitea-release.sh --version vX.Y.Z`（版本取 `VERSION` sidecar）。退出码 0 = 已发布（或远端已有且字节一致，输出 ℹ️），正常；退出码 1 且输出里有 `use --force` 字样 = 远端同版本 tag 已存在但 checksums 不同，或 Release 附件过期——这句话术的语义就是「让远端等于本地发布目录」，所以直接改用 `--force` 重跑一次；退出码 2 = 没有 `.gitx/gitea-release-target`（或用法错误），只做第 1 步并说明；其他退出码 1 原样报告、不重试。
+
+前置判断：若发布目录比 HEAD 旧（上次 `gitx-release.sh` 之后又有提交改过会进产物的文件），先重切（`gitx-release.sh --version vX.Y.Z`），再走上面两步。完成后回报两个仓库的 `main` commit、tag 与 Release 链接。GitHub 侧（打 tag、推 GitHub、GitHub Release）不在这句话术里，仍按政策 §4 由用户手动。
 
 辅助脚本：
 - `scripts/lib/detect-project.sh` — PROJECT_NAME/SKILL_NAME 自动检测（被 release.sh + audit.sh + sync-dual-source.sh 共享）

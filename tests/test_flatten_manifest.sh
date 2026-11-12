@@ -43,7 +43,7 @@ fi
 
 # ── Static: flatten_docs reads a manifest in a loop ────────────────────
 block=$(awk '/^flatten_docs\(\)/,/^\}/' "$RELEASE_SH")
-if echo "$block" | grep -qE '\.release-flatten'; then
+if grep -qE '\.release-flatten' <<<"$block"; then
     ok "flatten_docs() body reads .release-flatten manifest"
 else
     fail "flatten_docs() does not consume .release-flatten"
@@ -120,7 +120,8 @@ run_flatten_only() {
             # Use bash subshell to avoid running main flow.
             DRY_RUN=0
             run() { "$@"; }
-            source <(awk "/^flatten_docs\(\)/,/^\}/" "'"$RELEASE_SH"'")
+            # Why eval: bash 3.2 silently defines nothing when sourcing a process substitution.
+            eval "$(awk "/^flatten_docs\(\)/,/^\}/" "'"$RELEASE_SH"'")"
             flatten_docs >/dev/null 2>&1 || true
         '
 }

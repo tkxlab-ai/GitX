@@ -29,7 +29,7 @@ fi
 # Extract §2 for-loop and verify it lists the 8 REQUIRED docs but NOT TEST-SCENARIOS.md
 REQUIRED_LOOP=$(awk '/^echo "§2\. 平摊文档存在"/,/^check "install\.sh 可执行"/' "$AUDIT_SH")
 for req in "README.md" "INSTALL.md" "CHANGELOG.md" "LICENSE" "CONTRIBUTING.md" "SKILL.md" "RELEASE_NOTES.md" "install.sh"; do
-    if echo "$REQUIRED_LOOP" | grep -qE "for f in.*$req|check.*$req"; then
+    if grep -qE "for f in.*$req|check.*$req" <<<"$REQUIRED_LOOP"; then
         ok "REQUIRED doc '$req' is hard-checked in §2"
     else
         fail "REQUIRED doc '$req' is not hard-checked in §2 (regression!)"

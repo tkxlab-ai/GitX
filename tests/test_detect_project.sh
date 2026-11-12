@@ -117,9 +117,9 @@ EOF
     err="$(cat "$FIXTURE3/err.txt")"
     rm -rf "$FIXTURE3"
     [ "$rc" -ne 0 ] \
-        && echo "$err" | grep -q '发现可能的旧式 flat skill bundle' \
-        && echo "$err" | grep -q 'old/1by1-skill-dev/SKILL.md' \
-        && echo "$err" | grep -q 'GitX 需要标准布局'
+        && grep -q '发现可能的旧式 flat skill bundle' <<<"$err" \
+        && grep -q 'old/1by1-skill-dev/SKILL.md' <<<"$err" \
+        && grep -q 'GitX 需要标准布局' <<<"$err"
 }
 
 test_legacy_flat_skill_generates_upgrade_guideline() {

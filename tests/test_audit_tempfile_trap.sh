@@ -16,7 +16,7 @@ echo "=== test_audit_tempfile_trap: temp file cleanup ==="
 # Extract the 15 lines around the _SEC_LOG=$(mktemp) line to see if trap follows
 _SEC_LINE=$(grep -n '_SEC_LOG=\$(mktemp)' "$AUDIT_SH" | head -1 | cut -d: -f1)
 _EARLY=$(sed -n "${_SEC_LINE},$((${_SEC_LINE}+12))p" "$AUDIT_SH")
-if echo "$_EARLY" | grep -qE 'trap.*_SEC_LOG|trap.*EXIT'; then
+if grep -qE 'trap.*_SEC_LOG|trap.*EXIT' <<<"$_EARLY"; then
     ok "release-audit.sh: _SEC_LOG protected by trap on early exit"
 else
     fail "release-audit.sh: _SEC_LOG has no trap — leaks on early exit (exit 2 path)"
@@ -25,7 +25,7 @@ fi
 # Test 2: LIST temp file inside audit_section_5_tarball must have local cleanup
 _LIST_LINE=$(grep -n 'LIST=\$(mktemp)' "$AUDIT_SH" | head -1 | cut -d: -f1)
 _LIST_BLOCK=$(sed -n "${_LIST_LINE},$((${_LIST_LINE}+3))p" "$AUDIT_SH")
-if echo "$_LIST_BLOCK" | grep -qE 'trap.*LIST|trap.*RETURN'; then
+if grep -qE 'trap.*LIST|trap.*RETURN' <<<"$_LIST_BLOCK"; then
     ok "release-audit.sh: LIST temp file in §5 has trap RETURN guard"
 else
     fail "release-audit.sh: LIST in audit_section_5_tarball() has no trap — leaks on tar failure"

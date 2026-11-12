@@ -18,8 +18,8 @@ for a in "$A" "$B"; do [ -f "$a" ] || continue
    && grep -q '_track_end "§0g_readme_sync"' "$a" \
    && grep -q '§0g' "$a" && ok "§0g gate present ($lab)" || fail "$a missing §0g"
   g0g="$(awk '/^audit_section_0_readme_sync\(\)/,/_track_end "§0g_readme_sync"/' "$a")"
-  printf '%s\n' "$g0g" | grep -qF 'SKIP=$((SKIP+1))' \
-   && printf '%s\n' "$g0g" | grep -qE 'if \[ ! -f "\$rf" \] \|\| ! grep -qF' \
+  grep -qF 'SKIP=$((SKIP+1))' <<<"$g0g" \
+   && grep -qE 'if \[ ! -f "\$rf" \] \|\| ! grep -qF' <<<"$g0g" \
    && ok "§0g SKIP+errexit-safe idiom present, §0g-scoped ($lab)" || fail "$a §0g not generic/errexit-safe (scoped)"
 done
 cmp -s "$A" "$B" && ok "release-audit.sh dual-source byte-identical" || fail "dual-source drift"
@@ -59,11 +59,11 @@ for a in "$A" "$B"; do [ -f "$a" ] || continue
   lab="$(basename "$(dirname "$(dirname "$a")")")"
   g0g_block="$(awk '/--- §0g readme-sync/,/_track_end "§0g_readme_sync"/{print}' "$a")"
   # Safe form: bash -c '...' _ "$gr"  (path as positional arg, not interpolated)
-  printf '%s\n' "$g0g_block" | grep -qF "bash -c 'head -1" \
+  grep -qF "bash -c 'head -1" <<<"$g0g_block" \
     && ok "§0g uses safe bash -c '...' arg form ($lab)" \
     || fail "§0g missing safe arg-passing form ($lab) — FIX C not applied"
   # Unsafe form must be absent: "head -1 '$gr'"  (string interpolation of path)
-  printf '%s\n' "$g0g_block" | grep -qF "head -1 '\$gr'" \
+  grep -qF "head -1 '\$gr'" <<<"$g0g_block" \
     && fail "§0g still contains unsafe string-interpolated path in bash -c ($lab)" \
     || ok "§0g no unsafe string-interpolated path in bash -c ($lab)"
 done

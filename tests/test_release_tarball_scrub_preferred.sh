@@ -147,13 +147,13 @@ git add -A && git commit -q -m "fixture"
 out_scrub=$(env -u PROJECT_NAME -u SKILL_NAME PROJECT_ROOT="$FIX_SCRUB" \
     bash "$RELEASE_SH" --dry-run v0.1.1 2>&1 || true)
 
-if echo "$out_scrub" | grep -qE 'Building source tarball via .*scrub-tarball\.sh'; then
+if grep -qE 'Building source tarball via .*scrub-tarball\.sh' <<<"$out_scrub"; then
     ok "fixture WITH scrub-tarball.sh — new path marker appeared in dry-run"
 else
     fail "fixture WITH scrub-tarball.sh — new path NOT taken (got rsync fallback or aborted earlier)"
 fi
 
-if echo "$out_scrub" | grep -qE 'Staging source.*rsync mode'; then
+if grep -qE 'Staging source.*rsync mode' <<<"$out_scrub"; then
     fail "fixture WITH scrub-tarball.sh — rsync fallback fired (should not)"
 else
     ok "fixture WITH scrub-tarball.sh — rsync fallback did NOT fire (correct)"
@@ -203,13 +203,13 @@ git add -A && git commit -q -m "fixture-nogprotect"
 out_no_scrub=$(env -u PROJECT_NAME -u SKILL_NAME PROJECT_ROOT="$FIX_NO_SCRUB" \
     bash "$RELEASE_SH" --dry-run v0.1.1 2>&1 || true)
 
-if echo "$out_no_scrub" | grep -qE 'Staging source.*rsync mode'; then
+if grep -qE 'Staging source.*rsync mode' <<<"$out_no_scrub"; then
     ok "fixture WITHOUT scrub-tarball.sh — rsync fallback marker appeared (correct)"
 else
     fail "fixture WITHOUT scrub-tarball.sh — rsync fallback NOT taken (or pipeline aborted earlier)"
 fi
 
-if echo "$out_no_scrub" | grep -qE 'Building source tarball via .*scrub-tarball\.sh'; then
+if grep -qE 'Building source tarball via .*scrub-tarball\.sh' <<<"$out_no_scrub"; then
     fail "fixture WITHOUT scrub-tarball.sh — new path fired (impossible: file absent)"
 else
     ok "fixture WITHOUT scrub-tarball.sh — new path correctly did NOT fire"

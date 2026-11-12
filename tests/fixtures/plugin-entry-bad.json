@@ -1,0 +1,6 @@
+{
+  "name": "Demo Skill BAD",
+  "source": { "source": "gitea", "repo": "x" },
+  "version": "v1",
+  "description": ""
+}

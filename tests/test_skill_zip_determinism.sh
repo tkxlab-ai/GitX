@@ -23,7 +23,7 @@ else
 fi
 # Zip path must use staging copy + mtime normalization (not live source tree)
 _ZIP_BLOCK=$(awk '/skill-creator 不在/,/SKILL_OUT.*du/' "$RELEASE_SH" 2>/dev/null || true)
-if echo "$_ZIP_BLOCK" | grep -qE 'rsync|mktemp' && echo "$_ZIP_BLOCK" | grep -qE 'touch -t|SDE_ZIP|SDE_TOUCH'; then
+if grep -qE 'rsync|mktemp' <<<"$_ZIP_BLOCK" && grep -qE 'touch -t|SDE_ZIP|SDE_TOUCH' <<<"$_ZIP_BLOCK"; then
     ok "release.sh: zip fallback uses staging+mtime-normalize (deterministic)"
 else
     fail "release.sh: zip fallback reads live source without mtime normalization (non-deterministic)"

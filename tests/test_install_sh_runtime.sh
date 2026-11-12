@@ -35,7 +35,7 @@ else
     fail "install.sh --help exits $help_status (expected 0)"
 fi
 
-if echo "$help_out" | grep -qiE 'usage|用法'; then
+if grep -qiE 'usage|用法' <<<"$help_out"; then
     ok "install.sh --help prints usage text"
 else
     fail "install.sh --help output missing 'usage' keyword"
@@ -58,7 +58,7 @@ fi
 
 # ── Test 4: --force flag is accepted (no error on unknown flag) ────────────
 force_help=$(bash "$INSTALL_SH" --force --dry-run 2>&1 || true)
-if ! echo "$force_help" | grep -qiE 'unknown|unrecognized|invalid.*option'; then
+if ! grep -qiE 'unknown|unrecognized|invalid.*option' <<<"$force_help"; then
     ok "install.sh accepts --force flag"
 else
     fail "install.sh rejects --force: $force_help"
@@ -135,7 +135,7 @@ for expected in \
     "/skills" \
     "OpenCode" \
     "Gemini CLI"; do
-    if echo "$summary_out" | grep -q "$expected"; then
+    if grep -q "$expected" <<<"$summary_out"; then
         ok "install summary includes: $expected"
     else
         fail "install summary missing: $expected"

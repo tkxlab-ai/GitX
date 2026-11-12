@@ -26,8 +26,12 @@ self_excludes=(
     'TKX_Git_Release_policy_and_process.md'
     'TEST-SCENARIOS.md'
 )
+# v1.13.0 follow-up S2: exemptions are built as `! -path "$DIR/<dir>/<file>"`
+# from the _SELF_REL list, so the anchor is a directory-qualified _SELF_REL
+# entry plus the absence of any bare -name exclusion.
 for f in "${self_excludes[@]}"; do
-    if grep -qE "\-path[[:space:]]+['\"][^'\"]*${f//./\\.}['\"]" "$SANITIZE"; then
+    if grep -qE "^[[:space:]]*'[^']+/${f//./\\.}'[[:space:]]*$" "$SANITIZE" \
+       && ! grep -qE "\-name[[:space:]]+['\"]${f//./\\.}['\"]" "$SANITIZE"; then
         ok "exclusion for '$f' is path-anchored"
     else
         fail "exclusion for '$f' uses bare -name (collides on any same-basename file)"
@@ -53,12 +57,12 @@ JWT_BODY="${JWT_HDR_A}${JWT_HDR_B}${JWT_HDR_C}.${JWT_PL_A}${JWT_PL_B}${JWT_PL_C}
 } > "$FIXTURE/references/scan-credentials.sh"
 
 scan_out=$(PROJECT_ROOT="$FIXTURE" bash "$SANITIZE" "$FIXTURE" 2>&1 || true)
-if echo "$scan_out" | grep -qiE 'JWT|bearer|credential'; then
+if grep -qiE 'JWT|bearer|credential' <<<"$scan_out"; then
     ok "planted credential at colliding-basename path is detected (not skipped)"
 else
     fail "planted credential at references/scan-credentials.sh is NOT detected"
     echo "       sanitize output head:"
-    echo "$scan_out" | head -5 | sed 's/^/         /'
+    head -5 <<<"$scan_out" | sed 's/^/         /'
 fi
 
 echo ""

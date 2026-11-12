@@ -2,6 +2,90 @@
 
 All notable changes per release, newest first. Chinese parallel: [`CHANGELOG_CN.md`](CHANGELOG_CN.md).
 
+## v1.13.0 — 2026-11-02
+
+### Added
+- `gitx-marketplace` CLI (subcommands `register` / `bump` / `list`) for
+  self-service registration with the TKX central marketplace.
+- `gitx-release` post-release best-effort sync hook — bumps the marketplace
+  version automatically when `.gitx/marketplace-target` marker is present.
+- `--skip-marketplace` wrapper flag for opt-out per release.
+- Opt-in post-release Gitea release step (`scripts/gitx-gitea-release.sh`):
+  with a `.gitx/gitea-release-target` marker (`HOST[:SSH_PORT]/OWNER/REPO`),
+  `gitx-release` pushes the flattened, checksum-verified release dir as `main`
+  plus the version tag to a private Gitea release repo over SSH, then creates
+  the Gitea Release with the `.skill` / full tarball / `checksums.txt` /
+  `install.sh` assets. The Release step needs a `~/.netrc` entry for the host
+  (never stored in the repo); best-effort hook, skip per run with
+  `--skip-gitea-release`.
+- `推送并发布` / `push and publish` trigger (SKILL.md): on that phrase the agent
+  runs `git push origin main` (fast-forward only; a rejected push stops the
+  chain) and then `scripts/gitx-gitea-release.sh --version vX.Y.Z`, switching
+  to `--force` when the remote tag already exists with different checksums.
+  No script pushes by itself; the GitHub side stays manual.
+
+### Changed
+- `install.sh` now creates `~/.agents/bin/gitx-marketplace` PATH symlink in
+  addition to the existing skill bundle install.
+- SOP gains Phase 9 (marketplace registration / bump / opt-out modes).
+- Private-state defence also recognises the handoffx v4 layout (`HANDOFFX.md`,
+  `Handoffx_Logs/`, `Handoffx_Decisions/`, their `.archive`/`.bak` forms): staging
+  excludes, Deep Audit §5 fail-closed regexes and the sanitizer whitelist cover
+  both generations; check count unchanged.
+
+### Breaking / Migration
+For maintainers of skills released with GitX:
+- The sanitizer scans **every** text file (no extension allowlist) and
+  credential-scans binaries. Expect new hits in SVG / CSS / lock files (e.g. a
+  dotted digit run in a minified SVG path reads as an IPv4 address) and in previously unscanned
+  dotfiles such as `.sanitize-ignore` comments. Escape hatch: `.sanitize-ignore`
+  entries.
+- GitX-only self-exemptions (`tests/fixtures/`, `evals/data/`,
+  `references/TEST-SCENARIOS.md`, the scanner's own files) no longer apply
+  outside GitX. Projects that vendor old copies of `release-sanitize.sh` /
+  `scan-credentials.sh` (e.g. under `skills/<name>/scripts/`) must re-vendor the
+  v1.13.0 copies or whitelist them.
+- `.sanitize-ignore` first-segment rule: a glob in the first path segment needs
+  ≥2 literal leading chars **and** a `/`; `CHANGELOG*.md`, `README*.md`, `.env*`
+  now exit 1 — rewrite them as directory-scoped patterns or literal filenames.
+  No leading `/`, no `..` / `./` segments.
+- Deep Audit §5 rejects `.omc/`, `memory/`, `.superpowers/` at any depth;
+  `REVIEW.md` / `GitHub_STANDARD_ANALYSIS.md` at the archive root; and
+  `HANDOFF.md` / `GOTCHAS.md` / `Handoff_*` both at the root (as before) and
+  nested (new).
+- `gitx-sop` validates `--project` / `--repo` / `--private-host`
+  (`[A-Za-z0-9._&/-]`, no newline); directories with spaces or non-ASCII
+  names need the explicit flags. `gitx-init` rejects a project name or
+  version containing a newline and escapes every template value.
+- `install.sh` verifies `checksums.txt` before anything else, so on a tampered
+  bundle even `--help` exits 1; `checksums.txt` now lists every shipped file.
+- One-command `gitx-release.sh` works in git repos again and refuses symlinked
+  `VERSION` / `Release` paths.
+
+### Tests
+- `tests/run_all.sh` runs every suite hermetically: `env -i` with an explicit
+  allowlist (`PATH HOME TMPDIR LANG LC_ALL LC_CTYPE TERM USER SHELL CI`), a
+  private `TMPDIR` per suite, captured logs, and a verdict taken from the
+  suite's own summary line — a suite with no summary, a summary that reports
+  failures, or zero assertions (and no skips) is FAIL even when it exits 0.
+  Logs and scratch dirs of failed suites are kept under `gitx-tests.*` in the
+  caller's `TMPDIR` and the path is printed; the final two output lines are
+  unchanged.
+- No suite writes to a fixed `/tmp` path any more, and the `echo "$x" | grep`
+  / `| head` pipelines (268 sites) are here-strings — under `set -o pipefail`
+  the producer's SIGPIPE flipped a matched assertion to false once the output
+  outgrew the pipe buffer.
+- New `tests/test_run_all_harness.sh` (15 behavioural cases on fixture suites)
+  and `tests/test_harness_hygiene.sh` (static guard: forbids `/tmp` literals
+  and echo/printf-into-grep/head pipelines anywhere in `tests/`, including
+  across backslash continuations and `| VAR=value grep`; it scans itself).
+  Suite count 118 → 120.
+
+### Why
+v1.12.0 introduced central marketplace publishing but every version bump
+required a manual `jq` + PR + merge. v1.13.0 collapses that into one
+`gitx-marketplace register` on first setup + automatic sync thereafter.
+
 ## v1.12.3 — 2026-05-20
 
 ### Fixed

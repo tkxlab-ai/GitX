@@ -79,7 +79,7 @@ if [ -x "$WRAPPER" ]; then
     elif [ -e "$fx/.gitx" ]; then
         fail "--dry-run wrote .gitx/ (should be no-op)"
     elif ! grep -qE '(would|preview|dry-run).*GITHUB_RELEASE_SOP\.md' <<<"$out"; then
-        fail "--dry-run did not preview GITHUB_RELEASE_SOP.md (got: $(echo "$out" | head -1))"
+        fail "--dry-run did not preview GITHUB_RELEASE_SOP.md (got: $(head -1 <<<"$out"))"
     else
         ok "--dry-run previews target + writes nothing"
     fi
@@ -437,6 +437,71 @@ if [ -f "$BUNDLE_WRAPPER" ] && cmp -s "$WRAPPER" "$BUNDLE_WRAPPER"; then
     ok "gitx-sop.sh root vs bundle byte-identical"
 else
     fail "gitx-sop.sh dual-source drift (root vs skills/gitx-release/scripts/)"
+fi
+
+# === SECURITY 1: hostile --project is rejected (exit 2), no side-effect file ===
+if [ -x "$WRAPPER" ]; then
+    fx="$(mktemp -d)"
+    ( cd "$fx" && "$WRAPPER" --project='x|;w PWNED;#' --repo=o/r </dev/null >/dev/null 2>"$fx/err" )
+    st=$?
+    if [ "$st" -eq 2 ] && grep -qi invalid "$fx/err" && [ ! -e "$fx/PWNED" ] && [ ! -e "$fx/.gitx" ]; then
+        ok "hostile --project rejected (exit 2, 'invalid')"
+    else
+        fail "hostile --project: exit=$st"
+    fi
+    rm -rf "$fx"
+fi
+
+# === SECURITY 2: '&' in --project renders literally, not as the sed match ===
+if [ -x "$WRAPPER" ]; then
+    fx="$(mktemp -d)"
+    ( cd "$fx" && "$WRAPPER" --project='a&b' --repo=o/r </dev/null >/dev/null 2>&1 )
+    st=$?
+    if [ "$st" -eq 0 ] && grep -qF 'a&b' "$fx/.gitx/GITHUB_RELEASE_SOP.md" \
+       && ! grep -qF 'a{{PROJECT}}b' "$fx/.gitx/GITHUB_RELEASE_SOP.md"; then
+        ok "'&' in --project rendered literally"
+    else
+        fail "'&' in --project not literal (exit=$st)"
+    fi
+    rm -rf "$fx"
+fi
+
+# === SECURITY 3: symlinked target / .gitx refused (exit 5), victims untouched ===
+if [ -x "$WRAPPER" ]; then
+    fx="$(mktemp -d)"; victim="$(mktemp)"; printf 'KEEP\n' > "$victim"
+    mkdir "$fx/.gitx"; ln -s "$victim" "$fx/.gitx/GITHUB_RELEASE_SOP.md"
+    ( cd "$fx" && "$WRAPPER" --repo=o/r --force </dev/null >/dev/null 2>"$fx/err" )
+    st=$?
+    if [ "$st" -eq 5 ] && grep -qi symlink "$fx/err" && [ "$(cat "$victim")" = "KEEP" ]; then
+        ok "symlinked SOP target refused with --force (exit 5), victim unchanged"
+    else
+        fail "symlinked SOP target: exit=$st victim=$(cat "$victim")"
+    fi
+    rm -rf "$fx" "$victim"
+
+    fx="$(mktemp -d)"; outside="$(mktemp -d)"
+    ln -s "$outside" "$fx/.gitx"
+    ( cd "$fx" && "$WRAPPER" --repo=o/r </dev/null >/dev/null 2>"$fx/err" )
+    st=$?
+    if [ "$st" -eq 5 ] && grep -qi symlink "$fx/err" && [ -z "$(ls -A "$outside")" ]; then
+        ok "symlinked .gitx refused (exit 5), outside dir unchanged"
+    else
+        fail "symlinked .gitx: exit=$st outside=$(ls -A "$outside" | tr '\n' ' ')"
+    fi
+    rm -rf "$fx" "$outside"
+fi
+
+# === SECURITY 4: newline-smuggled --project is rejected (exit 2), no SOP file ===
+if [ -x "$WRAPPER" ]; then
+    fx="$(mktemp -d)"
+    ( cd "$fx" && "$WRAPPER" --project=$'ok\n|;w PWNED;#' --repo=o/r </dev/null >/dev/null 2>"$fx/err" )
+    st=$?
+    if [ "$st" -eq 2 ] && [ ! -e "$fx/.gitx/GITHUB_RELEASE_SOP.md" ] && [ ! -e "$fx/PWNED" ]; then
+        ok "newline-smuggled --project rejected (exit 2), no SOP written"
+    else
+        fail "newline-smuggled --project: exit=$st"
+    fi
+    rm -rf "$fx"
 fi
 
 # === summary ===

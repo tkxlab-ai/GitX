@@ -15,6 +15,7 @@
 #   2 usage error (unknown flag, invalid --type value)
 #   3 --type=auto detected empty AND stdin is non-TTY (cannot prompt)
 #   4 .gitx/ already exists and --force was not passed
+#   5 a write target (or one of its parent dirs) is a symlink — refused
 
 set -euo pipefail
 
@@ -126,7 +127,7 @@ Usage:
 Options:
   --type=<value>   Project type. Default: auto.
                    Valid values: auto skill mac both empty.
-  --force          Overwrite existing .gitx/ (backs up old to .gitx/.previous-<ts>/).
+  --force          Overwrite existing .gitx/ (backs up old to .gitx/.previous-<ts>.XXXXXX/).
   --dry-run        Print actions without writing any file.
   --help, -h       Show this help.
 
@@ -135,6 +136,7 @@ Exit codes:
   2 usage error (unknown flag, or invalid --type value)
   3 --type=auto detected empty AND stdin is non-TTY (cannot prompt)
   4 .gitx/ already exists and --force was not passed
+  5 a write target (or one of its parent dirs) is a symlink — refused
 EOF
             exit 0
             ;;
@@ -193,18 +195,71 @@ else
     GITX_VERSION="unknown"
 fi
 
+# _sed_esc — escape the sed replacement metachars (/ & \) so a project dir
+# named e.g. 'a&b' renders literally instead of re-expanding the match.
+_sed_esc() { printf '%s' "$1" | sed -e 's/[\/&\\]/\\&/g'; }
+
+# _refuse_symlink_path — fail if PATH or any parent component is a symlink, so a
+# planted link cannot redirect a write onto a file outside the project.
+_refuse_symlink_path() {
+    local d="$1"
+    while [ -n "$d" ] && [ "$d" != "." ] && [ "$d" != "/" ]; do
+        if [ -L "$d" ]; then
+            echo "❌ $d is a symlink — refusing to write through it" >&2
+            return 1
+        fi
+        d="$(dirname "$d")"
+    done
+    return 0
+}
+
+# A newline would break the sed expressions in render_template (and _sed_esc
+# can't neutralise it), so reject before anything is rendered.
+case "$PROJECT_NAME$GITX_VERSION" in
+    *$'\n'*) echo "❌ invalid project name or VERSION: contains a newline" >&2; exit 2 ;;
+esac
+
 render_template() {
-    sed -e "s/{{PROJECT_NAME}}/$PROJECT_NAME/g" \
-        -e "s/{{PROJECT_TYPE}}/$TYPE/g" \
-        -e "s/{{DATE}}/$DATE/g" \
-        -e "s/{{GITX_VERSION}}/$GITX_VERSION/g" \
+    local p t d v
+    p="$(_sed_esc "$PROJECT_NAME")"
+    t="$(_sed_esc "$TYPE")"
+    d="$(_sed_esc "$DATE")"
+    v="$(_sed_esc "$GITX_VERSION")"
+    sed -e "s/{{PROJECT_NAME}}/$p/g" \
+        -e "s/{{PROJECT_TYPE}}/$t/g" \
+        -e "s/{{DATE}}/$d/g" \
+        -e "s/{{GITX_VERSION}}/$v/g" \
         "$1"
 }
 
 if [ -d .gitx ] && [ "$FORCE" -eq 0 ]; then
     echo "❌ .gitx/ already exists at $(pwd)/.gitx" >&2
-    echo "   Re-run with --force to overwrite (backs up old to .gitx/.previous-<ts>/)" >&2
+    echo "   Re-run with --force to overwrite (backs up old to .gitx/.previous-<ts>.XXXXXX/)" >&2
     exit 4
+fi
+
+# Check every write target (and parents) up front, before --force moves anything.
+for _t in .gitx .gitx/policy.md .gitx/scenarios .gitx/scenarios/skill-flow.md \
+          .gitx/scenarios/mac-flow.md .gitx/marketplace-entry.json \
+          RELEASE_GUIDELINE.md .claude-plugin .claude-plugin/plugin.json; do
+    _refuse_symlink_path "$_t" || exit 5
+done
+
+# --force: move old .gitx/ contents into a timestamped backup. The marketplace
+# marker is per-machine state that register/bump depend on, so it stays put.
+if [ "$FORCE" -eq 1 ] && [ -d .gitx ]; then
+    _ts="$(date +%Y%m%d%H%M%S)"
+    # mktemp -d always yields a fresh dir: same-second re-runs can't collide, and a
+    # planted .previous-* symlink can't be adopted as the backup target.
+    _bk="$(mktemp -d ".gitx/.previous-${_ts}.XXXXXX")"
+    for f in .gitx/*; do
+        case "$f" in
+            "$_bk"|.gitx/marketplace-target) continue ;;
+        esac
+        if [ -e "$f" ] || [ -L "$f" ]; then
+            mv "$f" "$_bk/"
+        fi
+    done
 fi
 
 mkdir -p .gitx

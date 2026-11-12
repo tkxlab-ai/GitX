@@ -18,14 +18,14 @@ echo "══ test_audit_unzip_clean_fail.sh ══"
 
 # Static check: §6 wraps unzip in `if !` (or equivalent) with FAIL increment
 block=$(awk '/^audit_section_6_skill\(\)/,/^audit_section_7_sanity\(\)|^# --- §7/' "$AUDIT")
-if echo "$block" | grep -qE 'if[[:space:]]*!.*unzip|unzip.*\|\|.*FAIL'; then
+if grep -qE 'if[[:space:]]*!.*unzip|unzip.*\|\|.*FAIL' <<<"$block"; then
     ok "§6 guards unzip failure with explicit if/|| (no set-e abort)"
 else
     fail "§6 still uses bare 'unzip ...' under set -e (will abort on corrupt .skill)"
 fi
 
 # Static: corrupt .skill produces a labelled FAIL line, not bare exit
-if echo "$block" | grep -qE '损坏|无法解压|❌.*\.skill'; then
+if grep -qE '损坏|无法解压|❌.*\.skill' <<<"$block"; then
     ok "§6 has labelled FAIL message for unzip failure"
 else
     fail "§6 missing labelled FAIL message — user would see only rc, not reason"
@@ -46,13 +46,13 @@ audit_out=$(PROJECT_ROOT="$FIXTURE" PROJECT_NAME=fakeproj SKILL_NAME=fakeproj \
 
 # Even with corrupt .skill, the audit should still print Per-Section Summary.
 # (Without the fix, set -e aborts before the summary block.)
-if echo "$audit_out" | grep -qE 'Per-Section Summary|TOTAL'; then
+if grep -qE 'Per-Section Summary|TOTAL' <<<"$audit_out"; then
     ok "Per-Section Summary still emitted when §6 unzip fails"
 else
     fail "Per-Section Summary missing — audit aborted via set -e on corrupt .skill"
 fi
 
-if echo "$audit_out" | grep -qiE '损坏|无法解压|cannot.*unzip'; then
+if grep -qiE '损坏|无法解压|cannot.*unzip' <<<"$audit_out"; then
     ok "audit prints labelled corrupt-skill message"
 else
     fail "audit silent about corrupt .skill (user sees rc only)"

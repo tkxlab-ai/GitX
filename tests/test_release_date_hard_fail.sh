@@ -22,7 +22,9 @@ echo "══ test_release_date_hard_fail.sh ══"
 
 # Static: there's an explicit hard-fail when both date sources are absent
 block=$(awk '/RELEASE_DATE=.*grep/,/RELEASE_DATE=\$\{/' "$RELEASE")
-if echo "$block" | grep -qE 'wall-clock|hard.fail|未提供日期|cannot determine|RELEASE_DATE.*required' ; then
+# here-strings, not `echo | grep -q`: grep -q exits on first match and echo
+# then dies of SIGPIPE (141) under pipefail → random false ❌ (Gotcha #103 class)
+if grep -qE 'wall-clock|hard.fail|未提供日期|cannot determine|RELEASE_DATE.*required' <<<"$block"; then
     ok "release.sh has hard-fail / explicit-warn for missing date+SDE"
 else
     fail "release.sh silently falls back to wall-clock when no date and no SDE"
@@ -31,9 +33,9 @@ fi
 # Static: wall-clock fallback is now guarded by an explicit `if [ -z "$RELEASE_DATE" ]`
 # block (replaces the prior unconditional `${RELEASE_DATE:-$(date +%Y-%m-%d)}`)
 guarded_block=$(awk '/RELEASE_DATE.*grep -m1/,/RELEASE_DATE=\$\(date \+%Y-%m-%d\)/' "$RELEASE")
-if echo "$guarded_block" | grep -qE 'if \[ -z "\$RELEASE_DATE" \].*then|if \[ -z "\$\{?RELEASE_DATE'; then
+if grep -qE 'if \[ -z "\$RELEASE_DATE" \].*then|if \[ -z "\$\{?RELEASE_DATE' <<<"$guarded_block"; then
     ok "wall-clock fallback is guarded by explicit empty-check + warning"
-elif echo "$guarded_block" | grep -qiE 'falling back|warning|not byte-reproducible'; then
+elif grep -qiE 'falling back|warning|not byte-reproducible' <<<"$guarded_block"; then
     ok "wall-clock fallback emits a labelled warning"
 else
     fail "wall-clock fallback is unconditional — nondeterminism slips in silently"

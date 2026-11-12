@@ -1,4 +1,5 @@
 $gitx-release
 $gitx-init
+$gitx-marketplace
 $git-release-pipeline
 $gitx-sop

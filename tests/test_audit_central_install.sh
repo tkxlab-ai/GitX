@@ -17,7 +17,7 @@ for a in "$A" "$B"; do [ -f "$a" ] || continue
   grep -qF 'SKIP=$((SKIP+1))' "$a" && ok "§0h SKIP path ($lab)" || fail "$a §0h no SKIP"
   h0h="$(awk '/^audit_section_0_central_install\(\)/,/_track_end "§0h_central_install"/' "$a")"
   # shellcheck disable=SC2154 # ${name} is an awk-internal field variable, not a shell variable
-  printf '%s\n' "$h0h" | grep -qF 'bash -c' && fail "$a §0h uses bash -c (injection risk, ${name} from downstream manifest)" || ok "§0h injection-safe: no bash -c ($lab)"
+  grep -qF 'bash -c' <<<"$h0h" && fail "$a §0h uses bash -c (injection risk, ${name} from downstream manifest)" || ok "§0h injection-safe: no bash -c ($lab)"
 done
 cmp -s "$A" "$B" && ok "dual-source byte-identical" || fail "dual-source drift"
 ah=$(grep -n audit_section_0_central_install "$A"|head -1|cut -d: -f1)

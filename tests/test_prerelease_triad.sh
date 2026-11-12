@@ -11,13 +11,13 @@ RELEASE_SH="$ROOT/scripts/release.sh"
 echo "=== test_prerelease_triad: §2.1 blocking TODO scan ==="
 # preflight_checks must run a recursive grep for FIXME/HACK in source .sh files
 _BLK=$(awk '/^preflight_checks/,/^}/' "$RELEASE_SH")
-if echo "$_BLK" | grep -qE 'grep.*rE?.*FIXME|grep.*rn?.*FIXME'; then
+if grep -qE 'grep.*rE?.*FIXME|grep.*rn?.*FIXME' <<<"$_BLK"; then
     ok "release.sh preflight_checks: recursive FIXME/HACK source scan present"
 else
     fail "release.sh preflight_checks: missing §2.1 recursive FIXME/HACK scan"
 fi
 # Scan must exclude scripts/ specifically (prevents self-referencing variable names)
-if echo "$_BLK" | grep -qF 'exclude-dir=scripts' && echo "$_BLK" | grep -qF 'FIXME'; then
+if grep -qF 'exclude-dir=scripts' <<<"$_BLK" && grep -qF 'FIXME' <<<"$_BLK"; then
     ok "release.sh preflight_checks: --exclude-dir=scripts guards against self-reference"
 else
     fail "release.sh preflight_checks: FIXME scan missing --exclude-dir=scripts guard"

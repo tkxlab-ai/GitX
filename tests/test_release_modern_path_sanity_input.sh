@@ -34,21 +34,21 @@ echo "══ test_release_modern_path_sanity_input.sh ══"
 # === Static 1: modern scrub-tarball path sets STAGE_SUB before return ===
 # Slice from `if [ -x "$PROJECT_SCRUB" ]` to the first `return 0` after.
 MODERN_BLOCK=$(awk '/if \[ -x "\$PROJECT_SCRUB" \]/,/return 0/' "$RELEASE_SH")
-if echo "$MODERN_BLOCK" | grep -qE 'STAGE_SUB='; then
+if grep -qE 'STAGE_SUB=' <<<"$MODERN_BLOCK"; then
     ok "modern scrub-tarball path assigns STAGE_SUB before return"
 else
     fail "modern path returns without setting STAGE_SUB — run_sanity_scans aborts under set -u"
 fi
 
 # === Static 2: modern path also sets STAGE (parent dir, needed by tar -xzf -C) ===
-if echo "$MODERN_BLOCK" | grep -qE '^[[:space:]]*STAGE=\$\(mktemp'; then
+if grep -qE '^[[:space:]]*STAGE=\$\(mktemp' <<<"$MODERN_BLOCK"; then
     ok "modern path creates STAGE via mktemp before return"
 else
     fail "modern path missing STAGE=\$(mktemp -d) — tarball cannot be extracted for scan"
 fi
 
 # === Static 3: modern path also sets SKILL_STAGE (legacy parity) ===
-if echo "$MODERN_BLOCK" | grep -qE 'SKILL_STAGE='; then
+if grep -qE 'SKILL_STAGE=' <<<"$MODERN_BLOCK"; then
     ok "modern path assigns SKILL_STAGE (legacy parity for run_sanity_scans)"
 else
     fail "modern path missing SKILL_STAGE — run_sanity_scans .skill stage logic broken"
@@ -57,17 +57,17 @@ fi
 # === Static 4: modern path extracts tarball into STAGE so scan sees real content ===
 # Either tar -xzf the just-built tarball, or rsync project content; tar is preferred
 # (matches what's actually shipped).
-if echo "$MODERN_BLOCK" | grep -qE 'tar .*-xz?f.*TAR_OUT|tar -xz.*-C "?\$STAGE'; then
+if grep -qE 'tar .*-xz?f.*TAR_OUT|tar -xz.*-C "?\$STAGE' <<<"$MODERN_BLOCK"; then
     ok "modern path extracts \$TAR_OUT into \$STAGE for sanity scan input"
 else
     fail "modern path does not populate \$STAGE with tarball content — scan has nothing to scan"
 fi
 
 # === Static 5: modern path registers STAGE in CLEANUP_EXTRAS (no /tmp/ leak) ===
-if echo "$MODERN_BLOCK" | grep -qE 'CLEANUP_EXTRAS\+?=\("?\$STAGE'; then
+if grep -qE 'CLEANUP_EXTRAS\+?=\("?\$STAGE' <<<"$MODERN_BLOCK"; then
     ok "modern path registers STAGE in CLEANUP_EXTRAS (no /tmp leak)"
 else
-    fail "modern path leaks STAGE in /tmp/ — fix introduces a new mktemp leak"
+    fail "modern path leaks STAGE in the temp dir — fix introduces a new mktemp leak"
 fi
 
 # === Behavioral: dry-run release.sh on a fixture project that ships
@@ -81,10 +81,11 @@ cat > "$FIXTURE/scripts/scrub-tarball.sh" <<'EOF'
 # Fake scrub-tarball.sh for test fixture: write minimal valid tarball.
 OUT="$1"
 PREFIX="$2"
-mkdir -p "/tmp/.scrub_fixture/$PREFIX"
-echo "fake-content" > "/tmp/.scrub_fixture/$PREFIX/README.md"
-( cd "/tmp/.scrub_fixture" && tar -czf "$OUT" "$PREFIX" )
-rm -rf "/tmp/.scrub_fixture"
+SCRUB_FX=$(mktemp -d "${TMPDIR:-/tmp}/scrub_fixture.XXXXXX")
+mkdir -p "$SCRUB_FX/$PREFIX"
+echo "fake-content" > "$SCRUB_FX/$PREFIX/README.md"
+( cd "$SCRUB_FX" && tar -czf "$OUT" "$PREFIX" )
+rm -rf "$SCRUB_FX"
 exit 0
 EOF
 chmod +x "$FIXTURE/scripts/scrub-tarball.sh"
@@ -126,6 +127,10 @@ SLICE=$(mktemp)
     # BEFORE build_source_tarball, or the modern path dies "command not found".
     sed -n '/^inject_root_changelog_into_stage()/,/^}$/p' "$RELEASE_SH"
     sed -n '/^pack_source_tarball_deterministic()/,/^}$/p' "$RELEASE_SH"
+    # v1.13.0 Lane C: the scrub path also overlays wrapper-bumped VERSION
+    # sidecars and the rsync path prunes gitignored files — carry both.
+    sed -n '/^overlay_wrapper_versions_into_stage()/,/^}$/p' "$RELEASE_SH"
+    sed -n '/^prune_gitignored_from_stage()/,/^}$/p' "$RELEASE_SH"
     sed -n '/^build_source_tarball()/,/^}$/p' "$RELEASE_SH"
     echo 'build_source_tarball'
     echo 'echo "STAGE_SUB after build = ${STAGE_SUB:-UNSET}"'

@@ -56,25 +56,32 @@ Artifacts: `Release/my_skill-v0.0.4/`
 EOF
 
 mkdir -p "$FIXTURE/tests"
-cat > "$FIXTURE/tests/run_all.sh" <<'TESTEOF'
+# The flag path is baked into the stub at creation time, so the dry-run check
+# cannot pass vacuously if release.sh ever stops passing the env through.
+FLAG=$(mktemp "${TMPDIR:-/tmp}/dry-run-flag.XXXXXX")
+trap 'rm -rf "$FIXTURE" "$FLAG"' EXIT
+cat > "$FIXTURE/tests/run_all.sh" <<TESTEOF
 #!/bin/bash
-echo "TESTS_WERE_RUN" > /tmp/dry-run-test-flag
+echo "TESTS_WERE_RUN" > "$FLAG"
+TESTEOF
+cat >> "$FIXTURE/tests/run_all.sh" <<'TESTEOF'
 echo "══ test_suite ══"
 echo "Results: ✅0 passed / ❌0 failed 🎉 All tests GREEN"
 exit 0
 TESTEOF
 chmod +x "$FIXTURE/tests/run_all.sh"
 
-# Remove flag file
-rm -f /tmp/dry-run-test-flag
+# mktemp created the flag file; the assertion below needs it absent so that
+# only a real test run can bring it back.
+rm -f "$FLAG"
 
 set +e
 OUTPUT=$(PROJECT_ROOT="$FIXTURE" bash "$RELEASE_SH" v0.0.4 --dry-run 2>&1)
 RC=$?
 set -e
 
-if [ -f /tmp/dry-run-test-flag ]; then
-    flag=$(cat /tmp/dry-run-test-flag)
+if [ -f "$FLAG" ]; then
+    flag=$(cat "$FLAG")
     if [ "$flag" = "TESTS_WERE_RUN" ]; then
         fail "dry-run executed tests (side-effect detected)"
     else
@@ -85,7 +92,7 @@ else
 fi
 
 # In dry-run, it should still continue past the test step (or report skipping)
-if echo "$OUTPUT" | grep -qi '\[dry-run\].*[Tt]est\|skip.*test\|skip.*regression' 2>/dev/null; then
+if grep -qi '\[dry-run\].*[Tt]est\|skip.*test\|skip.*regression' 2>/dev/null <<<"$OUTPUT"; then
     ok "dry-run reports skipping tests"
 elif [ "$RC" -ne 0 ]; then
     # It's OK if dry-run continues to fail later (no artifacts) as long as tests weren't run

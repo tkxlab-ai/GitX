@@ -32,7 +32,7 @@ fi
 # ── Test 2: §10 RELEASE_NOTES version check uses SAFE_VERSION ─────────────
 # Find the line that checks "RELEASE_NOTES.md 含发版版本" and verify it uses SAFE_VERSION
 rn_line=$(grep -n 'RELEASE_NOTES.md 含发版版本' "$AUDIT_SH" | head -1)
-if echo "$rn_line" | grep -q 'SAFE_VERSION'; then
+if grep -q 'SAFE_VERSION' <<<"$rn_line"; then
     ok "§10 RELEASE_NOTES version check uses SAFE_VERSION"
 else
     fail "§10 RELEASE_NOTES version check uses raw VERSION (P0-2: regex wildcard bug)"
@@ -62,14 +62,14 @@ EOF
 
 SAFE_V=$(printf '%s' "v1.0.0" | sed 's/\./\\./g')
 # With SAFE_VERSION, v1.0.0 should NOT match v1X0Y0
-if ! echo "v1X0Y0" | grep -q "$SAFE_V"; then
+if ! grep -q "$SAFE_V" <<<"v1X0Y0"; then
     ok "SAFE_VERSION does not wildcard-match v1X0Y0"
 else
     fail "SAFE_VERSION regex still matches v1X0Y0 (false positive)"
 fi
 
 # Without escape, v1.0.0 WOULD match v1X0Y0
-if echo "v1X0Y0" | grep -q "v1.0.0"; then
+if grep -q "v1.0.0" <<<"v1X0Y0"; then
     ok "Unescaped v1.0.0 DOES match v1X0Y0 (proves bug exists)"
 else
     fail "Expected wildcard match not reproduced"

@@ -57,17 +57,18 @@ for manifest in "$PROJECT_ROOT/agents/codex-commands.txt" "$PROJECT_ROOT/skills/
         fail "$label missing required Codex $ selectors"
     fi
 
-    # Upper-bound (v1.7.0): exactly the 4 expected selectors. Set-based
-    # comparison so any drift (stray fifth, or rename without test update)
+    # Upper-bound (v1.13.0): exactly the 5 expected selectors. Set-based
+    # comparison so any drift (stray sixth, or rename without test update)
     # surfaces immediately. Allowed: $gitx-release (canonical v1.1.0+),
     # $gitx-init (canonical v1.6.0+ for subcommand slash), $gitx-sop
-    # (canonical v1.7.0+ for GitHub-publish SOP slash), $git-release-pipeline
+    # (canonical v1.7.0+ for GitHub-publish SOP slash), $gitx-marketplace
+    # (canonical v1.13.0+ for CLI marketplace integration), $git-release-pipeline
     # (deprecated alias retained for grace period). Codex treats every
     # non-empty line as a selector — comments aren't safe (see agents/README.md).
-    expected_set="$(printf '%s\n' '$git-release-pipeline' '$gitx-init' '$gitx-release' '$gitx-sop' | sort)"
+    expected_set="$(printf '%s\n' '$git-release-pipeline' '$gitx-init' '$gitx-marketplace' '$gitx-release' '$gitx-sop' | sort)"
     actual_set="$(grep -E '^\$' "$manifest" | sort)"
     if [ "$expected_set" = "$actual_set" ]; then
-        ok "$label selectors match expected set ({\$gitx-release, \$gitx-init, \$gitx-sop, \$git-release-pipeline})"
+        ok "$label selectors match expected set ({\$gitx-release, \$gitx-init, \$gitx-sop, \$gitx-marketplace, \$git-release-pipeline})"
     else
         fail "$label selectors differ from expected; got: $(echo "$actual_set" | tr '\n' ' ')"
     fi

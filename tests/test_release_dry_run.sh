@@ -119,11 +119,11 @@ OUTPUT=$(PROJECT_ROOT="$FIXTURE" PROJECT_NAME="my_skill" SKILL_NAME="my-skill" b
 RC=$?
 set -e
 
-if echo "$OUTPUT" | grep -q '\[dry-run\]'; then
+if grep -q '\[dry-run\]' <<<"$OUTPUT"; then
     ok "dry-run output contains [dry-run] markers"
 else
     fail "dry-run output missing [dry-run] markers"
-    echo "   output: $(echo "$OUTPUT" | grep -i 'dry-run' | head -3)"
+    echo "   output: $(grep -i 'dry-run' <<<"$OUTPUT" | head -3)"
 fi
 
 if [ ! -d "$RELEASE_DIR" ]; then
@@ -133,7 +133,7 @@ else
 fi
 
 # Test 7b: dry-run must NOT trigger cleanup (no filesystem state to clean)
-if echo "$OUTPUT" | grep -q "Cleaning up failed release"; then
+if grep -q "Cleaning up failed release" <<<"$OUTPUT"; then
     fail "dry-run triggered cleanup — means real dirs were created then removed (masking bug)"
 else
     ok "dry-run did not trigger cleanup (no real dirs created)"
@@ -243,7 +243,7 @@ else
     fail "dry-run modified CHANGELOG.md (P0-4: CHANGELOG gate leaks writes)"
 fi
 
-if [ "$RC3" -ne 0 ] && echo "$OUTPUT3" | grep -qi "CHANGELOG"; then
+if [ "$RC3" -ne 0 ] && grep -qi "CHANGELOG" <<<"$OUTPUT3"; then
     ok "dry-run still reports CHANGELOG gate status"
 else
     fail "dry-run should still report CHANGELOG gate (exit $RC3)"
@@ -308,7 +308,7 @@ else
     fail "dry-run invoked skill-creator package code"
 fi
 
-if [ "$RC4" -eq 0 ] && echo "$OUTPUT4" | grep -q '\[dry-run\]'; then
+if [ "$RC4" -eq 0 ] && grep -q '\[dry-run\]' <<<"$OUTPUT4"; then
     ok "dry-run with skill-creator present still completes as preview"
 else
     fail "dry-run with skill-creator present should complete as preview (exit $RC4)"
@@ -349,7 +349,7 @@ OUTPUT5=$(PROJECT_ROOT="$FIXTURE5" PROJECT_NAME="my_skill" SKILL_NAME="my-skill"
 RC5=$?
 set -e
 
-if [ "$RC5" -ne 0 ] && echo "$OUTPUT5" | grep -qi "Release dir already exists"; then
+if [ "$RC5" -ne 0 ] && grep -qi "Release dir already exists" <<<"$OUTPUT5"; then
     ok "dry-run reports existing release dir as blocker"
 else
     fail "dry-run should fail when final release dir already exists (exit $RC5)"

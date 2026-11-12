@@ -21,7 +21,7 @@ echo "══ test_skill_version_consistency.sh ══"
 
 # ── Test 1: frontmatter has no Codex-invalid metadata block ────────────────
 frontmatter=$(awk '/^---$/{c++; next} c==1' "$SKILL_MD")
-if echo "$frontmatter" | grep -qE '^metadata:[[:space:]]*$'; then
+if grep -qE '^metadata:[[:space:]]*$' <<<"$frontmatter"; then
     fail "SKILL.md frontmatter has Codex-invalid 'metadata:' block"
 else
     ok "SKILL.md frontmatter has no metadata block (Codex loader compatible)"
@@ -35,7 +35,7 @@ else
 fi
 
 # ── Test 3: top-level `version:` is NOT used ───────────────────────────────
-if echo "$frontmatter" | grep -qE '^version:'; then
+if grep -qE '^version:' <<<"$frontmatter"; then
     fail "SKILL.md has top-level 'version:' — Codex loader may reject"
 else
     ok "SKILL.md has NO top-level 'version:'"
@@ -43,7 +43,7 @@ fi
 
 # ── Test 4: version value is a valid semver-ish string ─────────────────────
 sk_version="$(tr -d '[:space:]' < "$ROOT_VERSION" 2>/dev/null || true)"
-if [ -n "${sk_version:-}" ] && echo "$sk_version" | grep -qE '^v[0-9]+\.[0-9]+(\.[0-9]+)?(-(alpha|beta|rc)\.?[0-9]*)?$'; then
+if [ -n "${sk_version:-}" ] && grep -qE '^v[0-9]+\.[0-9]+(\.[0-9]+)?(-(alpha|beta|rc)\.?[0-9]*)?$' <<<"$sk_version"; then
     ok "VERSION '$sk_version' matches TKX format"
 else
     fail "VERSION '$sk_version' invalid (expected vX.Y[.Z][-alpha|beta|rc[.N]])"

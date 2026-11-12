@@ -24,8 +24,8 @@ printf '{\n  "name": "demoskill",\n  "version": "9.9.9"\n}\n' > "$W/.claude-plug
 printf '## v9.9.9 — 2026-01-01\n- x\n' > "$W/CHANGELOG.md"
 # --help forwards: output contains deprecation notice AND docs-pipeline flags (e.g. --check)
 out="$(PROJECT_ROOT="$W" bash "$SH" --help 2>&1)"
-printf '%s\n' "$out" | grep -qi 'deprecat' && ok "--help contains deprecation notice" || no "--help missing deprecation notice"
-printf '%s\n' "$out" | grep -q -- '--check' && ok "--help forwards docs-pipeline flags (--check present)" || no "--help did not forward --check flag"
+grep -qi 'deprecat' <<<"$out" && ok "--help contains deprecation notice" || no "--help missing deprecation notice"
+grep -q -- '--check' <<<"$out" && ok "--help forwards docs-pipeline flags (--check present)" || no "--help did not forward --check flag"
 # --check exit code == docs-pipeline --check exit code (shim is a pure passthrough)
 DP="$ROOT/scripts/docs-pipeline.sh"
 ( cd "$W" && PROJECT_ROOT="$W" bash "$SH" --init --force >/dev/null 2>&1 )
@@ -74,7 +74,7 @@ cp "$M/README.md" "$M/README_CN.md"
 ( cd "$M" && PROJECT_ROOT="$M" bash "$SH" >/dev/null 2>&1 ) && ok "refresh exit 0" || no "refresh exit0"
 awk '/gitx:managed:suite-count/{f=1;next}/\/gitx:managed:suite-count/{f=0}f' "$M/README.md" | grep -qx '1' && ok "suite-count → 1" || no "suite-count rewrite"
 grep -qx 'PROSE-ABOVE-verbatim' "$M/README.md" && grep -qx 'PROSE-BELOW-verbatim' "$M/README.md" && ok "prose verbatim around regions" || no "prose lost"
-cp "$M/README.md" /tmp/r1; ( cd "$M" && PROJECT_ROOT="$M" bash "$SH" >/dev/null 2>&1 ); diff -q /tmp/r1 "$M/README.md" >/dev/null && ok "idempotent" || no "not idempotent"
+cp "$M/README.md" "$M/r1.readme"; ( cd "$M" && PROJECT_ROOT="$M" bash "$SH" >/dev/null 2>&1 ); diff -q "$M/r1.readme" "$M/README.md" >/dev/null && ok "idempotent" || no "not idempotent"
 ( cd "$M" && PROJECT_ROOT="$M" bash "$SH" --check >/dev/null 2>&1 ) && ok "--check exit 0 in sync" || no "--check false-drift"
 printf '\nhand-written paragraph outside any managed region\n' >> "$M/README.md"
 ( cd "$M" && PROJECT_ROOT="$M" bash "$SH" --check >/dev/null 2>&1 ) && ok "--check exit 0 after unmanaged-prose edit (contract)" || no "--check false-drift on unmanaged prose"
@@ -85,7 +85,7 @@ I="$(mktemp -d)"; ( cd "$I" && PROJECT_ROOT="$I" bash "$SH" --init >/dev/null 2>
 ( cd "$I" && PROJECT_ROOT="$I" bash "$SH" --init >/dev/null 2>&1; [ $? -eq 4 ] ) && ok "--init exit 4 when exists" || no "--init no-clobber"
 ( cd "$I" && PROJECT_ROOT="$I" bash "$SH" --init --force >/dev/null 2>&1 ) && ok "--init --force" || no "--init force"
 ( cd "$I" && PROJECT_ROOT="$I" bash "$SH" --check >/dev/null 2>&1 ) && ok "scaffold self-consistent (no exit 5)" || no "scaffold malformed"
-rm -rf "$M" "$I" /tmp/r1
+rm -rf "$M" "$I"
 # unknown managed region → fail-closed exit 5 (FIX B: gr_validate_regions
 # must reject any NAME not in {suite-count,version,install,whats-new})
 echo "§ unknown managed region (FIX B)"

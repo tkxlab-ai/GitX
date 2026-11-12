@@ -376,21 +376,28 @@ EOF_VR
 # Compares (version,date) tuple set + ### subsection heading set per version.
 # Does NOT generate CHANGELOG_CN (no LLM in loop) — parity is structure-only.
 dp_changelog_parity(){
-  local en="$PROJECT_ROOT/Release/CHANGELOG.md" cn="$PROJECT_ROOT/Release/CHANGELOG_CN.md"
-  [ -f "$cn" ] || { echo "CHANGELOG_CN.md absent — parity not applicable"; return 0; }
-  [ -f "$en" ] || { echo "❌ Release/CHANGELOG.md missing" >&2; return 1; }
-  _ver_set(){ grep -E '^## v[0-9]' "$1" | sed -E 's/^## (v[^ ]+) — ([0-9-]+).*/\1|\2/' | sort; }
-  if [ "$(_ver_set "$en")" != "$(_ver_set "$cn")" ]; then
-    echo "❌ CHANGELOG (version,date) tuple set differs EN vs CN" >&2; return 1; fi
-  local v
-  # shellcheck disable=SC2086
-  # Word-split intentional: _ver_set emits one v#.#.# token per line; no spaces in version tokens.
-  for v in $(_ver_set "$en" | cut -d'|' -f1); do
-    _subs(){ awk -v V="## $v " 'index($0,V)==1{f=1;next} /^## v/{f=0} f&&/^### /{print}' "$1" | sort -u; }
-    if [ "$(_subs "$en")" != "$(_subs "$cn")" ]; then
-      echo "❌ CHANGELOG subsection set differs at $v" >&2; return 1; fi
-  done
-  echo "✅ CHANGELOG EN/CN structural parity"; return 0
+  # Why subshell + LC_ALL=C: under non-UTF-8 locales sed/awk abort inside $(…),
+  # both sides become empty and compare equal — a vacuous ✅ that hid a real gap.
+  (
+    export LC_ALL=C
+    local en="$PROJECT_ROOT/Release/CHANGELOG.md" cn="$PROJECT_ROOT/Release/CHANGELOG_CN.md"
+    [ -f "$cn" ] || { echo "CHANGELOG_CN.md absent — parity not applicable"; exit 0; }
+    [ -f "$en" ] || { echo "❌ Release/CHANGELOG.md missing" >&2; exit 1; }
+    _ver_set(){ grep -E '^## v[0-9]' "$1" | sed -E 's/^## (v[^ ]+) — ([0-9-]+).*/\1|\2/' | sort; }
+    _en_vers=$(_ver_set "$en" || true)
+    [ -n "$_en_vers" ] || { echo "❌ CHANGELOG parity: no versions parsed from $en" >&2; exit 1; }
+    if [ "$_en_vers" != "$(_ver_set "$cn" || true)" ]; then
+      echo "❌ CHANGELOG (version,date) tuple set differs EN vs CN" >&2; exit 1; fi
+    local v
+    # shellcheck disable=SC2086
+    # Word-split intentional: _ver_set emits one v#.#.# token per line; no spaces in version tokens.
+    for v in $(printf '%s\n' "$_en_vers" | cut -d'|' -f1); do
+      _subs(){ awk -v V="## $v " 'index($0,V)==1{f=1;next} /^## v/{f=0} f&&/^### /{print}' "$1" | sort -u; }
+      if [ "$(_subs "$en")" != "$(_subs "$cn")" ]; then
+        echo "❌ CHANGELOG subsection set differs at $v" >&2; exit 1; fi
+    done
+    echo "✅ CHANGELOG EN/CN structural parity"; exit 0
+  )
 }
 
 # --- read-only deterministic helpers (additive; no LLM; no write) ---

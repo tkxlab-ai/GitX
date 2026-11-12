@@ -31,17 +31,17 @@ fi
 
 # --- Test 3: references the CI triple targets (install.sh + scripts/ + tests/) ---
 _sec=$(awk '/§0j/,/^# ---/' "$AUDIT" 2>/dev/null || grep -A 40 '§0j' "$AUDIT")
-if echo "$_sec" | grep -q 'install\.sh'; then
+if grep -q 'install\.sh' <<<"$_sec"; then
     ok "§0j references install.sh (CI target 1)"
 else
     fail "§0j does NOT reference install.sh"
 fi
-if echo "$_sec" | grep -q 'scripts/\*\.sh\|scripts/\\\*\.sh\|scripts/\*.sh'; then
+if grep -q 'scripts/\*\.sh\|scripts/\\\*\.sh\|scripts/\*.sh' <<<"$_sec"; then
     ok "§0j references scripts/*.sh (CI target 2)"
 else
     fail "§0j does NOT reference scripts/*.sh"
 fi
-if echo "$_sec" | grep -q 'tests/\*\.sh\|tests/\\\*\.sh\|tests/\*.sh'; then
+if grep -q 'tests/\*\.sh\|tests/\\\*\.sh\|tests/\*.sh' <<<"$_sec"; then
     ok "§0j references tests/*.sh (CI target 3)"
 else
     fail "§0j does NOT reference tests/*.sh"
@@ -79,17 +79,17 @@ fi
 # §0j on a bare scratch dir (§7 sanity aborts with exit 2), so behavioral
 # end-to-end is covered by test_release_pipeline_smoke.sh (6/0 green).
 _sec7=$(grep -A 60 '§0j' "$AUDIT")
-if echo "$_sec7" | grep -q '_has_ci_parity_contract'; then
+if grep -q '_has_ci_parity_contract' <<<"$_sec7"; then
     ok "§0j has _has_ci_parity_contract guard variable (Gotcha #51)"
 else
     fail "§0j missing _has_ci_parity_contract guard — dependent skills will be FAILed unjustly"
 fi
-if echo "$_sec7" | grep -q '\.github/workflows/ci\.yml'; then
+if grep -q '\.github/workflows/ci\.yml' <<<"$_sec7"; then
     ok "§0j guard checks .github/workflows/ci.yml (CI-parity contract file)"
 else
     fail "§0j guard does not check .github/workflows/ci.yml"
 fi
-if echo "$_sec7" | grep -qE 'no CI-parity contract|generic.safe SKIP.*dependent skill|dependent skill not held'; then
+if grep -qE 'no CI-parity contract|generic.safe SKIP.*dependent skill|dependent skill not held' <<<"$_sec7"; then
     ok "§0j guard emits 'no CI-parity contract' SKIP message when contract absent"
 else
     fail "§0j guard missing 'no CI-parity contract' SKIP message"

@@ -33,10 +33,10 @@ done
 
 # BEHAVIORAL: the rot regex flags a stale scope line, ignores a clean one.
 ROT='(当前 Scope|当前状态)[^|]*v[0-9]'
-echo '## 📌 当前 Scope（v0.9.x）' | grep -qE "$ROT" \
+grep -qE "$ROT" <<<'## 📌 当前 Scope（v0.9.x）' \
     && ok "rot regex flags '当前 Scope（v0.9.x）'" \
     || fail "rot regex failed to flag the known stale pattern"
-echo '## 📌 Scope（版本号见 VERSION / CHANGELOG）' | grep -qE "$ROT" \
+grep -qE "$ROT" <<<'## 📌 Scope（版本号见 VERSION / CHANGELOG）' \
     && fail "rot regex false-positives on the version-agnostic fixed form" \
     || ok "rot regex passes the version-agnostic Scope heading"
 

@@ -20,8 +20,8 @@
 
 <!-- gitx:managed:badges -->
 [![License](https://img.shields.io/badge/license-MIT-yellow.svg?style=for-the-badge)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-111%20suites%20%2F%200%20fail-brightgreen.svg?style=for-the-badge&logo=githubactions&logoColor=white)](tests/run_all.sh)
-[![Deep Audit](https://img.shields.io/badge/deep%20audit-246%2F0%2F1-brightgreen.svg?style=for-the-badge&logo=shieldsdotio&logoColor=white)](scripts/release-audit.sh)
+[![Tests](https://img.shields.io/badge/tests-121%20suites%20%2F%200%20fail-brightgreen.svg?style=for-the-badge&logo=githubactions&logoColor=white)](tests/run_all.sh)
+[![Deep Audit](https://img.shields.io/badge/deep%20audit-255%2F0%2F1-brightgreen.svg?style=for-the-badge&logo=shieldsdotio&logoColor=white)](scripts/release-audit.sh)
 [![CLIs](https://img.shields.io/badge/CLI-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20OpenCode%20%C2%B7%20Gemini-6366f1.svg?style=for-the-badge&logo=anthropic&logoColor=white)](#快速开始)
 [![Shell](https://img.shields.io/badge/bash-3.2%2B%20POSIX-06b6d4.svg?style=for-the-badge&logo=gnubash&logoColor=white)](SKILL.md)
 [![Release](https://img.shields.io/github/v/release/tkxlab-ai/GitX?sort=semver&style=for-the-badge&logo=github&logoColor=white&color=gold)](https://github.com/tkxlab-ai/GitX/releases)
@@ -31,7 +31,7 @@
 </div>
 
 <!-- gitx:managed:build-metrics -->
-> 🛠 **实时构建指标** — 版本 **v1.12.3** · 发版日期 **2026-05-20** · 由 **Claude（Opus/Sonnet）· Codex · Gemini** 跨数百会话打造 · 自首个原型（v0.9.4，2026-04-22）起累计 AI token 估算：**≈ 3 亿+ 输入/输出 + ≈ 30 亿+ 缓存** · 跨度：**28 天 ~63 个发布**（2026-04-22 → 2026-05-20）
+> 🛠 **实时构建指标** — 版本 **v1.13.0** · 发版日期 **2026-11-02** · 由 **Claude（Opus/Sonnet）· Codex · Gemini** 跨数百会话打造 · 自首个原型（v0.9.4，2026-04-22）起累计 AI token 估算：**≈ 3 亿+ 输入/输出 + ≈ 30 亿+ 缓存** · 跨度：**28 天 ~63 个发布**（2026-04-22 → 2026-05-20）
 <!-- /gitx:managed:build-metrics -->
 
 **[文档](#目录) · [更新日志](CHANGELOG_CN.md) · [报告缺陷](https://github.com/tkxlab-ai/GitX/issues) · [安全](SECURITY.md)**
@@ -41,12 +41,14 @@
 ## 更新摘要
 
 <!-- gitx:managed:whats-new -->
-**v1.12.3 — 2026-05-20**
+**v1.13.0 — 2026-11-02**
 
-- **README hero 图：绝对 `raw/main` URL → 相对路径**（`docs/assets/release-demo.jpeg`）于双语 README。关闭 `Codex` 重提的 `[medium]`（Gotcha #78）—— 去掉不可复现的指向 `main` 的 URL；达成强复现：每个发布 tag 的 README 永远指向该 tag 自己的 hero 资产。`GitHub` 服务端在渲染时把相对 `img src` 改写为根相对 URL → `github.com` README 页面渲染正常、`raw` 取图路径解析通；经一次性分支 `experiment/relative-hero` 实证（`raw` 重定向至 `raw.githubusercontent.com` 200；`blob` 视图 HTML 输出改写后的 src）。
-- **平摊后的发布目录 + `full` 压缩包缺少 `docs/assets/release-demo.jpeg`** —— 新的相对路径 `hero` 引用在平摊后的产物里解析不到（`github.com` 因服务端改写仍正常，但用户在本地打开平摊后的 README 看到坏图）。`release.sh:flatten_docs()` 现把 `docs/assets/` 按 README 引用路径平摊；`Codex v1.12.3` 评审第一轮 `[medium]` 在公开 publish 前抓到。
-- **`tests/test_docs_audit.sh` 的 `T15-hero (b')`**：从"绝对 URL `hero` 被 `H10` 跳过"世界重写为"相对路径 `hero` + 资产在 `PROJECT_ROOT` 下 `RESTORE`"世界。`H10` 严格模式现解析相对引用（旧版被跳过）。测试 38/0 仍全绿；`H10` 严格性仍通过 (b) 的故意 `broken ref` 非空校验。
-- **`release-audit.sh` 新增 `§0m` 平摊 `hero-asset` 闸**（非计数）：`manifest` 声明的 `hero_asset` 必须在平摊产物中解析；同类问题再不会静默出货。`generic-safe`（无 `manifest` / 无 `hero_asset` → `SKIP`）。新增 `tests/test_release_dist_hero_asset.sh` 同时守静态契约（`release.sh` + audit gate 已接入）与功能产物布局（平摊目录 + `full` 压缩包均按声明路径携带 hero）。
+- `gitx-marketplace` 命令行（`register` / `bump` / `list` 三个子命令），用于 把当前技能自助注册到 TKX 中央 marketplace。
+- `gitx-release` 发版后自动 best-effort 同步钩子——当 `.gitx/marketplace-target` 存在时自动 bump marketplace 版本。
+- `--skip-marketplace` 包装层标志，单次发版跳过 marketplace 同步。
+- 可选的发版后 Gitea 发布步骤（`scripts/gitx-gitea-release.sh`）：项目中存在 `.gitx/gitea-release-target` 标记（`HOST[:SSH_PORT]/OWNER/REPO`）时， `gitx-release` 先校验 `checksums.txt`，再把平摊后的发版目录作为 `main` 分支并打版本标签， 经 SSH 推送到私有 Gitea 发布仓库，然后创建 Gitea 的 Release 条目并附上 `.skill`、 全量压缩包、`checksums.txt`、`install.sh`。创建 Release 条目需要 `~/.netrc` 中 有该主机的条目（绝不存进仓库）；钩子尽力而为、不影响发版结果，单次可用 `--skip-gitea-release` 跳过。
+- `推送并发布` / `push and publish` 触发词（SKILL.md）：说出这句话后，AI 先 `git push origin main`（只接受快进推送，被拒即停），再跑 `scripts/gitx-gitea-release.sh --version vX.Y.Z`，远端同版本标签已存在但 校验和不同时自动改用 `--force`。脚本本身仍不推送；GitHub 侧仍由用户手动。
+- `install.sh` 增加创建 `~/.agents/bin/gitx-marketplace` PATH 软链接。
 <!-- /gitx:managed:whats-new -->
 
 完整历史（63 个发布）→ [`CHANGELOG_CN.md`](CHANGELOG_CN.md)。
@@ -94,7 +96,7 @@ $ /gitx-release --version v1.2.0
 ▸ 打包 .................. git_release_skill-v1.2.0.skill + tarball + SBOM
 ▸ 敏感扫描 .............. 认 .sanitize-ignore → 干净 ✅
 ▸ 文档平摊 .............. commands/ + references/ → Release/
-▸ 深度审计 .............. ✅ 246 / ❌ 0 / ➖ 1（§8 latest = 预期 SKIP；TOTAL == 实时总数）
+▸ 深度审计 .............. ✅ 254 / ❌ 0 / ➖ 1 / TOTAL 255（§8 latest = 预期 SKIP；TOTAL == 实时总数）
 ▸ 校验和 ................ sha256 × 6 写入
 RELEASE READY · 未推送（按政策 push 由人工执行）
 ```
@@ -107,7 +109,7 @@ RELEASE READY · 未推送（按政策 push 由人工执行）
 
 **问题。** 发版是一套仪式：到处改版本号、跑测试、扫密钥、把文档平摊进 bundle、证明完整性、审计结果、镜像到公开仓而不泄露私有仓。每一步都可跳过，每一处跳过都是未来的事故——陈旧的 README、泄露的 token、复现不出的 tarball、有 tag 没 release。
 
-**做法——政策即代码。** GitX 的契约（`references/TKX_Git_Release_policy_and_process.md`）不是建议性散文，每一条款都是运行时 shell 断言。违反的政策不会警告——它**中止构建**。审计是 246 条可执行检查，三态结果，`TOTAL = PASS + FAIL + SKIP` 必须精确成立。
+**做法——政策即代码。** GitX 的契约（`references/TKX_Git_Release_policy_and_process.md`）不是建议性散文，每一条款都是运行时 shell 断言。违反的政策不会警告——它**中止构建**。审计是 255 条可执行检查，三态结果，`TOTAL = PASS + FAIL + SKIP` 必须精确成立。
 
 **与众不同之处：**
 
@@ -196,6 +198,7 @@ GitX 不是 CI 发版机器人的替代品；它是任何技能在抵达远端�
 
 - `/gitx-release` — 技能本体
 - `/gitx-init`
+- `/gitx-marketplace`
 - `/gitx-sop`
 
 **B. 插件市场** — `/plugin marketplace add tkxlab-ai/marketplace` 然后 `/plugin install gitx@tkx-skills`（`/gitx` 冒号命名空间）
@@ -371,7 +374,7 @@ GitX/
 纯 Bash 测试架，零外部测试依赖。`bash tests/run_all.sh` 跑全量；流水线将其作为发版闸再跑一次。
 
 <!-- gitx:managed:suite-count -->
-111
+121
 <!-- /gitx:managed:suite-count -->
 
 **真机测试结果** —— 全套件绿 · 冒烟 6/6 · 深度审计严格 PASS · `shasum -c` OK。上方精确套件数由实时测试树机器派生、每次发版复核（绝不手工 stale）。

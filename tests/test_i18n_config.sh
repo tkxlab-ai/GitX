@@ -82,7 +82,7 @@ fi
 # ── Test 3: target-languages parsed as list ──────────────────────────────
 if [ -x "$LOADER" ]; then
     result=$("$LOADER" --config "$FIXTURE_DIR/.i18n-config" list targets 2>/dev/null | LC_ALL=C sort | tr '\n' ' ')
-    if echo "$result" | grep -q "en" && echo "$result" | grep -q "ja"; then
+    if grep -q "en" <<<"$result" && grep -q "ja" <<<"$result"; then
         ok "list targets contains en + ja"
     else
         fail "list targets expected 'en ja', got '$result'"
@@ -94,10 +94,10 @@ fi
 # ── Test 4: strict list enumeration ──────────────────────────────────────
 if [ -x "$LOADER" ]; then
     result=$("$LOADER" --config "$FIXTURE_DIR/.i18n-config" list strict 2>/dev/null | LC_ALL=C sort | tr '\n' ' ')
-    if echo "$result" | grep -q "README.md" \
-       && echo "$result" | grep -q "RELEASE_NOTES.md" \
-       && echo "$result" | grep -q "TOKEN_USAGE.md" \
-       && echo "$result" | grep -q "SKILL.md"; then
+    if grep -q "README.md" <<<"$result" \
+       && grep -q "RELEASE_NOTES.md" <<<"$result" \
+       && grep -q "TOKEN_USAGE.md" <<<"$result" \
+       && grep -q "SKILL.md" <<<"$result"; then
         ok "list strict contains all 4 strict files"
     else
         fail "list strict missing expected entries, got '$result'"
@@ -109,7 +109,7 @@ fi
 # ── Test 5: warn list enumeration ────────────────────────────────────────
 if [ -x "$LOADER" ]; then
     result=$("$LOADER" --config "$FIXTURE_DIR/.i18n-config" list warn 2>/dev/null)
-    if echo "$result" | grep -q "CONTRIBUTING.md" && echo "$result" | grep -q "ROADMAP.md"; then
+    if grep -q "CONTRIBUTING.md" <<<"$result" && grep -q "ROADMAP.md" <<<"$result"; then
         ok "list warn contains CONTRIBUTING.md + ROADMAP.md"
     else
         fail "list warn missing entries, got '$result'"
@@ -121,9 +121,9 @@ fi
 # ── Test 6: lock list includes declared + hardcoded defaults ─────────────
 if [ -x "$LOADER" ]; then
     result=$("$LOADER" --config "$FIXTURE_DIR/.i18n-config" list lock 2>/dev/null)
-    if echo "$result" | grep -q "LICENSE" \
-       && echo "$result" | grep -q "CUSTOM_LOCKED.md" \
-       && echo "$result" | grep -q "CODE_OF_CONDUCT.md"; then
+    if grep -q "LICENSE" <<<"$result" \
+       && grep -q "CUSTOM_LOCKED.md" <<<"$result" \
+       && grep -q "CODE_OF_CONDUCT.md" <<<"$result"; then
         ok "list lock contains declared + hardcoded (CODE_OF_CONDUCT.md)"
     else
         fail "list lock missing CODE_OF_CONDUCT.md default, got '$result'"
@@ -233,7 +233,7 @@ strict:
 EOF
 if [ -x "$LOADER" ]; then
     result=$("$LOADER" --config "$COMMENTED_CONFIG" list strict 2>/dev/null | LC_ALL=C sort | tr '\n' ' ')
-    if echo "$result" | grep -q "README.md" && echo "$result" | grep -q "SKILL.md"; then
+    if grep -q "README.md" <<<"$result" && grep -q "SKILL.md" <<<"$result"; then
         ok "comments and blank lines ignored correctly"
     else
         fail "comment/blank parse broken, got '$result'"

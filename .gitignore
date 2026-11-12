@@ -61,6 +61,15 @@ GOTCHAS.md
 Handoff_Logs/
 Handoff_Decisions/
 Handoff_Logs.archive/
+# handoffx v4 (2026-11) renamed the set to HANDOFFX.md / Handoffx_*; both
+# generations stay listed because stale tarballs and backups still carry the old names.
+HANDOFFX.md
+HANDOFFX.archive.md
+HANDOFFX.md.bak
+HANDOFFX.md.pre-v2-backup
+Handoffx_Logs/
+Handoffx_Decisions/
+Handoffx_Logs.archive/
 
 # Internal review / research docs (not for public)
 REVIEW.md
@@ -99,6 +108,8 @@ tests/.tmp/
 
 # ── OMC working memory ──────────────────────────────────────────────────
 .omc/
+# SDD controller workspace (briefs, review diffs, reports) — private like .omc/
+.superpowers/
 
 # gitx-init/gitx-sop generate project-local .gitx/ — never ship it
 .gitx/

@@ -17,14 +17,14 @@ echo "=== test_dual_source_check_release: check_dual_source() whitelist ==="
 # The broad pattern '| grep -v "^Only in.*scripts: release-"' allows
 # bundle-side extras (e.g. skills/x/scripts/release-rogue.sh) to pass silently.
 _BLOCK=$(sed -n '/check_dual_source()/,/^}/p' "$RELEASE_SH" | head -50)
-if echo "$_BLOCK" | grep -qE 'grep -v.*".*Only in.*scripts: release-"'; then
+if grep -qE 'grep -v.*".*Only in.*scripts: release-"' <<<"$_BLOCK"; then
     fail "check_dual_source(): still uses broad grep -v pattern (allows bundle-side drift)"
 else
     ok "check_dual_source(): no broad grep -v pattern"
 fi
 
 # Test 2: case-based SCRIPTS_ROOT filter must be present (matches audit §9 approach)
-if echo "$_BLOCK" | grep -qE 'SCRIPTS_ROOT|case.*Only in'; then
+if grep -qE 'SCRIPTS_ROOT|case.*Only in' <<<"$_BLOCK"; then
     ok "check_dual_source(): uses SCRIPTS_ROOT-pinned case filter"
 else
     fail "check_dual_source(): missing SCRIPTS_ROOT-pinned case filter"

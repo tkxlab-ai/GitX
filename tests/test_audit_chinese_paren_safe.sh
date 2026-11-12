@@ -35,7 +35,7 @@ echo "wrapped: ${my_value}）OK"
 EOF
 out=$(bash "$TMP" 2>&1)
 rc=$?
-if [ "$rc" = 0 ] && echo "$out" | grep -q 'wrapped: hello）OK'; then
+if [ "$rc" = 0 ] && grep -q 'wrapped: hello）OK' <<<"$out"; then
     ok "\${var}）form prints wrapped correctly under set -u"
 else
     fail "\${var}）form failed (rc=$rc, out=$out)"
@@ -53,7 +53,7 @@ echo "wrapped: $my_value）OK"
 EOF
 bare_out=$(bash "$TMP" 2>&1) || true
 bare_rc=$?
-if [ "$bare_rc" = 0 ] && echo "$bare_out" | grep -q 'wrapped: hello）OK'; then
+if [ "$bare_rc" = 0 ] && grep -q 'wrapped: hello）OK' <<<"$bare_out"; then
     # Bash on this machine handles it fine; harmless on this bash, but the
     # ${var} form is still the portable + safe form for cross-bash scripts.
     ok "bare \$var）printed correctly on this bash (informational; \${var} still required for portability)"

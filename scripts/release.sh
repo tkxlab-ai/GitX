@@ -80,6 +80,10 @@ run() {
 }
 
 # --- Consolidated cleanup trap ---
+# Keep the wrapper allowlist a plain shell variable here (preflight + the scrub
+# overlay still read it) but stop it reaching children — tests/run_all.sh or a
+# nested release.sh during a self-release must not inherit an excuse.
+export -n _GITX_WRAPPER_DIRTY_OK 2>/dev/null || true
 CLEANUP_EXTRAS=()
 RELEASE_DIR_CREATED=0
 cleanup_on_fail() {
@@ -134,7 +138,8 @@ preflight_checks() {
     # commit-then-release discipline GitX itself already follows.
     if git -C "$PROJECT_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
         # Two-part check (Codex round-12 [high] + round-13 [high]):
-        #   (1) tracked dirty   — diff-index --quiet HEAD
+        #   (1) tracked dirty   — diff-index --name-only HEAD, minus the
+        #       wrapper allowlist below; anything left aborts
         #   (2) untracked-but-not-gitignored — ls-files --others --exclude-standard
         # gitignored files are intentionally allowed (HANDOFF.md, .gitx/,
         # docs/superpowers/, etc.); they never enter the release artifact
@@ -142,7 +147,32 @@ preflight_checks() {
         # Catches the round-13 attack: an untracked `.release-flatten` or
         # untracked top-level doc that would later be flattened into the
         # release dir AFTER the source-tarball sanitize pass.
-        if ! git -C "$PROJECT_ROOT" diff-index --quiet HEAD -- 2>/dev/null; then
+        # Wrapper allowlist: gitx-release.sh bumps VERSION sidecars +
+        # Release/CHANGELOG.md BEFORE calling release.sh by design (so it can
+        # roll them back on failure — Gotcha #17). The round-12 check rejected
+        # exactly those files, breaking one-command release in every git repo.
+        # Only the exact paths the wrapper exported are excused; any other
+        # tracked edit still aborts. The env is also clamped to the shapes
+        # the wrapper writes, so a hand-set value cannot excuse e.g. a dirty
+        # README (flattened from the working tree, never scanned on the
+        # scrub path — the round-12 hole).
+        git -C "$PROJECT_ROOT" update-index -q --refresh 2>/dev/null || true
+        # Fail closed: a git error (unborn HEAD, corrupt index) must not read
+        # as "nothing dirty" — the old `! diff-index --quiet` aborted there.
+        if ! _dirty=$(git -C "$PROJECT_ROOT" diff-index --name-only HEAD -- 2>/dev/null); then
+            echo "❌ release.sh: cannot verify clean working tree (git diff-index failed — unborn HEAD?)"
+            exit 1
+        fi
+        if [ -n "$_dirty" ] && [ -n "${_GITX_WRAPPER_DIRTY_OK:-}" ]; then
+            _dirty_ok_file=$(mktemp)
+            CLEANUP_EXTRAS+=("$_dirty_ok_file")
+            printf '%s\n' "$_GITX_WRAPPER_DIRTY_OK" \
+                | grep -xE 'VERSION|skills/[A-Za-z0-9._-]+/VERSION|Release/CHANGELOG\.md' \
+                > "$_dirty_ok_file" || true
+            [ -s "$_dirty_ok_file" ] \
+                && _dirty=$(printf '%s\n' "$_dirty" | grep -vxF -f "$_dirty_ok_file" || true)
+        fi
+        if [ -n "$_dirty" ]; then
             echo "❌ release.sh: working tree has uncommitted tracked changes — release aborted"
             echo "   The sanitize pass covers HEAD content (via scrub-tarball.sh / git-archive)."
             echo "   Releasing with a dirty tree would ship un-scanned README / doc content."
@@ -151,7 +181,17 @@ preflight_checks() {
             echo "   Resolve:  commit (preferred) or stash, then re-run release.sh"
             exit 1
         fi
-        _untracked=$(git -C "$PROJECT_ROOT" ls-files --others --exclude-standard 2>/dev/null | head -20)
+        # Release/ holds the pipeline's own output (wrapper logs, version dirs)
+        # and is excluded from staging (rsync --exclude / export-ignore); the
+        # only Release/ inputs (CHANGELOG{,_CN}.md) are injected into the
+        # stage BEFORE the sanitize pass, so they cannot bypass the scan.
+        # Fail closed like diff-index above: a piped ls-files error would read
+        # as "no untracked files" and skip the trust-boundary check.
+        if ! _untracked_all=$(git -C "$PROJECT_ROOT" ls-files --others --exclude-standard 2>/dev/null); then
+            echo "❌ release.sh: cannot list untracked files (git ls-files failed) — release aborted"
+            exit 1
+        fi
+        _untracked=$(printf '%s\n' "$_untracked_all" | grep -v '^Release/' | head -20 || true)
         if [ -n "$_untracked" ]; then
             echo "❌ release.sh: untracked-not-gitignored files present — release aborted"
             echo "   The sanitize/scan pass and source tarball derive from HEAD; any"
@@ -258,7 +298,16 @@ EOF
         fi
         TMP_CHANGELOG=$(mktemp)
         CLEANUP_EXTRAS+=("$TMP_CHANGELOG")
-        head -4 "$ACCUM_CHANGELOG" > "$TMP_CHANGELOG"
+        # Anchor on the first `## ` entry (same as gitx-release.sh): a fixed
+        # head -4 split put the new entry BELOW the current top entry whenever
+        # the header was not exactly 4 lines, so audit §4 saw the wrong top
+        # version. awk exits 0 on no match (set -e safe); empty = append.
+        _anchor_line=$(awk '/^## / { print NR; exit }' "$ACCUM_CHANGELOG")
+        if [ -n "$_anchor_line" ]; then
+            head -n $((_anchor_line - 1)) "$ACCUM_CHANGELOG" > "$TMP_CHANGELOG"
+        else
+            cp "$ACCUM_CHANGELOG" "$TMP_CHANGELOG"
+        fi
         cat >> "$TMP_CHANGELOG" <<EOF
 ## $VERSION — $RELEASE_DATE
 
@@ -269,7 +318,9 @@ Artifacts: \`Release/${PROJECT_NAME}-$VERSION/\`
 ---
 
 EOF
-        tail -n +5 "$ACCUM_CHANGELOG" >> "$TMP_CHANGELOG" 2>/dev/null || true
+        if [ -n "$_anchor_line" ]; then
+            tail -n +"$_anchor_line" "$ACCUM_CHANGELOG" >> "$TMP_CHANGELOG"
+        fi
         mv "$TMP_CHANGELOG" "$ACCUM_CHANGELOG"
         echo ""
         echo "⛔ CHANGELOG gate（§4 #5）：已为 $VERSION 创建占位条目"
@@ -336,6 +387,24 @@ run_tests() {
     echo "✅ Tests passed"
 }
 
+# Filter allowed root-only drift from `diff -rq` output before flagging.
+# Allowed root-only: release-* (protected pipeline scripts, Gotcha #22) and
+# scrub-tarball.sh (optional project tooling, Gotcha #33). $1 = root scripts dir
+# (the "Only in <dir>:" prefix). Defined as a FUNCTION — not an inline `case`
+# inside $(…) — because bash 3.2 mis-parses a `case` nested in command
+# substitution (the pattern's `)` is read as the closing `)` of $(…)); a function
+# body is parsed separately, keeping this 3.2-portable (dev = macOS /bin/bash 3.2).
+_filter_dual_source_drift() {
+    local _root="$1" _ln
+    while IFS= read -r _ln; do
+        case "$_ln" in
+            "Only in ${_root}: release-"*) ;;
+            "Only in ${_root}: scrub-tarball.sh") ;;
+            *) printf '%s\n' "$_ln" ;;
+        esac
+    done
+}
+
 check_dual_source() {
     if [ ! -d "$PROJECT_ROOT/scripts" ]; then
         echo "❌ Missing root scripts directory: $PROJECT_ROOT/scripts"
@@ -348,18 +417,7 @@ check_dual_source() {
 
     _SCRIPTS_ROOT="$PROJECT_ROOT/scripts"
     drift=$(diff -rq "$PROJECT_ROOT/scripts/" "$PROJECT_ROOT/skills/$SKILL_NAME/scripts/" 2>&1 \
-            | { while IFS= read -r _ln; do
-                    case "$_ln" in
-                        # release-* are protected pipeline scripts (Gotcha #22)
-                        "Only in ${_SCRIPTS_ROOT}: release-"*) ;;
-                        # scrub-tarball.sh is OPTIONAL project tooling (Gotcha #33,
-                        # v1.1.7): a project may ship it in scripts/ to opt into
-                        # git-archive-based source tarball; it is NOT part of the
-                        # skill bundle, so root-only is the correct shape.
-                        "Only in ${_SCRIPTS_ROOT}: scrub-tarball.sh") ;;
-                        *) printf '%s\n' "$_ln" ;;
-                    esac
-                done; } || true)
+            | _filter_dual_source_drift "$_SCRIPTS_ROOT" || true)
     if [ -n "$drift" ]; then
         echo "❌ 双源脚本漂移（v2.2 §4 #11）："
         echo "$drift"
@@ -632,6 +690,63 @@ pack_source_tarball_deterministic() {
     ) 2>/dev/null | gzip -n > "$TAR_OUT"
 }
 
+# rsync honours only the explicit --exclude list, never .gitignore, so any
+# gitignored file missing from that list (e.g. .npmrc with a token) reached the
+# public tarball. Delete from the STAGE (never the working tree) every path git
+# itself considers ignored. No-op outside a git repo (non-git downstream users).
+prune_gitignored_from_stage() {
+    local root="$1" stage="$2" p
+    git -C "$root" rev-parse --git-dir >/dev/null 2>&1 || return 0
+    while IFS= read -r -d '' p; do
+        # -L too: -e follows links, so a gitignored dangling symlink (target
+        # may leak a /Users/<name>/ path) would otherwise stay staged.
+        if [ -e "$stage/$p" ] || [ -L "$stage/$p" ]; then
+            rm -rf "${stage:?}/$p"
+        fi
+    done < <(git -C "$root" ls-files -z --others --ignored --exclude-standard 2>/dev/null)
+    return 0
+}
+
+# The scrub path archives HEAD, but the one-command wrapper bumps VERSION
+# sidecars uncommitted, so the tarball would ship the PREVIOUS version. Copy
+# only VERSION files the wrapper declared (never Release/CHANGELOG.md — Deep
+# Audit §5 rejects any Release/ member; changelogs go via
+# inject_root_changelog_into_stage). Refuse staged symlinks (git archive
+# preserves them) so cp can never write outside the stage. Here-doc feed, not a
+# pipe, so `return` leaves the function and every mkdir/cp failure propagates.
+overlay_wrapper_versions_into_stage() {
+    local root="$1" stage="$2" p d _c
+    [ -n "${_GITX_WRAPPER_DIRTY_OK:-}" ] || return 0
+    while IFS= read -r p; do
+        # Same shape clamp as the preflight, plus no `..` / absolute path: the
+        # env is caller-controlled, and an unclamped entry could mkdir+cp
+        # outside the stage or slip an untracked VERSION into the tarball.
+        case "$p" in
+            /*|*..*) continue ;;
+        esac
+        printf '%s\n' "$p" | grep -qxE 'VERSION|skills/[A-Za-z0-9._-]+/VERSION' || continue
+        [ -f "$root/$p" ] || continue
+        d="$(dirname "$p")"
+        _c="$d"
+        while [ "$_c" != "." ]; do
+            if [ -L "$stage/$_c" ]; then
+                echo "❌ staged $_c is a symlink — refusing to overlay $p" >&2
+                return 1
+            fi
+            _c="$(dirname "$_c")"
+        done
+        if [ -L "$stage/$p" ]; then
+            echo "❌ staged $p is a symlink — refusing to overlay" >&2
+            return 1
+        fi
+        mkdir -p "$stage/$d" || return 1
+        cp -p "$root/$p" "$stage/$p" || return 1
+    done <<EOF_OVL
+$_GITX_WRAPPER_DIRTY_OK
+EOF_OVL
+    return 0
+}
+
 build_source_tarball() {
     TAR_OUT="$RELEASE_DIR/${PROJECT_NAME}-${VERSION}-source.tar.gz"
 
@@ -682,6 +797,9 @@ build_source_tarball() {
         # deterministic recipe. scrub's git-tracked-only cleanliness holds:
         # we re-pack ITS extracted clean tree plus the changelog.
         inject_root_changelog_into_stage
+        # git archive HEAD carries the PRE-bump VERSION sidecars when the
+        # one-command wrapper ran (it bumps them uncommitted); overlay them.
+        overlay_wrapper_versions_into_stage "$PROJECT_ROOT" "$STAGE_SUB" || exit 1
         pack_source_tarball_deterministic
         echo "   → $TAR_OUT (re-packed with source-of-truth CHANGELOG; $(du -h "$TAR_OUT" 2>/dev/null | cut -f1 || echo "dry-run"))"
         return 0
@@ -712,6 +830,8 @@ build_source_tarball() {
         SKILL_EXCLUDE=(--exclude='/skills')
     fi
 
+    # handoffx v4 (2026-11) renamed HANDOFF.md/Handoff_* to HANDOFFX.md/Handoffx_*;
+    # both generations are excluded — stale checkouts and backups still carry the old names.
     run rsync -a \
         --exclude='.git' \
         --exclude='Release' \
@@ -719,6 +839,7 @@ build_source_tarball() {
         --exclude='tests/.tmp' \
         --exclude='.claude' \
         --exclude='.omc' \
+        --exclude='.superpowers' \
         --exclude='.1by1' \
         --exclude='.i18n-cache' \
         --exclude='.cache' \
@@ -738,6 +859,13 @@ build_source_tarball() {
         --exclude='Handoff_Decisions' \
         --exclude='HANDOFF.archive.md' \
         --exclude='HANDOFF.md.bak' \
+        --exclude='HANDOFFX.md' \
+        --exclude='HANDOFFX.md.pre-v2-backup' \
+        --exclude='Handoffx_Logs' \
+        --exclude='Handoffx_Logs.archive' \
+        --exclude='Handoffx_Decisions' \
+        --exclude='HANDOFFX.archive.md' \
+        --exclude='HANDOFFX.md.bak' \
         --exclude='REVIEW.md' \
         --exclude='GitHub_STANDARD_ANALYSIS.md' \
         --exclude='CLAUDE.md' \
@@ -750,6 +878,10 @@ build_source_tarball() {
         --exclude="skills/${SKILL_NAME}-workspace" \
         "${SKILL_EXCLUDE[@]+"${SKILL_EXCLUDE[@]}"}" \
         "$PROJECT_ROOT/" "$STAGE_SUB/" 2>/dev/null
+
+    # rsync ignores .gitignore, so gitignored secrets (.npmrc, .env.local…)
+    # not on the exclude list above were staged into the public tarball.
+    run prune_gitignored_from_stage "$PROJECT_ROOT" "$STAGE_SUB"
 
     # Non-destructive: overwrite the staged flat CHANGELOG{,_CN}.md with the
     # source-of-truth Release/ copies (rsync excludes Release/, so a stale
@@ -1043,19 +1175,21 @@ EOF_FF
 
 generate_attestations() {
     if [ "$DRY_RUN" = "1" ]; then
-        echo "  [dry-run] Skipping attestations (SBOM, TOKEN_USAGE, checksums)"
+        echo "  [dry-run] Skipping attestations (SBOM, TOKEN_USAGE)"
         return 0
     fi
     SKILL_SRC_DIR="$PROJECT_ROOT/skills/$SKILL_NAME"
 
     # --- 2.7 SBOM — via emit-sbom.sh ---
     echo "🧾 Generating sbom.cyclonedx.json..."
-    run "$PROJECT_ROOT/scripts/emit-sbom.sh" "$RELEASE_DIR" "$PROJECT_NAME" "$VERSION" "$SKILL_NAME"
+    # Helpers ship with the pipeline ($SKILL_ROOT), like audit/sanitize — a
+    # downstream project's own scripts/ need not (and usually does not) carry them.
+    run "$SKILL_ROOT/emit-sbom.sh" "$RELEASE_DIR" "$PROJECT_NAME" "$VERSION" "$SKILL_NAME"
 
     # --- 2.7b TOKEN_USAGE.md ---
     if [ -f "$SKILL_SRC_DIR/SKILL.md" ]; then
         echo "🧮 Generating TOKEN_USAGE.md..."
-        if ! "$PROJECT_ROOT/scripts/emit-token-usage.sh" \
+        if ! "$SKILL_ROOT/emit-token-usage.sh" \
                 "$SKILL_SRC_DIR" \
                 "$RELEASE_DIR/TOKEN_USAGE.md" \
                 "$VERSION"; then
@@ -1063,8 +1197,19 @@ generate_attestations() {
             exit 1
         fi
     fi
+}
 
-    # --- 2.8 checksums.txt (sha256 of distributable artifacts + SBOM + TOKEN_USAGE) ---
+generate_checksums() {
+    if [ "$DRY_RUN" = "1" ]; then
+        echo "  [dry-run] Skipping checksums.txt"
+        return 0
+    fi
+    # --- 2.8 checksums.txt (sha256 of EVERY shipped file in the release dir) ---
+    # Why every file: install.sh installs loose SKILL.md / scripts/ / references/
+    # from this dir; an allowlist of built artifacts left those unverified.
+    # Why here (after update_changelog, before build_full_tarball): CHANGELOG*.md
+    # must already be flattened in, and the full tarball must embed this
+    # manifest without its own hash (build_full_tarball appends that outside).
     echo "🔐 Generating checksums.txt..."
     if command -v shasum >/dev/null 2>&1; then
         SHA_CMD="shasum -a 256"
@@ -1077,11 +1222,15 @@ generate_attestations() {
     (
         cd "$RELEASE_DIR"
         CHK_FILES=()
-        [ -f "${PROJECT_NAME}-${VERSION}.skill" ]          && CHK_FILES+=("${PROJECT_NAME}-${VERSION}.skill")
-        [ -f "${PROJECT_NAME}-${VERSION}-source.tar.gz" ]  && CHK_FILES+=("${PROJECT_NAME}-${VERSION}-source.tar.gz")
-        [ -f "install.sh" ]                                && CHK_FILES+=("install.sh")
-        [ -f "sbom.cyclonedx.json" ]                       && CHK_FILES+=("sbom.cyclonedx.json")
-        [ -f "TOKEN_USAGE.md" ]                            && CHK_FILES+=("TOKEN_USAGE.md")
+        # Process substitution (not a pipe) so the array fills in this shell;
+        # bash 3.2 has no mapfile. Exclusions are TOP-LEVEL only: install.sh
+        # copies references/ scripts/vendored/ assets/ recursively, so a nested
+        # *.log / *.sha256 ships and must be hashed.
+        while IFS= read -r f; do
+            CHK_FILES+=("$f")
+        done < <(find . -type f | sed 's|^\./||' \
+                 | { grep -vE '^(checksums\.txt|[^/]*\.log|[^/]*\.sha256|[^/]*-full\.tar\.gz)$' || true; } \
+                 | LC_ALL=C sort)
         if [ "${#CHK_FILES[@]}" -eq 0 ]; then
             echo "❌ no artifacts found to hash" >&2
             exit 1
@@ -1310,6 +1459,7 @@ fi
 generate_attestations
 generate_release_notes
 update_changelog
+generate_checksums
 build_full_tarball
 run_deep_audit
 update_latest_symlink

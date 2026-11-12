@@ -46,8 +46,8 @@ fi
 # Function body should have `if [ "$SKC_PYYAML_OK" = "1" ]` early guard
 # followed by `return 0` within a few lines.
 FN_BODY=$(awk '/^ensure_pyyaml_via_venv\(\)/,/^}$/' "$HELPER_SH")
-if echo "$FN_BODY" | grep -qE 'SKC_PYYAML_OK.*=.*"1"' && \
-   echo "$FN_BODY" | grep -qE 'return 0'; then
+if grep -qE 'SKC_PYYAML_OK.*=.*"1"' <<<"$FN_BODY" && \
+   grep -qE 'return 0' <<<"$FN_BODY"; then
     ok "helper idempotent (early return when PyYAML already available)"
 else
     fail "helper missing idempotent early return guard"
@@ -103,11 +103,11 @@ RESULT=$(bash -c "
     fi
 ")
 
-if echo "$RESULT" | grep -qE "YAML_VERSION_PROBE=[0-9]+\."; then
-    ok "behavior: venv created + PyYAML import works ($(echo "$RESULT" | grep YAML_VERSION_PROBE))"
+if grep -qE "YAML_VERSION_PROBE=[0-9]+\." <<<"$RESULT"; then
+    ok "behavior: venv created + PyYAML import works ($(grep YAML_VERSION_PROBE <<<"$RESULT"))"
 else
     # If system Python is unusual, accept VENV_FAILED as graceful degradation
-    if echo "$RESULT" | grep -q "VENV_FAILED"; then
+    if grep -q "VENV_FAILED" <<<"$RESULT"; then
         ok "behavior: ensure_pyyaml_via_venv graceful-fails when python3/venv unavailable (acceptable)"
     else
         fail "behavior: venv creation+import path broken. Output: $RESULT"

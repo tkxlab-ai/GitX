@@ -193,23 +193,38 @@ else
 fi
 
 mkdir -p "$TMP/evals_data/evals/data"
+# v1.13.0: evals/data|fixtures exemption is GitX-self-test-only — the fixture
+# must identify as gitx-release for the exemption to apply.
+printf -- '---\nname: gitx-release\n---\n' > "$TMP/evals_data/SKILL.md"
 cat > "$TMP/evals_data/evals/data/sample.txt" <<'EOF'
 jarvis@realdomain.io
 EOF
 if bash "$SANITIZE" "$TMP/evals_data" > /dev/null 2>&1; then
-    ok "evals/data/ TRUE NEGATIVE: exempt from scanning"
+    ok "evals/data/ TRUE NEGATIVE: exempt from scanning (gitx-release self-scan)"
 else
     fail "evals/data/ TRUE NEGATIVE: evals/data/ should be exempt but was flagged"
 fi
 
 mkdir -p "$TMP/evals_fixtures/evals/fixtures"
+printf -- '---\nname: gitx-release\n---\n' > "$TMP/evals_fixtures/SKILL.md"
 cat > "$TMP/evals_fixtures/evals/fixtures/fake_cred.txt" <<'EOF'
 jarvis@realdomain.io
 EOF
 if bash "$SANITIZE" "$TMP/evals_fixtures" > /dev/null 2>&1; then
-    ok "evals/fixtures/ TRUE NEGATIVE: exempt from scanning"
+    ok "evals/fixtures/ TRUE NEGATIVE: exempt from scanning (gitx-release self-scan)"
 else
     fail "evals/fixtures/ TRUE NEGATIVE: evals/fixtures/ should be exempt but was flagged"
+fi
+
+# Inverse: a downstream skill gets no GitX self-test exemption.
+mkdir -p "$TMP/evals_downstream/evals/data" "$TMP/evals_downstream/evals/fixtures"
+printf -- '---\nname: other-skill\n---\n' > "$TMP/evals_downstream/SKILL.md"
+echo "jarvis@realdomain.io" > "$TMP/evals_downstream/evals/data/sample.txt"
+echo "jarvis@realdomain.io" > "$TMP/evals_downstream/evals/fixtures/fake_cred.txt"
+if ! bash "$SANITIZE" "$TMP/evals_downstream" > /dev/null 2>&1; then
+    ok "evals/data|fixtures TRUE POSITIVE: scanned for non-gitx-release skill"
+else
+    fail "evals/data|fixtures TRUE POSITIVE: downstream skill wrongly inherited GitX exemption"
 fi
 
 # ── Category 7: Files with spaces in their names (S2-1) ─────────────────────

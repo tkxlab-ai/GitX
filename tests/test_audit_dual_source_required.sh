@@ -30,20 +30,20 @@ section=$(awk '/^echo "§9\./{flag=1} flag; /^echo "§10\./{flag=0}' "$AUDIT_SH"
 # The else branch (no dual source) must increment FAIL; must not increment SKIP
 else_branch=$(echo "$section" | awk '/^else$/{flag=1} flag; /^fi$/{flag=0}')
 
-if echo "$else_branch" | grep -q 'FAIL=\$((FAIL+1))'; then
+if grep -q 'FAIL=\$((FAIL+1))' <<<"$else_branch"; then
     ok "§9 else branch increments FAIL on missing dual-source (S3-4)"
 else
     fail "§9 else branch does NOT increment FAIL (S3-4: should not SKIP)"
 fi
 
-if echo "$else_branch" | grep -q 'SKIP=\$((SKIP+1))'; then
+if grep -q 'SKIP=\$((SKIP+1))' <<<"$else_branch"; then
     fail "§9 else branch still increments SKIP — policy violation (S3-4)"
 else
     ok "§9 else branch does NOT increment SKIP"
 fi
 
 # ── Test 3: else branch emits ❌ message, not ➖ ────────────────────────────
-if echo "$else_branch" | grep -q '❌'; then
+if grep -q '❌' <<<"$else_branch"; then
     ok "§9 else branch emits ❌ error marker"
 else
     fail "§9 else branch missing ❌ marker (S3-4: should signal failure clearly)"

@@ -66,7 +66,7 @@ fi
 # The guard must NOT call check() when directory is empty
 # Check that the ➖ skip message is in the assets block
 ASSETS_BLOCK=$(awk '/assets\/ — 至少一个 .md/,/fi$/' "$AUDIT" 2>/dev/null || true)
-if echo "$ASSETS_BLOCK" | grep -q '➖'; then
+if grep -q '➖' <<<"$ASSETS_BLOCK"; then
     ok "Assets empty-dir guard emits ➖ skip message"
 else
     fail "Assets guard does NOT emit ➖ skip — empty assets/ still hits check() and FAILs"

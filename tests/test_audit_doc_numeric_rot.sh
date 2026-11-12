@@ -52,7 +52,7 @@ nums=$( {
     grep -oE '[0-9]+ checks' "$TMP/README.md" | grep -oE '^[0-9]+'
     grep -oE '[0-9]+ PASS' "$TMP/README.md" | grep -oE '^[0-9]+'
 } | sort -u )
-if [ "$(printf '%s\n' "$nums" | grep -c .)" -gt 1 ]; then
+if [ "$(grep -c . <<<"$nums")" -gt 1 ]; then
     ok "numeric-rot logic flags disagreeing citations (227 vs 228)"
 else
     fail "numeric-rot logic FAILED to flag a known disagreeing README"
@@ -68,7 +68,7 @@ nums2=$( {
     grep -oE '[0-9]+ checks' "$TMP/ok.md" | grep -oE '^[0-9]+'
     grep -oE '[0-9]+ PASS' "$TMP/ok.md" | grep -oE '^[0-9]+'
 } | sort -u )
-if [ "$(printf '%s\n' "$nums2" | grep -c .)" -le 1 ]; then
+if [ "$(grep -c . <<<"$nums2")" -le 1 ]; then
     ok "numeric-rot logic passes a consistent README (all cite 228)"
 else
     fail "numeric-rot logic false-positives on a consistent README"

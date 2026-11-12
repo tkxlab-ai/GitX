@@ -12,8 +12,9 @@
 #
 # Exit:
 #   0 success (including dry-run)
-#   2 usage error (unknown flag)
+#   2 usage error (unknown flag, or invalid --project/--repo/--private-host)
 #   4 .gitx/GITHUB_RELEASE_SOP.md already exists and --force was not passed
+#   5 target (or .gitx) is a symlink — refused
 
 set -euo pipefail
 
@@ -46,8 +47,9 @@ Options:
 
 Exit codes:
   0 success (including dry-run completion)
-  2 usage error (unknown flag)
+  2 usage error (unknown flag, or invalid --project/--repo/--private-host)
   4 .gitx/GITHUB_RELEASE_SOP.md already exists and --force was not passed
+  5 target (or .gitx) is a symlink — refused
 EOF
             exit 0
             ;;
@@ -77,11 +79,40 @@ else
 fi
 TARGET=".gitx/GITHUB_RELEASE_SOP.md"
 
+# These values are interpolated into sed expressions below; an unvalidated
+# '|;w FILE;#' in a dir name would let sed write files (or run commands on GNU sed).
+_invalid() { echo "❌ invalid $1: '$2'" >&2; exit 2; }
+# `case` matches the WHOLE string; a per-line grep would accept 'ok<LF>|;w X;#'
+# because one line passes.
+case "$PROJECT" in ''|*[!A-Za-z0-9._\&/-]*) _invalid project "$PROJECT" ;; esac
+case "$REPO" in ''|*[!A-Za-z0-9._\&/-]*) _invalid repo "$REPO" ;; esac
+case "$PRIVATE_HOST" in ''|*[!A-Za-z0-9._\<\>-]*) _invalid private-host "$PRIVATE_HOST" ;; esac
+
+# _sed_esc — escape the sed replacement metachars for the '|' delimiter.
+_sed_esc() { printf '%s' "$1" | sed -e 's/[|&\\]/\\&/g'; }
+
+# _refuse_symlink_path — fail if PATH or any parent component is a symlink, so a
+# planted link cannot redirect the write onto a file outside the project.
+_refuse_symlink_path() {
+    local d="$1"
+    while [ -n "$d" ] && [ "$d" != "." ] && [ "$d" != "/" ]; do
+        if [ -L "$d" ]; then
+            echo "❌ $d is a symlink — refusing to write through it" >&2
+            return 1
+        fi
+        d="$(dirname "$d")"
+    done
+    return 0
+}
+
 if [ "$DRY_RUN" -eq 1 ]; then
     echo "project: $PROJECT / repo: $REPO"
     echo "would write: $(pwd)/$TARGET"
     exit 0
 fi
+
+# Checked before the exists-guard so --force can never write through a link.
+_refuse_symlink_path "$TARGET" || exit 5
 
 if [ -f "$TARGET" ] && [ "$FORCE" -eq 0 ]; then
     echo "❌ $TARGET already exists at $(pwd)/$TARGET" >&2
@@ -90,10 +121,14 @@ if [ -f "$TARGET" ] && [ "$FORCE" -eq 0 ]; then
 fi
 
 mkdir -p .gitx
-sed -e "s|{{PROJECT}}|$PROJECT|g" \
-    -e "s|{{REPO}}|$REPO|g" \
-    -e "s|{{PRIVATE_GIT_HOST}}|$PRIVATE_HOST|g" \
+_p="$(_sed_esc "$PROJECT")"
+_r="$(_sed_esc "$REPO")"
+_h="$(_sed_esc "$PRIVATE_HOST")"
+_v="$(_sed_esc "$GITX_VERSION")"
+sed -e "s|{{PROJECT}}|$_p|g" \
+    -e "s|{{REPO}}|$_r|g" \
+    -e "s|{{PRIVATE_GIT_HOST}}|$_h|g" \
     -e "s|{{DATE}}|$DATE|g" \
-    -e "s|{{GITX_VERSION}}|$GITX_VERSION|g" \
+    -e "s|{{GITX_VERSION}}|$_v|g" \
     "$REFS_DIR/GITHUB_RELEASE_SOP.template.md" > "$TARGET"
 exit 0

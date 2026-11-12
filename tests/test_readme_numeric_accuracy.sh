@@ -61,7 +61,7 @@ for rf in "$ROOT/README.md" "$ROOT/README_CN.md"; do
         grep -oE '[0-9]+ checks' "$rf" | grep -oE '^[0-9]+'
         grep -oE '[0-9]+ PASS' "$rf" | grep -oE '^[0-9]+'
     } | sort -u )
-    if [ "$(printf '%s\n' "$nums" | grep -c .)" -le 1 ]; then
+    if [ "$(grep -c . <<<"$nums")" -le 1 ]; then
         ok "$b Deep-Audit citations agree ($(printf '%s' "$nums" | tr '\n' ' '))"
     else
         fail "$b Deep-Audit citations disagree: $(printf '%s' "$nums" | tr '\n' ' ')"

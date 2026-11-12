@@ -42,7 +42,10 @@ fi
 # --- Section tracking for per-section summary (P3-2) ---
 # Bash 3.2 compatible: write each section's delta to a temp file
 _SEC_LOG=$(mktemp)
-trap 'rm -f "${_SEC_LOG:-}"' EXIT
+# Preserve the exit status across the cleanup trap: bash 3.2 otherwise reports
+# the trap body's status (0) as the shell's exit status.
+# shellcheck disable=SC2154  # _rc is assigned inside the trap string itself
+trap '_rc=$?; rm -f "${_SEC_LOG:-}"; exit $_rc' EXIT
 
 _track_start() {
     _TRACK_P=$PASS; _TRACK_F=$FAIL; _TRACK_S=$SKIP; _TRACK_N="$1"
@@ -54,10 +57,26 @@ _track_end() {
     echo "$_TRACK_N|$dp|$df|$ds" >> "$_SEC_LOG"
 }
 
+# Why anchored: a bare `grep -v evals` also dropped legitimate filenames such
+# as retrievals.md from the .skill-vs-bundle diff. Only the evals/ directory
+# itself (and anything under it) is excluded from the .skill. `|| true` keeps
+# an all-filtered (empty) result from aborting under pipefail.
+_filter_evals_diff() {
+    grep -vE '^Only in [^:]*: evals$|^Only in [^:]*/evals(/[^:]*)?: ' || true
+}
+
 # --- Resolve self location ---
 # shellcheck disable=SC2034  # SELF_DIR kept for future extensions
 SELF_DIR="$(cd "$(dirname "$0")" && pwd)"
-VERSION="${1:?Usage: $0 [--inline] vX.Y[.Z][-alpha|beta|rc[.N]]}"
+# Why explicit check (not ${1:?}): on bash 3.2 the ${1:?} failure reaches the
+# EXIT trap with $? already 0, so a bare run exited 0 and left the gate open.
+# `set -- "${ARGS[@]:-}"` above yields one empty arg when ARGS is empty, hence
+# the -z test.
+if [ $# -lt 1 ] || [ -z "$1" ]; then
+    echo "Usage: $0 [--inline] vX.Y[.Z][-alpha|beta|rc[.N]]" >&2
+    exit 2
+fi
+VERSION="$1"
 # v1.0.8 hardening (Sec Minor #3): standalone audit was unvalidated.
 # Mirror release.sh:47 regex so VERSION is constrained before flowing into
 # awk/grep patterns and Release/<PROJECT>-<VERSION> path components.
@@ -258,14 +277,16 @@ audit_section_0_spec() {
     # quick_validate.py is present, also run it; disagreement → ADVISORY.
     # This catches block-scalar / multiline YAML edge cases bash inline can't
     # parse, without changing the PASS/FAIL audit numbers.
+    # Not counted on success either (v1.13.0): a PASS++ here made the Deep
+    # Audit TOTAL depend on whether the machine has PyYAML (253 vs 252), so
+    # the README count (§0f/§0i exactness) rotted between machines.
     local _qv="$PROJECT_ROOT/scripts/vendored/skill-creator/scripts/quick_validate.py"
     if [ -f "$_qv" ] && python3 -c "import yaml" >/dev/null 2>&1; then
         if python3 "$_qv" "$PROJECT_ROOT/skills/$SKILL_NAME" >/dev/null 2>&1; then
-            echo "  ✅ official quick_validate.py cross-validates"
-            PASS=$((PASS+1))
+            echo "  ✅ official quick_validate.py cross-validates (advisory, not counted)"
         else
             local _qv_err
-            _qv_err=$(python3 "$_qv" "$PROJECT_ROOT/skills/$SKILL_NAME" 2>&1 | head -1)
+            _qv_err=$(python3 "$_qv" "$PROJECT_ROOT/skills/$SKILL_NAME" 2>&1 | head -1 || true)
             echo "  ⚠️  official quick_validate.py disagrees with bash inline: $_qv_err"
             ADVISORY=$((ADVISORY+1))
         fi
@@ -679,7 +700,7 @@ fi
 audit_section_4_changelog() {
 echo "§4. CHANGELOG 真实性"
 if [ -f "$DIR/CHANGELOG.md" ]; then
-    first_ver_line=$(grep "^## " "$DIR/CHANGELOG.md" | head -1)
+    first_ver_line=$(grep "^## " "$DIR/CHANGELOG.md" | head -1 || true)
     if echo "$first_ver_line" | grep -qF "## $VERSION "; then
         echo "  ✅ 顶部版本号 = $VERSION"
         PASS=$((PASS+1))
@@ -717,7 +738,7 @@ if [ -f "$DIR/$TAR_FILE" ]; then
     _S5_LIST=$(mktemp)
     LIST="$_S5_LIST"   # back-compat alias; existing checks reference $LIST
     trap 'rm -f "${_S5_LIST:-}"' RETURN
-    tar tzf "$DIR/$TAR_FILE" > "$LIST" 2>/dev/null
+    tar tzf "$DIR/$TAR_FILE" > "$LIST" 2>/dev/null || true
     check "含 install.sh"            grep -q "install.sh" "$LIST"
     check "含 README.md"              grep -q "README.md" "$LIST"
     # v0.9.7 (self-review F1): flat-layout projects (SKILL.md at root) use
@@ -745,13 +766,13 @@ if [ -f "$DIR/$TAR_FILE" ]; then
     # Bug #9 fix: detect memory/ dir leak (project-level AI session memory, not distributable)
     check_not "不含 memory/ 目录"        grep -qE "^${PROJECT_NAME}-${VERSION}/memory/" "$LIST"
     # Bug #13 fix: HANDOFF.md / HANDOFF.archive.md are project-private, must not be distributed
-    check_not "不含 HANDOFF.md"          grep -qE "^${PROJECT_NAME}-${VERSION}/HANDOFF\.md$" "$LIST"
-    check_not "不含 HANDOFF.archive.md"  grep -qE "^${PROJECT_NAME}-${VERSION}/HANDOFF\.archive\.md$" "$LIST"
+    check_not "不含 HANDOFF.md"          grep -qE "^${PROJECT_NAME}-${VERSION}/HANDOFFX?\.md$" "$LIST"
+    check_not "不含 HANDOFF.archive.md"  grep -qE "^${PROJECT_NAME}-${VERSION}/HANDOFFX?\.archive\.md$" "$LIST"
     # v1.9.6 (codex P2): handoff v2 working memory — prevention (release.sh
     # --exclude) AND detection. A stale/external tarball carrying any of
     # these must fail-closed here, same contract as HANDOFF.md above.
     check_not "不含 handoff v2 工作记忆" \
-        grep -qE "^${PROJECT_NAME}-${VERSION}/(GOTCHAS\.md$|Handoff_Logs/|Handoff_Logs\.archive/|Handoff_Decisions/|HANDOFF\.md\.bak$|HANDOFF\.md\.pre-v2-backup$)" "$LIST"
+        grep -qE "^${PROJECT_NAME}-${VERSION}/(GOTCHAS\.md$|Handoff_Logs/|Handoff_Logs\.archive/|Handoff_Decisions/|HANDOFF\.md\.bak$|HANDOFF\.md\.pre-v2-backup$|Handoffx_Logs/|Handoffx_Logs\.archive/|Handoffx_Decisions/|HANDOFFX\.md\.bak$|HANDOFFX\.md\.pre-v2-backup$)" "$LIST"
     # graphify knowledge graph (built FROM the private-memory set above) +
     # local Claude instruction file: prevention is release.sh rsync
     # --exclude (graphify-out, CLAUDE.md); this is the detection half —
@@ -770,8 +791,12 @@ if [ -f "$DIR/$TAR_FILE" ]; then
     # --exclude='.gitx' (prevention). The whitelist removed sanitizer
     # detection of it, so the fail-closed net MUST positively reject it here
     # (detection) — same prevent-AND-detect pairing as .github-publish-wt.
+    # Parity: every token in release.sh's rsync private-state excludes
+    # (.omc/, memory/, docs/superpowers/, REVIEW.md, GitHub_STANDARD_ANALYSIS.md,
+    # nested HANDOFF.md/GOTCHAS.md/Handoff_*) must also be detected here;
+    # extended in this one regex so the check COUNT stays constant.
     check_not "不含 private local state dotdirs" \
-        grep -qE "^${PROJECT_NAME}-${VERSION}/(\.1by1/|\.i18n-cache/|\.cache/|\.ssh/|\.aws/|\.env[^/]*|\.python-version|\.github-publish-wt/|\.gitx/)|^${PROJECT_NAME}-${VERSION}/.*graphify-out/|^${PROJECT_NAME}-${VERSION}/(.*/)?CLAUDE\.md$" "$LIST"
+        grep -qE "^${PROJECT_NAME}-${VERSION}/(\.1by1/|\.i18n-cache/|\.cache/|\.ssh/|\.aws/|\.env[^/]*|\.python-version|\.github-publish-wt/|\.gitx/|docs/superpowers/|REVIEW\.md$|GitHub_STANDARD_ANALYSIS\.md$)|^${PROJECT_NAME}-${VERSION}/(.*/)?(\.omc/|memory/|\.superpowers/)|^${PROJECT_NAME}-${VERSION}/.*graphify-out/|^${PROJECT_NAME}-${VERSION}/(.*/)?CLAUDE\.md$|^${PROJECT_NAME}-${VERSION}/(.*/)+(HANDOFFX?\.md|GOTCHAS\.md|Handoffx?_Logs/|Handoffx?_Decisions/)" "$LIST"
     rm -f "$LIST"
     trap - RETURN   # clear the §5-scoped RETURN trap before leaving the function
 fi
@@ -916,7 +941,7 @@ check ".skill 含 scripts/"       test -d "$TMP/$SKILL_NAME/scripts"
     fi
     if [ -d "$TMP/$SKILL_NAME" ] && [ -d "$PROJECT_ROOT/skills/$SKILL_NAME" ]; then
         diff_out=$(diff -r "$TMP/$SKILL_NAME" "$PROJECT_ROOT/skills/$SKILL_NAME" 2>&1 \
-                   | grep -v evals | grep -v "^Only in.*evals" || true)
+                   | _filter_evals_diff || true)
         if [ -z "$diff_out" ]; then
             echo "  ✅ .skill 与 skills/$SKILL_NAME/ 一致（除 evals/）"
             PASS=$((PASS+1))
@@ -1016,20 +1041,30 @@ echo ""
 # --- §9 双源脚本 byte-identical (v2.3 §8.1 #14) ---
 # S3-4: dual-source layout is MANDATORY; missing either side is a hard FAIL,
 # not a silent SKIP — byte-identity is the whole policy.
+# Filter allowed root-only drift from `diff -rq` output before flagging.
+# Allowed root-only: release-* (protected pipeline scripts, Gotcha #22) and
+# scrub-tarball.sh (optional project tooling, Gotcha #33). $1 = root scripts dir.
+# Defined as a FUNCTION — not an inline `case` inside $(…) — because bash 3.2
+# mis-parses a `case` nested in command substitution (the pattern's `)` is read
+# as the closing `)` of $(…)); a function body is parsed separately, keeping this
+# 3.2-portable. See check_dual_source() in release.sh for the matching rationale.
+_filter_dual_source_drift() {
+    local _root="$1" _ln
+    while IFS= read -r _ln; do
+        case "$_ln" in
+            "Only in ${_root}: release-"*) ;;
+            "Only in ${_root}: scrub-tarball.sh") ;;
+            *) printf '%s\n' "$_ln" ;;
+        esac
+    done
+}
+
 audit_section_9_dual_source() {
 echo "§9. 双源脚本一致性（v2.3 policy）"
 if [ -d "$PROJECT_ROOT/scripts" ] && [ -d "$PROJECT_ROOT/skills/$SKILL_NAME/scripts" ]; then
     SCRIPTS_ROOT="$PROJECT_ROOT/scripts"
     drift=$(diff -rq "$PROJECT_ROOT/scripts/" "$PROJECT_ROOT/skills/$SKILL_NAME/scripts/" 2>&1 \
-            | { while IFS= read -r _ln; do
-                    case "$_ln" in
-                        "Only in ${SCRIPTS_ROOT}: release-"*) ;;  # root-side release-* only: allowed
-                        # scrub-tarball.sh is OPTIONAL project tooling (Gotcha #33, v1.1.7);
-                        # see check_dual_source() in scripts/release.sh for rationale.
-                        "Only in ${SCRIPTS_ROOT}: scrub-tarball.sh") ;;
-                        *) printf '%s\n' "$_ln" ;;
-                    esac
-                done; } || true)
+            | _filter_dual_source_drift "$SCRIPTS_ROOT" || true)
     if [ -z "$drift" ]; then
         echo "  ✅ 根 scripts/ 与 skill bundle scripts/ byte-identical"
         PASS=$((PASS+1))
@@ -1227,16 +1262,18 @@ echo ""
 echo "§11k. install.sh 依赖完整性 (Codex parser perspective)"
 if [ -f "$DIR/install.sh" ]; then
     _INSTALL_DEPS_UNRESOLVED=()
+    # Strip whole-line + trailing comments BEFORE scanning so a documented
+    # example like `# cp "$SELF_DIR/foo.md" ...` does not produce a
+    # false-positive missing-dep failure (5th-pass review Important #1).
+    # Why up here: bash 3.2 lexes `< <( … )` bodies without comment
+    # awareness, so quotes in comments INSIDE the body break the parse
+    # ("bad substitution", Gotcha #94 family).
     while IFS= read -r dep; do
         [ -z "$dep" ] && continue
         if [ ! -e "$DIR/$dep" ]; then
             _INSTALL_DEPS_UNRESOLVED+=("$dep")
         fi
     done < <(
-        # Strip whole-line + trailing comments BEFORE scanning so a
-        # documented example like `# cp "$SELF_DIR/foo.md" ...` doesn't
-        # produce a false-positive missing-dep failure (5th-pass review
-        # Important #1).
         sed -E 's/[[:space:]]*#.*$//' "$DIR/install.sh" 2>/dev/null \
         | grep -oE '"\$\{?SELF_DIR\}?/[^"]+"' \
         | sed -E 's|^"\$\{?SELF_DIR\}?/||; s|"$||' \

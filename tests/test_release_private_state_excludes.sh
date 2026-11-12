@@ -27,11 +27,22 @@ echo "══ test_release_private_state_excludes.sh ══"
 # shippable input; rsync staging ignores .gitignore so it must be on the
 # explicit --exclude list or it leaks into the public source tarball
 # (codex P2, v1.9.6). Dual-source byte-identity covers the bundle copy.
-for pat in ".omc" ".1by1" ".i18n-cache" ".cache" ".env*" ".ssh" ".aws" ".python-version" ".github-publish-wt" ".gitx" "graphify-out" "CLAUDE.md"; do
+for pat in ".omc" ".1by1" ".i18n-cache" ".cache" ".env*" ".ssh" ".aws" ".python-version" ".github-publish-wt" ".gitx" "graphify-out" "CLAUDE.md" "HANDOFFX.md" "Handoffx_Logs" "Handoffx_Decisions"; do
     if grep -Fq -- "--exclude='$pat'" "$RELEASE_SH" || grep -Fq -- "--exclude=\"$pat\"" "$RELEASE_SH"; then
         ok "release.sh excludes $pat"
     else
         fail "release.sh does not exclude $pat from source tarball staging"
+    fi
+done
+
+# ── Test 1b: .superpowers/ (SDD controller workspace: briefs, review diffs,
+# reports) excluded in BOTH copies — it only stayed out of staging because a
+# machine-global git exclude happened to cover it, which rsync never reads.
+for rs in "$RELEASE_SH" "$PROJECT_ROOT/skills/gitx-release/scripts/release.sh"; do
+    if grep -Fq -- "--exclude='.superpowers'" "$rs"; then
+        ok "${rs#"$PROJECT_ROOT"/} excludes .superpowers"
+    else
+        fail "${rs#"$PROJECT_ROOT"/} does not exclude .superpowers from staging"
     fi
 done
 
@@ -64,10 +75,13 @@ if grep -qF '不含 handoff v2 工作记忆' "$AUDIT_SH" \
    && grep -qF 'GOTCHAS\.md$' "$AUDIT_SH" \
    && grep -qF 'Handoff_Logs/' "$AUDIT_SH" \
    && grep -qF 'Handoff_Decisions/' "$AUDIT_SH" \
-   && grep -qF 'HANDOFF\.md\.pre-v2-backup$' "$AUDIT_SH"; then
+   && grep -qF 'HANDOFF\.md\.pre-v2-backup$' "$AUDIT_SH" \
+   && grep -qF 'Handoffx_Logs/' "$AUDIT_SH" \
+   && grep -qF 'Handoffx_Decisions/' "$AUDIT_SH" \
+   && grep -qF 'HANDOFFX\.md\.pre-v2-backup$' "$AUDIT_SH"; then
     ok "release-audit.sh fail-closed net rejects handoff v2 working-memory files"
 else
-    fail "release-audit.sh omits handoff v2 files (GOTCHAS/Handoff_Logs/Handoff_Decisions/pre-v2-backup) — fail-closed gap"
+    fail "release-audit.sh omits handoff v2 files (GOTCHAS/Handoff_Logs/Handoff_Decisions/pre-v2-backup, v4 Handoffx_Logs/Handoffx_Decisions/HANDOFFX pre-v2-backup) — fail-closed gap"
 fi
 
 # ── Test 2d: fail-closed net must ALSO reject .github-publish-wt ──────────
@@ -109,12 +123,13 @@ fi
 # Behavioral non-vacuity: the depth-agnostic pattern MUST match nested +
 # top-level private-state and MISS a benign nested path.
 _psf_re='^demo-1.0.0/(\.1by1/|\.i18n-cache/|\.cache/|\.ssh/|\.aws/|\.env[^/]*|\.python-version|\.github-publish-wt/)|^demo-1.0.0/.*graphify-out/|^demo-1.0.0/(.*/)?CLAUDE\.md$'
-_psf_hits=$(printf '%s\n' \
+_psf_lines=$(printf '%s\n' \
   'demo-1.0.0/scripts/ok.sh' \
   'demo-1.0.0/skills/demo/CLAUDE.md' \
   'demo-1.0.0/docs/a/graphify-out/g.json' \
-  'demo-1.0.0/CLAUDE.md' | grep -cE "$_psf_re" || true)
-if [ "$_psf_hits" = 3 ] && ! printf '%s\n' 'demo-1.0.0/scripts/ok.sh' | grep -qE "$_psf_re"; then
+  'demo-1.0.0/CLAUDE.md')
+_psf_hits=$(grep -cE "$_psf_re" <<<"$_psf_lines" || true)
+if [ "$_psf_hits" = 3 ] && ! grep -qE "$_psf_re" <<<'demo-1.0.0/scripts/ok.sh'; then
     ok "private-state detection: nested skills/.../CLAUDE.md + docs/.../graphify-out/ + top-level caught (3), benign missed"
 else
     fail "private-state depth-agnostic detection wrong (hits=$_psf_hits, expected 3 + benign miss)"
@@ -132,11 +147,43 @@ else
     fail "release-audit.sh omits .gitx/ from private-state regex — whitelisted-but-undetected gap"
 fi
 # Behavioral non-vacuity: .gitx/ under the release root must match the regex.
-if printf '%s\n' 'demo-1.0.0/.gitx/GITHUB_RELEASE_SOP.md' \
-   | grep -qE '^demo-1.0.0/(\.1by1/|\.i18n-cache/|\.cache/|\.ssh/|\.aws/|\.env[^/]*|\.python-version|\.github-publish-wt/|\.gitx/)'; then
+if grep -qE '^demo-1.0.0/(\.1by1/|\.i18n-cache/|\.cache/|\.ssh/|\.aws/|\.env[^/]*|\.python-version|\.github-publish-wt/|\.gitx/)' <<<'demo-1.0.0/.gitx/GITHUB_RELEASE_SOP.md'; then
     ok "private-state detection: .gitx/ payload caught (non-vacuous)"
 else
     fail "private-state regex does not actually match .gitx/ payload"
+fi
+
+# ── Test 2h: detection regex parity with release.sh's rsync exclude list ──
+# Why: release.sh excludes .omc/, memory/, docs/superpowers/, REVIEW.md,
+# GitHub_STANDARD_ANALYSIS.md and NESTED HANDOFF.md/GOTCHAS.md/Handoff_*
+# (prevention), but the audit's fail-closed net lacked them (detection gap).
+# Tested against the REAL regex extracted from release-audit.sh — not a copy —
+# so drift between the two cannot hide. Boundary cases guard over-matching.
+_re=$(grep -oE 'grep -qE "[^"]*"' "$AUDIT_SH" | grep graphify-out | head -1 || true)
+_re=${_re#grep -qE \"}; _re=${_re%\"}
+_re=${_re//\$\{PROJECT_NAME\}-\$\{VERSION\}/p-v1}
+if [ -z "$_re" ]; then
+    fail "could not extract the private-state regex from release-audit.sh"
+else
+    for p in p-v1/.omc/x p-v1/memory/x p-v1/docs/superpowers/spec.md p-v1/REVIEW.md \
+             p-v1/GitHub_STANDARD_ANALYSIS.md p-v1/skills/s/HANDOFF.md \
+             p-v1/docs/GOTCHAS.md p-v1/a/Handoff_Logs/x \
+             p-v1/a/.omc/x p-v1/a/memory/x \
+             p-v1/.superpowers/x p-v1/a/.superpowers/x \
+             p-v1/skills/s/HANDOFFX.md p-v1/a/Handoffx_Logs/x p-v1/b/Handoffx_Decisions/y; do
+        if grep -qE "$_re" <<<"$p"; then
+            ok "private-state regex catches $p"
+        else
+            fail "private-state regex MISSES $p (release.sh excludes it; audit must detect it)"
+        fi
+    done
+    for p in p-v1/docs/superpowers-guide.md p-v1/README.md p-v1/scripts/memory-notes.md; do
+        if grep -qE "$_re" <<<"$p"; then
+            fail "private-state regex over-matches benign $p"
+        else
+            ok "private-state regex ignores benign $p"
+        fi
+    done
 fi
 
 echo ""

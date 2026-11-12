@@ -21,8 +21,8 @@ AUDIT="$ROOT/scripts/release-audit.sh"
 echo "=== test_audit_mktemp_safe: predictable temp path guard ==="
 
 # No hard-coded /tmp/ assignment for the tarlist variable
-check "release-audit.sh: no LIST=/tmp/ hard-coded path" \
-    bash -c '! grep -qE "LIST=/tmp/" '"\"$AUDIT\""
+check "release-audit.sh: no hard-coded temp path for LIST" \
+    bash -c '! grep -qE "LIST=/tm[p]/" '"\"$AUDIT\""
 
 # Must use mktemp at least once for the tarlist (already uses mktemp for _SEC_LOG)
 check "release-audit.sh: LIST assigned via mktemp" \

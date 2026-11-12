@@ -23,7 +23,7 @@ echo "══ test_release_notes_determinism.sh ══"
 if grep -qF 'RELEASE_DATE=$(date +%Y-%m-%d)' "$RELEASE_SH"; then
     # Bare assignment exists — verify it's inside an if-block (guarded fallback)
     _block=$(awk '/^[[:space:]]*if \[ -z "?\$\{?RELEASE_DATE/,/^[[:space:]]*fi/' "$RELEASE_SH")
-    if echo "$_block" | grep -qF 'RELEASE_DATE=$(date +%Y-%m-%d)'; then
+    if grep -qF 'RELEASE_DATE=$(date +%Y-%m-%d)' <<<"$_block"; then
         ok "release.sh: bare wall-clock fallback is guarded by if [ -z \"\$RELEASE_DATE\" ]"
     else
         fail "release.sh: bare RELEASE_DATE=\$(date +%Y-%m-%d) is unconditional"
@@ -43,9 +43,12 @@ else
 fi
 
 # ── Test 3: SOURCE_DATE_EPOCH appears as RELEASE_DATE fallback ─────────────
-# Capture awk output first to avoid SIGPIPE with set -o pipefail.
+# Capture awk output first to avoid SIGPIPE with set -o pipefail. The block
+# is ~50 KB (the range reopens on later RELEASE_DATE mentions), so feed grep
+# via here-string: `echo | grep -q` SIGPIPEs echo once it outgrows the pipe
+# buffer, and pipefail turns that into a flaky false FAIL.
 _EPOCH_BLOCK=$(awk '/RELEASE_DATE/,/PROJECT_TITLE/' "$RELEASE_SH")
-if echo "$_EPOCH_BLOCK" | grep -qE 'SOURCE_DATE_EPOCH'; then
+if grep -qE 'SOURCE_DATE_EPOCH' <<< "$_EPOCH_BLOCK"; then
     ok "release.sh: SOURCE_DATE_EPOCH used as RELEASE_DATE fallback"
 else
     fail "release.sh: SOURCE_DATE_EPOCH not near RELEASE_DATE assignment"

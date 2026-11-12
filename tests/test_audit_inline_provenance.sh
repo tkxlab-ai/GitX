@@ -20,7 +20,7 @@ echo "══ test_audit_inline_provenance.sh ══"
 # ── Test 1: release.sh sets _GITX_INTERNAL_INLINE=1 before invoking audit ──
 # Look inside run_deep_audit() for the env export adjacent to --inline.
 block=$(awk '/^run_deep_audit\(\)/,/^\}/' "$RELEASE")
-if echo "$block" | grep -qE '_GITX_INTERNAL_INLINE.*=.*1|_GITX_INTERNAL_INLINE="1"'; then
+if grep -qE '_GITX_INTERNAL_INLINE.*=.*1|_GITX_INTERNAL_INLINE="1"' <<<"$block"; then
     ok "release.sh sets _GITX_INTERNAL_INLINE=1 in run_deep_audit"
 else
     fail "release.sh does NOT set _GITX_INTERNAL_INLINE — audit accepts --inline from any caller"
@@ -37,17 +37,17 @@ fi
 # Probe with a nonexistent version so audit aborts early but argv parsing
 # fires first. Expect a warning about untrusted --inline invocation.
 warn_out=$(env -u _GITX_INTERNAL_INLINE bash "$AUDIT" --inline v99.99.99 2>&1 | head -10 || true)
-if echo "$warn_out" | grep -qiE 'inline.*ignored|inline.*untrusted|provenance|_GITX_INTERNAL_INLINE'; then
+if grep -qiE 'inline.*ignored|inline.*untrusted|provenance|_GITX_INTERNAL_INLINE' <<<"$warn_out"; then
     ok "audit warns when --inline used without _GITX_INTERNAL_INLINE env"
 else
     fail "audit silently accepts --inline from any caller (no warning)"
     echo "     stderr/stdout:"
-    echo "$warn_out" | head -5 | sed 's/^/       /'
+    head -5 <<<"$warn_out" | sed 's/^/       /'
 fi
 
 # ── Test 4: behavioral — --inline WITH env produces no warning ──────────
 no_warn_out=$(_GITX_INTERNAL_INLINE=1 bash "$AUDIT" --inline v99.99.99 2>&1 | head -10 || true)
-if echo "$no_warn_out" | grep -qiE 'inline.*ignored|inline.*untrusted|provenance'; then
+if grep -qiE 'inline.*ignored|inline.*untrusted|provenance' <<<"$no_warn_out"; then
     fail "audit warns even when env IS set — should be silent"
 else
     ok "audit silent when --inline used with _GITX_INTERNAL_INLINE=1"

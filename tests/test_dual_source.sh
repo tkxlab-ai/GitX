@@ -101,11 +101,15 @@ else
     ok "skills/gitx-release is trackable by git"
 fi
 
-# ── Test 7: CI must fail closed if tracked mirror is missing ───────────────
-if grep -q 'skills/gitx-release/scripts is required' "$CI_WORKFLOW"; then
-    ok "CI fails closed when dual-source mirror scripts are missing"
+# ── Test 7: CI uses generic-safe dual-source pattern (absent → skip, present → enforce) ──
+# v1.12.3 hot-fix (Gotcha #93): CI workflow no longer fails when public release artifact
+# layout (no skills/ mirror) is used. Generic-safe pattern: absent → skip; present → enforce drift.
+# Verify: CI checks [ ! -d "skills/gitx-release/scripts" ] and exits 0 when absent.
+if grep -q '\[ ! -d "skills/gitx-release/scripts" \]' "$CI_WORKFLOW" \
+    && grep -q 'echo.*skip.*public release artifact layout' "$CI_WORKFLOW"; then
+    ok "CI uses generic-safe dual-source pattern (absent → skip)"
 else
-    fail "CI silently skips dual-source check when mirror scripts are missing"
+    fail "CI workflow missing generic-safe pattern; reverted from v1.12.3 hot-fix?"
 fi
 
 # ── Test 8: release.sh must fail closed if either script source is missing ─

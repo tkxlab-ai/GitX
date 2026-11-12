@@ -23,18 +23,18 @@ if [ -f "$RA" ]; then
     _blk=$(awk '/^# --- §0l published-layout ref gate/,/^# Per-section summary/' "$RA")
     [ -n "$_blk" ] && ok "§0l block present in release-audit.sh" \
         || fail "§0l block missing from release-audit.sh"
-    if printf '%s\n' "$_blk" | grep -qE '_track_(start|end)'; then
+    if grep -qE '_track_(start|end)' <<<"$_blk"; then
         fail "§0l is NOT non-counting — contains _track_* (Gotcha #62 TOTAL-rot)"
     else
         ok "§0l non-counting — no _track_* in its block (TOTAL invariant)"
     fi
-    printf '%s\n' "$_blk" | grep -q 'PUBLAYOUT_FAIL=0' \
+    grep -q 'PUBLAYOUT_FAIL=0' <<<"$_blk" \
         && ok "§0l declares PUBLAYOUT_FAIL standalone flag" \
         || fail "§0l missing PUBLAYOUT_FAIL declaration"
     grep -qE 'if \[ "\$FAIL" -eq 0 \].*PUBLAYOUT_FAIL:-0.*-eq 0 \]; then' "$RA" \
         && ok "PUBLAYOUT_FAIL wired into final Deep-Audit decision" \
         || fail "PUBLAYOUT_FAIL NOT in final-exit condition (gate is vacuous)"
-    printf '%s\n' "$_blk" | grep -q 'generic-safe SKIP' \
+    grep -q 'generic-safe SKIP' <<<"$_blk" \
         && ok "§0l is generic-safe (SKIP when no source tarball — Gotcha #51)" \
         || fail "§0l missing generic-safe SKIP path"
 else

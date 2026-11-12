@@ -40,33 +40,36 @@ else
     exit 2
 fi
 
+# Why LABELS is index-parallel: the loop reads LABELS[$i] under set -u, so
+# every PATTERNS entry needs a label at the same index.
 PATTERNS=(
     'sk-proj-[A-Za-z0-9_-]{20,}'
     'sk-[A-Za-z0-9]{48,}'
-    'sk-ant-(api|admin)[0-9]+-[A-Za-z0-9_-]{20,}'
+    'sk-ant-[a-z]+[0-9]+-[A-Za-z0-9_-]{20,}'
     'ghp_[A-Za-z0-9]{36,}'
     'gho_[A-Za-z0-9]{36,}'
     'ghs_[A-Za-z0-9]{36,}'
     'ghu_[A-Za-z0-9]{36,}'
-    'github_pat_[A-Z0-9_]{82}'
+    'github_pat_[A-Za-z0-9_]{82}'
     'AKIA[0-9A-Z]{16}'
     'ASIA[0-9A-Z]{16}'
-    'aws_secret_access_key[[:space:]]*=[[:space:]]*[A-Za-z0-9/+=]{40}'
+    '[Aa][Ww][Ss]_?[Ss][Ee][Cc][Rr][Ee][Tt]_?[Aa][Cc][Cc][Ee][Ss][Ss]_?[Kk][Ee][Yy]["'"'"']?[[:space:]]*[=:][[:space:]]*["'"'"']?[A-Za-z0-9/+=]{40}'
     'xox[baprs]-[A-Za-z0-9-]{10,}'
     'sbp_[A-Za-z0-9]{32,}'
     'npm_[A-Za-z0-9]{36,}'
     'pypi-[A-Za-z0-9_-]{16,}'
-    '-----BEGIN [A-Z ]+PRIVATE KEY-----'
+    '-----BEGIN [A-Z ]*PRIVATE KEY( BLOCK)?-----'
     'sk_(live|test)_[A-Za-z0-9]{24,}'
     'Bearer[[:space:]]+eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+'
     '\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b'
     '"type"[[:space:]]*:[[:space:]]*"service_account"'
     'DefaultEndpointsProtocol=https;AccountName=[A-Za-z0-9]+;AccountKey=[A-Za-z0-9/+=]{60,}'
+    'sk-svcacct-[A-Za-z0-9_-]{20,}'
 )
 LABELS=(
     'OpenAI project key'
     'OpenAI classic key'
-    'Anthropic API key'
+    'Anthropic API key / OAuth token'
     'GitHub personal token'
     'GitHub OAuth token'
     'GitHub server token'
@@ -74,25 +77,29 @@ LABELS=(
     'GitHub fine-grained PAT'
     'AWS access key ID'
     'AWS temporary access key ID (STS)'
-    'AWS secret access key (key=value)'
+    'AWS secret access key (key=value / key: value)'
     'Slack token'
     'Supabase service role key'
     'npm auth token'
     'PyPI API token'
-    'Private key header'
+    'Private key header (PEM / PKCS#8 / OpenSSH / PGP)'
     'Stripe secret key'
     'JWT bearer token (with Bearer prefix)'
     'JWT bearer token (bare)'
     'GCP service-account JSON marker'
     'Azure storage connection string'
+    'OpenAI service-account key'
 )
 
 FOUND=0
 for i in "${!PATTERNS[@]}"; do
     pattern="${PATTERNS[$i]}"
     label="${LABELS[$i]}"
-    if grep -qE -- "$pattern" "$SRC"; then
-        line=$(grep -nE -- "$pattern" "$SRC" | head -1 | cut -d: -f1)
+    # -a + LC_ALL=C: search binary input byte-wise (release-sanitize.sh feeds
+    # every regular file here, binaries included); without them grep reports
+    # "Binary file matches" or stops at invalid UTF-8.
+    if LC_ALL=C grep -aqE -- "$pattern" "$SRC"; then
+        line=$(LC_ALL=C grep -anE -- "$pattern" "$SRC" | head -1 | LC_ALL=C cut -d: -f1)
         printf '⚠️  %s detected (line %s)\n' "$label" "$line" >&2
         FOUND=1
     fi

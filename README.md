@@ -21,8 +21,8 @@ same standard it imposes on others: GitX releases GitX.
 
 <!-- gitx:managed:badges -->
 [![License](https://img.shields.io/badge/license-MIT-yellow.svg?style=for-the-badge)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-111%20suites%20%2F%200%20fail-brightgreen.svg?style=for-the-badge&logo=githubactions&logoColor=white)](tests/run_all.sh)
-[![Deep Audit](https://img.shields.io/badge/deep%20audit-246%2F0%2F1-brightgreen.svg?style=for-the-badge&logo=shieldsdotio&logoColor=white)](scripts/release-audit.sh)
+[![Tests](https://img.shields.io/badge/tests-121%20suites%20%2F%200%20fail-brightgreen.svg?style=for-the-badge&logo=githubactions&logoColor=white)](tests/run_all.sh)
+[![Deep Audit](https://img.shields.io/badge/deep%20audit-255%2F0%2F1-brightgreen.svg?style=for-the-badge&logo=shieldsdotio&logoColor=white)](scripts/release-audit.sh)
 [![CLIs](https://img.shields.io/badge/CLI-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20OpenCode%20%C2%B7%20Gemini-6366f1.svg?style=for-the-badge&logo=anthropic&logoColor=white)](#quick-start)
 [![Shell](https://img.shields.io/badge/bash-3.2%2B%20POSIX-06b6d4.svg?style=for-the-badge&logo=gnubash&logoColor=white)](SKILL.md)
 [![Release](https://img.shields.io/github/v/release/tkxlab-ai/GitX?sort=semver&style=for-the-badge&logo=github&logoColor=white&color=gold)](https://github.com/tkxlab-ai/GitX/releases)
@@ -32,7 +32,7 @@ same standard it imposes on others: GitX releases GitX.
 </div>
 
 <!-- gitx:managed:build-metrics -->
-> 🛠 **Live build metrics** — Version **v1.12.3** · Released **2026-05-20** · Engineered with **Claude (Opus/Sonnet) · Codex · Gemini** across hundreds of sessions · Cumulative AI tokens since the first prototype (v0.9.4, 2026-04-22), estimated: **≈ 300M+ input/output + ≈ 3B+ cached** · Span: **~63 releases across 28 days** (2026-04-22 → 2026-05-20)
+> 🛠 **Live build metrics** — Version **v1.13.0** · Released **2026-11-02** · Engineered with **Claude (Opus/Sonnet) · Codex · Gemini** across hundreds of sessions · Cumulative AI tokens since the first prototype (v0.9.4, 2026-04-22), estimated: **≈ 300M+ input/output + ≈ 3B+ cached** · Span: **~63 releases across 28 days** (2026-04-22 → 2026-05-20)
 <!-- /gitx:managed:build-metrics -->
 
 **[Documentation](#table-of-contents) · [Changelog](CHANGELOG.md) · [Report a bug](https://github.com/tkxlab-ai/GitX/issues) · [Security](SECURITY.md)**
@@ -42,12 +42,14 @@ same standard it imposes on others: GitX releases GitX.
 ## What's New
 
 <!-- gitx:managed:whats-new -->
-**v1.12.3 — 2026-05-20**
+**v1.13.0 — 2026-11-02**
 
-- README hero img: absolute `raw/main` URL → relative path (`docs/assets/release-demo.jpeg`) on both EN and CN README. Closes Codex's re-raised [medium] (Gotcha #78) by removing the non-reproducible main-pinned URL; strong reproducibility achieved — every release tag's README now points at that tag's own hero asset. GitHub server-side rewrites relative img src → root-relative URL on render, so github.com README pages render correctly and the raw fetch path resolves; verified via throwaway branch experiment/relative-hero (raw redirect to raw.githubusercontent.com 200; blob view HTML emits the rewritten src).
-- Flattened release dir + full tarball were missing `docs/assets/release-demo.jpeg` — the new relative hero ref was unresolved in the flattened artifact (github.com worked via server-side rewrite, but users opening the flattened README locally saw a broken image). `release.sh:flatten_docs()` now carries `docs/assets/` at the README-referenced path; caught by Codex v1.12.3 review round-1 [medium] before public publish.
-- `tests/test_docs_audit.sh` T15-hero (b'): rewrite from the "absolute-URL hero is H10-skipped" world to the "relative-path hero + asset restored under PROJECT_ROOT" world. H10 strict now resolves the relative ref (was previously skipped). Test 38/0 still all-green; H10 strictness still non-vacuously tested via the deliberately-injected broken ref in (b).
-- `release-audit.sh` adds `§0m flattened hero-asset gate` (non-counting): the manifest-declared `hero_asset` MUST resolve under the flattened release dir so the same class never silently ships again. Generic-safe — no manifest or no `hero_asset` declared → SKIP. New `tests/test_release_dist_hero_asset.sh` fences both static contract (release.sh + audit gate wired) and functional dist layout (flattened dir + full tarball carry the hero at the declared path).
+- `gitx-marketplace` CLI (subcommands `register` / `bump` / `list`) for self-service registration with the TKX central marketplace.
+- `gitx-release` post-release best-effort sync hook — bumps the marketplace version automatically when `.gitx/marketplace-target` marker is present.
+- `--skip-marketplace` wrapper flag for opt-out per release.
+- Opt-in post-release Gitea release step (`scripts/gitx-gitea-release.sh`): with a `.gitx/gitea-release-target` marker (`HOST[:SSH_PORT]/OWNER/REPO`), `gitx-release` pushes the flattened, checksum-verified release dir as `main` plus the version tag to a private Gitea release repo over SSH, then creates the Gitea Release with the `.skill` / full tarball / `checksums.txt` / `install.sh` assets. The Release step needs a `~/.netrc` entry for the host (never stored in the repo); best-effort hook, skip per run with `--skip-gitea-release`.
+- `推送并发布` / `push and publish` trigger (SKILL.md): on that phrase the agent runs `git push origin main` (fast-forward only; a rejected push stops the chain) and then `scripts/gitx-gitea-release.sh --version vX.Y.Z`, switching to `--force` when the remote tag already exists with different checksums. No script pushes by itself; the GitHub side stays manual.
+- `install.sh` now creates `~/.agents/bin/gitx-marketplace` PATH symlink in addition to the existing skill bundle install.
 <!-- /gitx:managed:whats-new -->
 
 Full history (63 releases) → [`CHANGELOG.md`](CHANGELOG.md).
@@ -95,7 +97,7 @@ $ /gitx-release --version v1.2.0
 ▸ package ................... git_release_skill-v1.2.0.skill + tarball + SBOM
 ▸ secret scan ............... .sanitize-ignore-aware → clean ✅
 ▸ doc flatten ............... commands/ + references/ → Release/
-▸ Deep Audit ................ ✅ 246 / ❌ 0 / ➖ 1   (§8 latest = expected SKIP; TOTAL == live total)
+▸ Deep Audit ................ ✅ 254 / ❌ 0 / ➖ 1 / TOTAL 255   (§8 latest = expected SKIP; TOTAL == live total)
 ▸ checksums ................. sha256 × 6 written
 RELEASE READY · nothing pushed (push is user-manual by policy)
 ```
@@ -108,7 +110,7 @@ RELEASE READY · nothing pushed (push is user-manual by policy)
 
 **The problem.** Releasing is a ritual: bump the version everywhere, run the tests, scan for secrets, flatten docs into the bundle, prove integrity, audit the result, mirror to a public host without leaking the private one. Every step is skippable, and every skipped step is a future incident — a stale README, a leaked token, an unreproducible tarball, a tag with no release.
 
-**The approach — policy as code.** GitX's contract (`references/TKX_Git_Release_policy_and_process.md`) is not advisory prose; each clause is a runtime shell assertion. A violated policy does not warn — it **aborts the build**. The audit is 246 executable checks with a three-state result where `TOTAL = PASS + FAIL + SKIP` must hold exactly.
+**The approach — policy as code.** GitX's contract (`references/TKX_Git_Release_policy_and_process.md`) is not advisory prose; each clause is a runtime shell assertion. A violated policy does not warn — it **aborts the build**. The audit is 255 executable checks with a three-state result where `TOTAL = PASS + FAIL + SKIP` must hold exactly.
 
 **What makes it different:**
 
@@ -198,6 +200,7 @@ Two install paths.
 
 - `/gitx-release` — the skill itself
 - `/gitx-init`
+- `/gitx-marketplace`
 - `/gitx-sop`
 
 **B. Plugin marketplace** — `/plugin marketplace add tkxlab-ai/marketplace` then `/plugin install gitx@tkx-skills` (`/gitx` colon namespace)
@@ -375,7 +378,7 @@ Every gate reports one of five states; the meaning is fixed project-wide so outp
 Pure-bash harness, zero external test dependencies. `bash tests/run_all.sh` runs everything; the pipeline re-runs it as a release gate.
 
 <!-- gitx:managed:suite-count -->
-111
+121
 <!-- /gitx:managed:suite-count -->
 
 **Real-Machine Test Results** — full suite green · smoke 6/6 · Deep Audit strict PASS · `shasum -c` OK. The exact suite count above is machine-derived from the live test tree and re-verified every release (it never goes stale by hand).

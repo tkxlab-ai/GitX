@@ -46,7 +46,7 @@ fi
 # syntax belongs in the SKILL.md body to avoid Codex metadata truncation.
 # v1.1.0: trigger renamed /GitX-release → /gitx-release.
 for trig in "/gitx-release" "release" "audit" "scan"; do
-    if echo "$desc" | grep -qF "$trig"; then
+    if grep -qF "$trig" <<<"$desc"; then
         ok "description still mentions '$trig'"
     else
         fail "description lost trigger '$trig' — S3-2 must preserve semantics"

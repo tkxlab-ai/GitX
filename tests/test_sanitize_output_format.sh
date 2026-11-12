@@ -41,7 +41,7 @@ assert_contains() {
     local desc="$1" needle="$2"; shift 2
     local out
     out=$("$@" 2>&1)
-    if printf '%s' "$out" | grep -qF -- "$needle"; then
+    if grep -qF -- "$needle" <<<"$out"; then
         echo "  ✅ $desc"
         PASS=$((PASS+1))
     else
@@ -57,7 +57,7 @@ assert_not_contains() {
     local desc="$1" needle="$2"; shift 2
     local out
     out=$("$@" 2>&1)
-    if printf '%s' "$out" | grep -qF -- "$needle"; then
+    if grep -qF -- "$needle" <<<"$out"; then
         echo "  ❌ $desc — should NOT contain '$needle'"
         echo "  ----- output -----"
         printf '%s\n' "$out" | sed 's/^/  | /'

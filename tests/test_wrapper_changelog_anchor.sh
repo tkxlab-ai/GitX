@@ -68,7 +68,7 @@ cat > "$FIXTURE/Release/CHANGELOG.md" <<'EOF'
 EOF
 ensure_changelog_entry "v1.0.1" >/dev/null 2>&1 || true
 LINE5=$(sed -n '5p' "$FIXTURE/Release/CHANGELOG.md")
-if echo "$LINE5" | grep -q '^## v1.0.1'; then
+if grep -q '^## v1.0.1' <<<"$LINE5"; then
     ok "case 1 (4-line header): new entry at line 5 (existing position preserved)"
 else
     fail "case 1: expected '## v1.0.1' at line 5, got: $LINE5"
@@ -90,7 +90,7 @@ cat > "$FIXTURE/Release/CHANGELOG.md" <<'EOF'
 EOF
 ensure_changelog_entry "v0.0.2" >/dev/null 2>&1 || true
 LINE3=$(sed -n '3p' "$FIXTURE/Release/CHANGELOG.md")
-if echo "$LINE3" | grep -q '^## v0.0.2'; then
+if grep -q '^## v0.0.2' <<<"$LINE3"; then
     ok "case 2 (2-line header): new entry at line 3 (anchor-correct, mac-release fixed)"
 else
     fail "case 2: expected '## v0.0.2' at line 3, got: $LINE3"

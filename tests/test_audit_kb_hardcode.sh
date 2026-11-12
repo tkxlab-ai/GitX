@@ -20,21 +20,21 @@ section=$(awk '/^echo "§10\./{flag=1} flag; /^echo "§11\./{flag=0}' "$AUDIT_SH
 
 # ── Test 1: KB-hardcode branch increments FAIL (not just ⚠️) ──────────────
 kb_branch=$(echo "$section" | awk '/grep -qE .\[0-9\]\+ KB/{flag=1; next} flag && /else/{flag=0} flag')
-if echo "$kb_branch" | grep -q 'FAIL=\$((FAIL+1))'; then
+if grep -q 'FAIL=\$((FAIL+1))' <<<"$kb_branch"; then
     ok "§10 KB-hardcode branch increments FAIL (S3-6)"
 else
     fail "§10 KB-hardcode branch does NOT increment FAIL (S3-6: always-green warn)"
 fi
 
 # ── Test 2: uses ❌ marker, not just ⚠️ ────────────────────────────────────
-if echo "$kb_branch" | grep -q '❌'; then
+if grep -q '❌' <<<"$kb_branch"; then
     ok "§10 KB-hardcode branch uses ❌ marker"
 else
     fail "§10 KB-hardcode branch uses soft ⚠️ only (S3-6: should be hard fail)"
 fi
 
 # ── Test 3: title no longer says 软警告 ────────────────────────────────────
-if echo "$section" | head -1 | grep -q '软警告'; then
+if head -1 <<<"$section" | grep -q '软警告'; then
     fail "§10 title still says 软警告 — S3-6 requires hard gate"
 else
     ok "§10 title is hard-gate (no '软警告')"

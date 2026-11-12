@@ -46,7 +46,7 @@ fi
 # audit reads readlink(latest); new value should be matched against
 # ${PROJECT_NAME}-${VERSION}, not bare ${VERSION}.
 block=$(awk '/^# --- §8 Release\/latest/,/^# --- §9/' "$AUDIT_SH")
-if echo "$block" | grep -qE '\$\{?PROJECT_NAME\}?-\$\{?VERSION\}?|\$\{PROJECT_NAME\}-\$\{VERSION\}'; then
+if grep -qE '\$\{?PROJECT_NAME\}?-\$\{?VERSION\}?|\$\{PROJECT_NAME\}-\$\{VERSION\}' <<<"$block"; then
     ok "audit §8 compares latest against \$PROJECT_NAME-\$VERSION"
 else
     fail "audit §8 still compares against bare \$VERSION"
@@ -56,7 +56,7 @@ fi
 LATEST_TARGET=$(readlink "$PROJECT_ROOT/Release/latest" 2>/dev/null || echo "")
 if [ -z "$LATEST_TARGET" ]; then
     ok "(skip) Release/latest absent — cannot verify post-release format"
-elif echo "$LATEST_TARGET" | grep -qE '^[a-z_][a-z0-9_]*-v[0-9]+\.[0-9]+'; then
+elif grep -qE '^[a-z_][a-z0-9_]*-v[0-9]+\.[0-9]+' <<<"$LATEST_TARGET"; then
     ok "Release/latest target '$LATEST_TARGET' follows new <name>-<version> format"
 else
     fail "Release/latest target '$LATEST_TARGET' uses legacy bare-version format"

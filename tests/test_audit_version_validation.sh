@@ -25,11 +25,11 @@ fi
 test_reject() {
     local label="$1" ver="$2"
     out=$(bash "$AUDIT" "$ver" 2>&1 || true)
-    if echo "$out" | grep -qiE 'invalid version|expected v'; then
+    if grep -qiE 'invalid version|expected v' <<<"$out"; then
         ok "$label: '$ver' rejected"
     else
         fail "$label: '$ver' NOT rejected (audit accepted invalid input)"
-        echo "       output head: $(echo "$out" | head -1)"
+        echo "       output head: $(head -1 <<<"$out")"
     fi
 }
 
@@ -41,7 +41,7 @@ test_reject "wildcard chars" "v1.*.0"
 
 # Behavioral: valid version passes the regex (other audit failures are fine)
 out=$(bash "$AUDIT" v99.99.99 2>&1 || true)
-if echo "$out" | grep -qiE 'invalid version'; then
+if grep -qiE 'invalid version' <<<"$out"; then
     fail "valid 'v99.99.99' rejected as invalid"
 else
     ok "valid 'v99.99.99' passes version regex (audit may fail elsewhere — that's OK)"

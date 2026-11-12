@@ -8,8 +8,8 @@
     {
       "name": "gitx",
       "source": "./",
-      "description": "GitX \u2014 cross-project release pipeline (release / audit / scan / gitx-init / gitx-sop).",
-      "version": "1.12.3",
+      "description": "GitX — cross-project release pipeline (release / audit / scan / gitx-init / gitx-sop).",
+      "version": "1.13.0",
       "author": {
         "name": "TKXLAB.AI"
       },
@@ -23,5 +23,6 @@
         "sbom"
       ]
     }
-  ]
+  ],
+  "version": "1.13.0"
 }

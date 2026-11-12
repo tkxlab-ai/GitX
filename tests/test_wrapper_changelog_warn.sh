@@ -32,6 +32,16 @@ else
     fail "wrapper does not warn when CHANGELOG still has auto-line at end of run"
 fi
 
+# Static: advice must not tell the operator to edit the release-dir copy —
+# checksums.txt hashes it, so an in-place edit breaks `shasum -c` / install.sh.
+if grep -qF 'flattened copy in' "$WRAPPER"; then
+    fail "wrapper still advises editing the hashed release-dir CHANGELOG"
+elif grep -qF 'Edit ONLY Release/CHANGELOG.md' "$WRAPPER" && grep -qiF 're-run the release' "$WRAPPER"; then
+    ok "wrapper advises source-only edit + rebuild"
+else
+    fail "wrapper advice lacks source-only edit + rebuild instruction"
+fi
+
 # Behavioral: simulate the warning logic on a fixture CHANGELOG with sentinel.
 FIXTURE=$(mktemp -d)
 trap 'rm -rf "$FIXTURE"' EXIT

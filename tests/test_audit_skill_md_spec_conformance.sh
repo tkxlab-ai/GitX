@@ -107,7 +107,7 @@ license: MIT
 Body content.
 EOF
 RES=$(run_spec "$FIXTURE/A")
-if echo "$RES" | grep -qE "FAIL=0"; then
+if grep -qE "FAIL=0" <<<"$RES"; then
     ok "case A (valid): §0 produces 0 FAILs"
 else
     fail "case A: expected FAIL=0, got '$RES'"
@@ -123,7 +123,7 @@ description: A skill with forbidden top-level version field.
 ---
 EOF
 RES=$(run_spec "$FIXTURE/B")
-if echo "$RES" | grep -qE "FAIL=[1-9]"; then
+if grep -qE "FAIL=[1-9]" <<<"$RES"; then
     ok "case B (unexpected key): §0 catches 'version:' top-level violation"
 else
     fail "case B: expected FAIL≥1, got '$RES'"
@@ -138,7 +138,7 @@ description: Name has uppercase letters, should fail.
 ---
 EOF
 RES=$(run_spec "$FIXTURE/C")
-if echo "$RES" | grep -qE "FAIL=[1-9]"; then
+if grep -qE "FAIL=[1-9]" <<<"$RES"; then
     ok "case C (UpperCase name): §0 catches non-kebab-case name"
 else
     fail "case C: expected FAIL≥1, got '$RES'"
@@ -155,7 +155,7 @@ EOF
 # Inject a literal `<` via printf to avoid heredoc YAML pitfalls
 printf '%s\n' '---' 'name: demo-skill' 'description: Has a less-than sign right here X < Y forbidden.' '---' > "$FIXTURE/D/skills/demo-skill/SKILL.md"
 RES=$(run_spec "$FIXTURE/D")
-if echo "$RES" | grep -qE "FAIL=[1-9]"; then
+if grep -qE "FAIL=[1-9]" <<<"$RES"; then
     ok "case D (angle bracket in description): §0 catches it"
 else
     fail "case D: expected FAIL≥1 for angle bracket in description, got '$RES'"

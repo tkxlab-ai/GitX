@@ -58,13 +58,13 @@ fi
 SAFE_VERSION="v1\\.0\\.0"
 entry=$(awk "/^## $SAFE_VERSION /,/^---$/" "$TMP/CHANGELOG.md")
 
-if echo "$entry" | grep -q "初始发布"; then
+if grep -q "初始发布" <<<"$entry"; then
     ok "awk SAFE: v1\\.0\\.0 extracts correct entry content"
 else
     fail "awk SAFE: v1\\.0\\.0 did NOT extract expected content"
 fi
 
-if echo "$entry" | grep -q "TODO"; then
+if grep -q "TODO" <<<"$entry"; then
     fail "awk SAFE: v1\\.0\\.0 wrongly captured v1X0Y0's TODO — dot wildcarded!"
 else
     ok "awk SAFE: v1\\.0\\.0 did NOT capture v1X0Y0 entry (dot not wildcarding)"
@@ -75,7 +75,7 @@ fi
 UNSAFE_VERSION="v1.0.0"
 unsafe_entry=$(awk "/^## $UNSAFE_VERSION /,/^---$/" "$TMP/CHANGELOG.md")
 
-if echo "$unsafe_entry" | grep -q "TODO"; then
+if grep -q "TODO" <<<"$unsafe_entry"; then
     ok "awk UNSAFE (bug demo): v1.0.0 DID wrongly capture v1X0Y0 TODO (dot wildcarded — bug confirmed)"
 else
     # On some awk implementations the bug may not manifest — that's ok, note it
@@ -87,7 +87,7 @@ fi
 SAFE_V2="v1X0Y0"
 todo_entry=$(awk "/^## $SAFE_V2 /,/^---$/" "$TMP/CHANGELOG.md")
 
-if echo "$todo_entry" | grep -q "<!-- TODO"; then
+if grep -q "<!-- TODO" <<<"$todo_entry"; then
     ok "TODO detection: <!-- TODO found in v1X0Y0 entry"
 else
     fail "TODO detection: <!-- TODO NOT found in v1X0Y0 entry"
@@ -107,6 +107,44 @@ if grep -qE "SAFE_VERSION|grep -qF" "$AUDIT_SH"; then
     ok "release-audit.sh §4 uses grep -F or SAFE_VERSION"
 else
     fail "release-audit.sh MISSING grep -F / SAFE_VERSION in §4 (S2-2 audit half: awk dot wildcards)"
+fi
+
+# ── Test 7: release.sh scaffold anchors on the first `## ` line ─────────────
+# A fixed `head -4` split put the new entry BELOW the existing top entry when
+# the header was not exactly 4 lines, so audit §4 saw the wrong top version.
+SC="$TMP/scaffold"
+mkdir -p "$SC/skills/demo/" "$SC/Release"
+printf -- '---\nname: demo\ndescription: d\n---\n# Demo\n' > "$SC/skills/demo/SKILL.md"
+printf 'v0.0.2\n' > "$SC/skills/demo/VERSION"
+cat > "$SC/Release/CHANGELOG.md" <<'EOF'
+# Demo — Release History
+
+## v0.0.1 — 2026-01-01
+
+old body line one
+old body line two
+
+---
+EOF
+set +e
+sc_out=$(cd "$TMP" && PROJECT_ROOT="$SC" PROJECT_NAME=demo SKILL_NAME=demo \
+         bash "$RELEASE_SH" v0.0.2 2>&1)
+sc_rc=$?
+set -e
+new_ln=$(awk '/^## v0\.0\.2 /{print NR; exit}' "$SC/Release/CHANGELOG.md")
+old_ln=$(awk '/^## v0\.0\.1 /{print NR; exit}' "$SC/Release/CHANGELOG.md")
+if [ "$sc_rc" -ne 0 ] && [ -n "$new_ln" ] && [ -n "$old_ln" ] && [ "$new_ln" -lt "$old_ln" ]; then
+    ok "scaffold: new ## v0.0.2 inserted ABOVE existing ## v0.0.1 (2-line header)"
+else
+    fail "scaffold: v0.0.2 at line '${new_ln}', v0.0.1 at '${old_ln}' (rc=$sc_rc)"
+    echo "$sc_out" | tail -5
+fi
+old_section=$(awk '/^## v0\.0\.1 /,/^---$/' "$SC/Release/CHANGELOG.md")
+expected_old=$(printf '## v0.0.1 — 2026-01-01\n\nold body line one\nold body line two\n\n---')
+if [ "$old_section" = "$expected_old" ] && [ "$(head -1 "$SC/Release/CHANGELOG.md")" = "# Demo — Release History" ]; then
+    ok "scaffold: header + existing v0.0.1 body intact"
+else
+    fail "scaffold: header or v0.0.1 body mangled"
 fi
 
 # --- Summary ---

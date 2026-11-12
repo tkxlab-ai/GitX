@@ -92,9 +92,9 @@ fi
 # ── Test 4: list terms emits zh|en pairs ─────────────────────────────────
 if [ -x "$LOADER" ]; then
     result=$("$LOADER" --glossary "$FIXTURE" list terms 2>/dev/null)
-    if echo "$result" | grep -qE '^发版\|release$' \
-       && echo "$result" | grep -qE '^打包\|package$' \
-       && echo "$result" | grep -qE '^签名\|signing$'; then
+    if grep -qE '^发版\|release$' <<<"$result" \
+       && grep -qE '^打包\|package$' <<<"$result" \
+       && grep -qE '^签名\|signing$' <<<"$result"; then
         ok "list terms emits all zh|en pairs"
     else
         fail "list terms missing entries; got:\n$result"
@@ -140,14 +140,14 @@ fi
 if [ -x "$LOADER" ]; then
     result=$("$LOADER" --glossary "$FIXTURE" emit-few-shot 2>/dev/null)
     # Must contain: some prompt instruction + 2+ glossary entries + NO_TRANSLATE patterns
-    if echo "$result" | grep -qE '发版.*release' \
-       && echo "$result" | grep -qE '打包.*package' \
-       && echo "$result" | grep -qiE 'no.?translate|do not translate|禁译' \
-       && echo "$result" | grep -qE 'scripts/\*|\\\$SOURCE_DATE_EPOCH'; then
+    if grep -qE '发版.*release' <<<"$result" \
+       && grep -qE '打包.*package' <<<"$result" \
+       && grep -qiE 'no.?translate|do not translate|禁译' <<<"$result" \
+       && grep -qE 'scripts/\*|\\\$SOURCE_DATE_EPOCH' <<<"$result"; then
         ok "emit-few-shot contains glossary entries + NO_TRANSLATE instructions"
     else
         fail "emit-few-shot output incomplete; got first 20 lines:"
-        echo "$result" | head -20
+        head -20 <<<"$result"
     fi
 else
     fail "skipped"
@@ -168,9 +168,9 @@ cat > "$COMMENTED" <<'G'
 G
 if [ -x "$LOADER" ]; then
     result=$("$LOADER" --glossary "$COMMENTED" list terms 2>/dev/null)
-    if echo "$result" | grep -qE '^发版\|release$' \
-       && echo "$result" | grep -qE '^打包\|package$' \
-       && ! echo "$result" | grep -qE 'comment'; then
+    if grep -qE '^发版\|release$' <<<"$result" \
+       && grep -qE '^打包\|package$' <<<"$result" \
+       && ! grep -qE 'comment' <<<"$result"; then
         ok "comments and blank lines ignored"
     else
         fail "comment handling broken; got:\n$result"
