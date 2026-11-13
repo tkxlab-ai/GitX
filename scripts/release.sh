@@ -1451,7 +1451,7 @@ build_source_tarball
 assert_changelog_tarball_parity
 run_sanity_scans
 flatten_docs
-echo "📋 Running docs-audit ......... document contract (H1–H7 + H10)"
+echo "📋 Running docs-audit ......... document contract (H1–H7 + H10 + H11)"
 if ! PROJECT_ROOT="$PROJECT_ROOT" bash "$SKILL_ROOT/docs-audit.sh"; then
     echo "❌ docs-audit failed — document contract violated. Release aborted." >&2
     exit 1

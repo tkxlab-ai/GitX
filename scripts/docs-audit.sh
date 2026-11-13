@@ -6,6 +6,8 @@
 # H5: CHANGELOG EN/CN structural parity (delegates to docs-pipeline --changelog-parity).
 # H6: managed-region drift check (delegates to docs-pipeline --check); idempotent gate.
 # H7: self shellcheck-clean at -S warning (generic-safe skip when shellcheck absent).
+# H10: every repo-local link / <img src> in each README resolves; declared hero exists.
+# H11: no README cites private working files (Gotcha / Dev Log / Decision / handoff).
 # Non-counting (Gotcha #62): never prints PASS/FAIL/SKIP tallies; owns STRUCTURE only.
 # Generic-safe SKIP (Gotcha #51): absent manifest -> "not applicable" + exit 0.
 # Usage: [PROJECT_ROOT=<dir>] docs-audit.sh
@@ -36,6 +38,7 @@ _section_ids_in_file() {
         m["Table of Contents"]           = "table-of-contents"
         m["CLI in Action"]               = "cli-in-action"
         m["Why GitX"]                    = "why-gitx"
+        m["Philosophy"]                  = "philosophy"
         m["Comparison"]                  = "comparison"
         m["Command Surface"]             = "command-surface"
         m["Pipeline & Audit Gates"]      = "pipeline-audit-gates"
@@ -66,6 +69,7 @@ _section_ids_in_file() {
         m["目录"]              = "table-of-contents"
         m["命令行实况"]        = "cli-in-action"
         m["为什么选择 GitX"]   = "why-gitx"
+        m["设计理念"]          = "philosophy"
         m["横向对比"]          = "comparison"
         m["命令面"]            = "command-surface"
         m["流水线与审计闸"]    = "pipeline-audit-gates"
@@ -493,7 +497,33 @@ fi
 _check_h10 "$EN_README" "en" || OVERALL_RC=1
 _check_h10 "$CN_README" "cn" || OVERALL_RC=1
 
+# H11: a public README must not cite private working files. The maintainers'
+# Gotcha / Dev Log / Decision records and handoff files are never published,
+# so a reference to them is a dead end for every reader (and leaks that they
+# exist). Case-insensitive; record numbers must look like record numbers
+# (zero-padded), so prose such as "Decision 2026" passes. A project whose
+# product legitimately names one of these files (e.g. a handoff tool) declares
+# `h11_allow: <ERE>` lines in the manifest (several lines are OR-ed together);
+# matching README lines are exempt.
+_check_h11() {
+  local file="$1" label="$2" hits allow
+  [ -f "$file" ] || return 0
+  hits=$(grep -niE 'gotcha ?#[0-9]+|dev log (0[0-9]{3}|[0-9]{4}-[0-9]{2}-[0-9]{2})|decision 0[0-9]{3}|gotchas\.md|handoffx?(\.archive)?\.md|handoffx?_(logs|decisions)([^a-z0-9_]|$)' "$file" || true)
+  allow=$(grep -E '^h11_allow:[[:space:]]' "$MANIFEST" 2>/dev/null \
+    | sed -E 's/^h11_allow:[[:space:]]+//' | paste -sd '|' - || true)
+  if [ -n "$hits" ] && [ -n "$allow" ]; then
+    hits=$(grep -vE -- "$allow" <<<"$hits" || true)
+  fi
+  [ -z "$hits" ] && return 0
+  while IFS= read -r h; do
+    echo "  docs-audit H11 [$label]: private-file reference in $file:$h" >&2
+  done <<<"$hits"
+  return 1
+}
+_check_h11 "$EN_README" "en" || OVERALL_RC=1
+_check_h11 "$CN_README" "cn" || OVERALL_RC=1
+
 if [ "$OVERALL_RC" -eq 0 ]; then
-  echo "docs-audit: H1+H2+H3+H4+H5+H6+H7+H10 clean"
+  echo "docs-audit: H1+H2+H3+H4+H5+H6+H7+H10+H11 clean"
 fi
 exit $OVERALL_RC

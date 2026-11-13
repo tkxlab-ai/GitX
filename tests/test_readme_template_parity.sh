@@ -59,8 +59,8 @@ MAN="$ROOT/references/docs-contract/manifest.txt"
 tail -40 "$EN" | grep -q '^## Special Thanks$' && ok "C1 EN Special Thanks at bottom" || fail "C1 EN Special Thanks not relocated"
 tail -40 "$CN" | grep -q '^## 特别致谢$' && ok "C1 CN 特别致谢 at bottom" || fail "C1 CN 特别致谢 not relocated"
 [ "$(grep -nE '^## ' "$EN" | head -1 | grep -c 'Special Thanks')" -eq 0 ] && ok "C1 EN Special Thanks not first section" || fail "C1 EN Special Thanks still first"
-# manifest: special-thanks immediately before license
-grep -A1 '^section: special-thanks' "$MAN" | grep -q '^section: license' && ok "C1 manifest special-thanks before license" || fail "C1 manifest order wrong"
+# manifest: license is the last README section (v1.13.1 moved thanks into docs/JOURNEY.md)
+[ "$(grep -E '^section:' "$MAN" | tail -1 | awk '{print $2}')" = "license" ] && ok "C1 manifest ends with license" || fail "C1 manifest order wrong"
 # C3: Real-Machine Test Results present, EN + CN
 grep -q 'Real-Machine Test Results' "$EN" && ok "C3 EN Real-Machine block" || fail "C3 EN missing"
 grep -q '真机测试结果' "$CN" && ok "C3 CN 真机测试结果 block" || fail "C3 CN missing"

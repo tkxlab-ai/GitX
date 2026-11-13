@@ -13,7 +13,7 @@
         "repo": "tkxlab-ai/GitX"
       },
       "description": "GitX — cross-project release pipeline.",
-      "version": "1.13.0",
+      "version": "1.13.1",
       "author": {
         "name": "TKXLAB.AI"
       },
@@ -26,5 +26,5 @@
       ]
     }
   ],
-  "version": "1.13.0"
+  "version": "1.13.1"
 }

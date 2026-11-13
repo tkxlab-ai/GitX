@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/tkxlab-ai/GitX/security/advisories/new
+    about: Report security issues privately — never in a public issue.
+  - name: Installation help
+    url: https://github.com/tkxlab-ai/GitX/blob/main/INSTALL.md
+    about: Read INSTALL.md (and the troubleshooting notes in the README) before opening an install issue.
+  - name: 中文文档
+    url: https://github.com/tkxlab-ai/GitX/blob/main/README_CN.md
+    about: 完整的中文说明。

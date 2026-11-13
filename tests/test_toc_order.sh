@@ -17,14 +17,14 @@ fail() { echo "  ❌ $1"; FAIL=1; }
 check() {
     local f="$1" toc_h="$2"
     [ -f "$f" ] || { fail "$(basename "$f") missing"; return; }
-    # ToC link texts, in order: lines '- [TEXT](#...)' between the ToC
-    # heading and the next '## ' heading.
+    # ToC link texts, in order: bulleted '- [TEXT](#...)' or numbered
+    # '1. [TEXT](#...)' lines between the ToC heading and the next '## '.
     local toc
     toc=$(awk -v h="## $toc_h" '
         $0==h {inb=1; next}
         inb && /^## / {exit}
-        inb && /^- \[[^]]+\]\(#/ {
-            s=$0; sub(/^- \[/,"",s); sub(/\].*$/,"",s); print s
+        inb && /^(- |[0-9]+\. )\[[^]]+\]\(#/ {
+            s=$0; sub(/^(- |[0-9]+\. )\[/,"",s); sub(/\].*$/,"",s); print s
         }' "$f")
     # Body section headings, in order, restricted to those the ToC lists.
     local body

@@ -65,12 +65,8 @@ mkdir -p "$TMP_H1/references/docs-contract"
 cp "$MANIFEST" "$TMP_H1/references/docs-contract/manifest.txt"
 
 # Build a valid EN README with all contract sections present, then remove one.
-# Section IDs from manifest.txt (ordered): whats-new table-of-contents cli-in-action
-# why-gitx comparison command-surface pipeline-audit-gates quick-start configuration
-# architecture symbol-state testing development-journey audits-code-review
-# multi-model-ai research-references security faq compatibility roadmap
-# acknowledgments contributing special-thanks license
-# We map to EN headings matching the fixed table in docs-audit.sh / docs-pipeline.sh.
+# Section IDs come from manifest.txt (read it for the current ordered list);
+# headings map to ids through the fixed table in docs-audit.sh / docs-pipeline.sh.
 # Use the real README.md as the base for EN (guaranteed valid structure).
 REAL_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cp "$REAL_ROOT/README.md" "$TMP_H1/README.md"
@@ -669,6 +665,53 @@ if grep '_track_start.*docs.audit\|_track_start.*docs-audit' "$RELEASE_AUDIT_SH"
 else
   ok "release-audit.sh docs-audit call is non-counting (no _track_start wrapper)"
 fi
+
+# --- T19: H11 — a README citing private working files fails; plain words do not ---
+# The scratch tree lacks docs/ and the other link targets, so H10 fires there by
+# design; these cases assert on the H11 lines only.
+REAL_ROOT="${REAL_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+TMP_H11=$(mktemp -d)
+mkdir -p "$TMP_H11/references/docs-contract"
+cp "$MANIFEST" "$TMP_H11/references/docs-contract/manifest.txt"
+cp "$REAL_ROOT/README.md" "$TMP_H11/README.md"
+cp "$REAL_ROOT/README_CN.md" "$TMP_H11/README_CN.md"
+printf '\nDecisions are reviewed; every gotcha becomes a test; see the Dev Log idea. Decision 2026 was the year.\n' >> "$TMP_H11/README.md"
+err_h11=$(PROJECT_ROOT="$TMP_H11" bash "$AUDIT" 2>&1 >/dev/null || true)
+if grep -q 'docs-audit H11' <<<"$err_h11"; then
+  fail "H11 fired on a README with no private-file references: $(grep 'H11' <<<"$err_h11" | head -2)"
+else
+  ok "H11 silent on the real README plus plain words (decision / gotcha / dev log without numbers)"
+fi
+printf '\nSee Gotcha #12 and Dev Log 0058 for details.\n' >> "$TMP_H11/README.md"
+printf '\n详见 Decision 0044 与 HANDOFFX.md。\n' >> "$TMP_H11/README_CN.md"
+rc_h11=0; err_h11=$(PROJECT_ROOT="$TMP_H11" bash "$AUDIT" 2>&1 >/dev/null) || rc_h11=$?
+if [ "$rc_h11" -ne 0 ] && grep -q 'docs-audit H11 \[en\].*Gotcha #12' <<<"$err_h11" \
+   && grep -q 'docs-audit H11 \[cn\].*Decision 0044' <<<"$err_h11"; then
+  ok "H11 fires in both locales on Gotcha / Dev Log / Decision / handoff references (exit $rc_h11)"
+else
+  fail "H11 did not fire on planted private references (rc=$rc_h11): $(grep 'H11' <<<"$err_h11" | head -3)"
+fi
+# Other spellings fire too (case, no space before #, GOTCHAS.md, no trailing slash).
+cp "$REAL_ROOT/README_CN.md" "$TMP_H11/README_CN.md"
+cp "$REAL_ROOT/README.md" "$TMP_H11/README.md"
+printf '\nsee gotcha#7, GOTCHAS.md and the Handoffx_Logs folder\nper Dev Log 2026-05-07\n' >> "$TMP_H11/README.md"
+err_h11=$(PROJECT_ROOT="$TMP_H11" bash "$AUDIT" 2>&1 >/dev/null || true)
+if grep -q 'gotcha#7' <<<"$err_h11" && grep -q 'Dev Log 2026-05-07' <<<"$err_h11"; then
+  ok "H11 catches lowercase / no-space / GOTCHAS.md / slash-less Handoffx_Logs forms"
+else
+  fail "H11 missed alternate spellings: $(grep 'H11' <<<"$err_h11" | head -2)"
+fi
+# A project may exempt its own product file names via h11_allow in the manifest.
+cp "$REAL_ROOT/README.md" "$TMP_H11/README.md"
+printf '\nThe tool writes HANDOFFX.md at the project root.\n' >> "$TMP_H11/README.md"
+printf 'h11_allow: unrelated-pattern\nh11_allow: HANDOFFX\\.md at the project root\n' >> "$TMP_H11/references/docs-contract/manifest.txt"
+err_h11=$(PROJECT_ROOT="$TMP_H11" bash "$AUDIT" 2>&1 >/dev/null || true)
+if grep -q 'docs-audit H11' <<<"$err_h11"; then
+  fail "h11_allow did not exempt the declared line: $(grep 'H11' <<<"$err_h11" | head -2)"
+else
+  ok "h11_allow in the manifest exempts a project's own product file name"
+fi
+rm -rf "$TMP_H11"
 
 # --- Summary ---
 echo ""

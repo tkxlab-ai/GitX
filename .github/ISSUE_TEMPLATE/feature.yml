@@ -1,0 +1,23 @@
+name: Feature request
+description: Suggest a new gate, command or improvement
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The release problem it solves
+      description: What goes wrong today without it? A concrete incident is the most useful answer.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: What should GitX check or do, and should a failure abort the release, warn, or skip?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

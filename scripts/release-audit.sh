@@ -1428,7 +1428,7 @@ if [ ! -f "$_da_script" ]; then
 else
     _da_out=$(PROJECT_ROOT="$PROJECT_ROOT" bash "$_da_script" 2>&1) && _da_rc=0 || _da_rc=$?
     if [ "$_da_rc" -eq 0 ]; then
-        echo "  ✅ docs-audit clean (H1–H7 + H10)"
+        echo "  ✅ docs-audit clean (H1–H7 + H10 + H11)"
         echo "$_da_out" | sed 's/^/    /'
     else
         echo "  ❌ docs-audit found document contract violations:"

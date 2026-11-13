@@ -1,0 +1,61 @@
+name: Bug report
+description: Report a reproducible problem with GitX
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please fill in every field; reports that cannot be reproduced may be closed.
+
+        **Security issues**: do not use this form. Use [private security advisories](https://github.com/tkxlab-ai/GitX/security/advisories/new) instead.
+  - type: input
+    id: version
+    attributes:
+      label: GitX version
+      description: Output of `cat ~/.agents/skills/gitx-release/VERSION`, or the .skill filename you installed
+      placeholder: v1.13.1
+    validations:
+      required: true
+  - type: dropdown
+    id: cli
+    attributes:
+      label: Agent CLI
+      options:
+        - Claude Code
+        - Codex
+        - OpenCode
+        - Gemini
+        - Direct script call (no CLI)
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: OS and bash version
+      description: e.g. `sw_vers -productVersion` / `uname -sr` and `bash --version | head -1`
+      placeholder: macOS 15.1, GNU bash 3.2.57
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The exact command(s) you ran, from a clean checkout if possible.
+      render: bash
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: What happened
+      description: Paste the output, especially the last `❌` line. Remove tokens, hostnames and home-directory paths first.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true

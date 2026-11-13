@@ -2,6 +2,35 @@
 
 All notable changes per release, newest first. Chinese parallel: [`CHANGELOG_CN.md`](CHANGELOG_CN.md).
 
+## v1.13.1 — 2026-11-13
+
+### Changed
+- README rewritten in English and Chinese around one storyline: a table of
+  release failures and the gate that stops each, design principles mapped to
+  their sources and to the code that enforces them, a pipeline diagram, and a
+  table of what a release contains. The README now has 15 sections instead of
+  24; development history, review process, model collaboration and plans moved
+  to `docs/JOURNEY.md`, internals to `docs/ARCHITECTURE.md`.
+- The README section contract (`references/docs-contract/manifest.txt`)
+  follows the new structure, and the `Philosophy` heading is known to
+  `docs-audit` and `docs-pipeline`.
+
+### Added
+- `docs-audit` rule H11: a README must not cite the maintainers' private
+  records (Gotcha / Dev Log / Decision numbers or handoff files), because
+  readers cannot open them. A project whose product legitimately names such a
+  file can exempt it with an `h11_allow:` line in the docs-contract manifest.
+- GitHub issue forms (bug report, feature request), an issue chooser that
+  routes security reports to private advisories, and a pull-request checklist.
+
+### Fixed
+- The README no longer carries hand-written release counts or spans, which
+  had already gone stale, and the status badge no longer links to a removed
+  section.
+- README claims now match the code: the core pipeline never pushes, while the
+  two optional post-release steps do write to a remote; a dry run performs
+  read-only checks only; public CI runs shellcheck and an installer dry run.
+
 ## v1.13.0 — 2026-11-02
 
 ### Added
