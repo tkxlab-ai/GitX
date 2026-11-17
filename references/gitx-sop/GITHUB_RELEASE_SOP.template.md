@@ -283,14 +283,14 @@ fi
 # central marketplace registration: every TKX skill is installable from ONE
 # place. Users add the marketplace ONCE, then install any skill by name.
 #   /plugin marketplace add tkxlab-ai/marketplace
-#   /plugin install <name>@tkx-skills
+#   /plugin install <name>@tkxlab
 # .gitx/marketplace-entry.json (produced by gitx-init) is the snippet to PR
 # into the central tkxlab-ai/marketplace repo. Per-repo .claude-plugin/* still
 # ships for direct installs; the central entry is additive, not a replacement.
 if [ -f .gitx/marketplace-entry.json ]; then
-    echo "✅ marketplace-entry.json present — PR it into tkxlab-ai/marketplace (@tkx-skills)"
+    echo "✅ marketplace-entry.json present — PR it into tkxlab-ai/marketplace (@tkxlab)"
 else
-    echo "⚠ no .gitx/marketplace-entry.json — run gitx-init so users get central /plugin install <name>@tkx-skills"
+    echo "⚠ no .gitx/marketplace-entry.json — run gitx-init so users get central /plugin install <name>@tkxlab"
 fi
 # Build-metrics: the README must carry a concise one-line metrics block.
 grep -qiE '构建指标|build metrics' README.md \
@@ -305,7 +305,7 @@ cd ..
 > opening a PR that adds the `.gitx/marketplace-entry.json` snippet
 > (gitx-init produces it). Users then run **once**
 > `/plugin marketplace add tkxlab-ai/marketplace` and install any skill via
-> `/plugin install <name>@tkx-skills`. The per-repo `.claude-plugin/*`
+> `/plugin install <name>@tkxlab`. The per-repo `.claude-plugin/*`
 > remains for direct installs — the central entry is additive.
 >
 > **Build-metrics block** (keep it to ONE concise line — nobody reads a

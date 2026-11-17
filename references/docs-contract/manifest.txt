@@ -13,6 +13,7 @@ hero_asset: docs/assets/release-demo.jpeg
 region: badges
 region: build-metrics
 region: whats-new
+region: metrics
 region: command-surface
 region: suite-count
 

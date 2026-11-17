@@ -53,7 +53,7 @@ is_allowed_legacy_path() {
         # (own .git → public mirror only); it holds an extracted source
         # snapshot that legitimately carries the project name. Transient,
         # gitignored, never in the private repo nor any tarball.
-        ./.i18n-cache/*|./.omc/*|./.cache/*|./memory/*|./.github-publish-wt/*) return 0 ;;
+        ./.i18n-cache/*|./.omc/*|./wip/*|./.serena/*|./.cache/*|./memory/*|./.github-publish-wt/*) return 0 ;;
         # graphify knowledge graph + local Claude instruction: gitignored,
         # release-excluded, never shipped. GRAPH_REPORT.md is regenerated
         # from Handoff_* history that legitimately preserves the legacy

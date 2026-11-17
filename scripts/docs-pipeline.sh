@@ -6,7 +6,8 @@
 # NEVER runs git/gh/any LLM (SKILL.md #1, TKX §10.10). Markers MUST be on
 # their own line; malformed regions fail closed (exit 5, nothing written).
 #
-# Manages: badges, build-metrics, whats-new, command-surface, suite-count.
+# Manages: the regions in DP_REGIONS (badges, build-metrics, whats-new,
+# metrics, command-surface, suite-count).
 # DOES NOT manage the Deep-Audit N/0/1 count — circular via §0g; owned by
 # release-audit.sh §0f (consistency) + §0i (generic exactness) + per-repo
 # test_readme_numeric_accuracy.sh (Decision 0018/0019).
@@ -18,6 +19,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="${PROJECT_ROOT:-$(pwd)}"
 TPL_DIR="$SCRIPT_DIR/../references/readme"
+# Contract source for --init, resolved like TPL_DIR so the repo scripts/ and
+# the installed bundle scaffold the same manifest (entry-point independent).
+CONTRACT_SRC_DIR="$SCRIPT_DIR/../references/docs-contract"
+# The ONE managed-region inventory. The validator, the rewriter and
+# --print-regions all read it, so adding a region cannot leave a stale copy.
+DP_REGIONS="badges build-metrics whats-new metrics command-surface suite-count"
 MODE="refresh"; FORCE=0; DRY_RUN=0; LOCALE=""
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -27,8 +34,9 @@ Usage: docs-pipeline [--locale en|cn] [--check] [--init] [--force] [--dry-run] [
   (default)        refresh managed regions in ALL locale README targets (en+cn)
   --locale en|cn   scope to a single locale (default: both en and cn)
   --check          regenerate to temp; exit 1 if any managed region drifted
-  --init           scaffold ./README.md from references/readme/README.template.md
-  --force          with --init, overwrite existing README.md
+  --init           scaffold README.md (+ README_CN.md) from references/readme/ and,
+                   when absent, references/docs-contract/{manifest.txt,cjk-allow.txt}
+  --force          with --init, overwrite existing README.md / README_CN.md
   --dry-run        print intended actions; write nothing
   --print-regions  print the space-separated list of managed region names and exit 0
   --print-target   print the resolved README basename(s) and exit 0
@@ -164,7 +172,7 @@ dp_skill_name(){
 }
 dp_install(){
   if [ -d "$PROJECT_ROOT/.claude-plugin" ]; then
-    printf '```bash\n/plugin marketplace add tkxlab-ai/marketplace\n/plugin install %s@tkx-skills\n```\n' "$(dp_plugin_name)"
+    printf '```bash\n/plugin marketplace add tkxlab-ai/marketplace\n/plugin install %s@tkxlab\n```\n' "$(dp_plugin_name)"
   else printf '```bash\nbash install.sh\n```\n'; fi
 }
 dp_whats_new(){
@@ -240,7 +248,7 @@ dp_command_surface(){
     cn)
       _label_two_paths='两种安装路径。'
       _label_a_prefix='**A. install.sh** — 运行 `bash install.sh`（技能 + 扁平命令；无需插件）'
-      _label_b_prefix='**B. 插件市场** — `/plugin marketplace add tkxlab-ai/marketplace` 然后 `/plugin install %s@tkx-skills`（`/%s` 冒号命名空间）'
+      _label_b_prefix='**B. 插件市场** — `/plugin marketplace add tkxlab-ai/marketplace` 然后 `/plugin install %s@tkxlab`（`/%s` 冒号命名空间）'
       _label_b_na='**B. 插件安装** — 不适用：无 `.claude-plugin/plugin.json`；本技能仅通过路径 A（install.sh，扁平命令）安装。'
       _label_footer_only='> `/%s` 冒号前缀命令仅限插件（官方文档的插件命名空间设计）。install.sh 提供扁平 `/%s` + `/<cmd>`；冒号形式需要安装此插件，从不由扁平命令合成。'
       _label_skill_self='技能本体'
@@ -248,7 +256,7 @@ dp_command_surface(){
     *)
       _label_two_paths='Two install paths.'
       _label_a_prefix='**A. install.sh** — run `bash install.sh` (skill + flat commands; no plugin needed)'
-      _label_b_prefix='**B. Plugin marketplace** — `/plugin marketplace add tkxlab-ai/marketplace` then `/plugin install %s@tkx-skills` (`/%s` colon namespace)'
+      _label_b_prefix='**B. Plugin marketplace** — `/plugin marketplace add tkxlab-ai/marketplace` then `/plugin install %s@tkxlab` (`/%s` colon namespace)'
       _label_b_na='**B. Plugin install** — N/A: no `.claude-plugin/plugin.json`; this skill installs only via path A (install.sh, flat commands).'
       _label_footer_only='> The `/%s` colon-prefixed commands are plugin-only (a plugin-namespacing design, per official docs). install.sh gives flat `/%s` + `/<cmd>`; the colon form requires this plugin install and is NEVER synthesized from flat commands.'
       _label_skill_self='the skill itself'
@@ -339,7 +347,7 @@ dp_validate_regions(){
   # own-line ERE as the structural checks ensures we skip documentation prose
   # (e.g. the template's comment block) that mentions NAME inline or indented.
   # errexit-safe: grep guarded || true.
-  local _known="badges build-metrics whats-new command-surface suite-count"
+  local _known="$DP_REGIONS"
   local _found_names
   _found_names=$( grep -oE '^<!-- /?gitx:managed:[A-Za-z0-9_-]+ -->[[:space:]]*$' "$file" 2>/dev/null \
       | sed -E 's@.*gitx:managed:([A-Za-z0-9_-]+) -->.*@\1@' | sort -u || true )
@@ -352,7 +360,7 @@ dp_validate_regions(){
   done <<EOF_VR
 $_found_names
 EOF_VR
-  for name in badges build-metrics whats-new command-surface suite-count; do
+  for name in $DP_REGIONS; do
     grep -qF "<!-- gitx:managed:${name} -->" "$file" 2>/dev/null || continue
     # NEW-I-a: own-line marker, trailing whitespace/CR TOLERATED (benign
     # editor artifact must not hard-fail a meta-skill release); leading or
@@ -424,6 +432,7 @@ dp_section_ids(){
         m["Comparison"]                  = "comparison"
         m["Command Surface"]             = "command-surface"
         m["Pipeline & Audit Gates"]      = "pipeline-audit-gates"
+        m["How It Works"]                = "pipeline-audit-gates"
         m["Quick Start"]                 = "quick-start"
         m["Configuration"]               = "configuration"
         m["Architecture"]                = "architecture"
@@ -442,7 +451,10 @@ dp_section_ids(){
         m["Special Thanks"]              = "special-thanks"
         m["License"]                     = "license"
       }
-      /^## / { h=substr($0,4); sub(/\r$/,"",h); if (h in m) print m[h] }
+      # G4: an optional "N. " section number is not part of the heading name,
+      # and "Why <Project>" is section 1 for ANY project (generic template).
+      /^## / { h=substr($0,4); sub(/\r$/,"",h); sub(/^[0-9]+\.[ \t]+/,"",h)
+               if (h ~ /^Why /) print "why-gitx"; else if (h in m) print m[h] }
     ' "$readme"
   else
     awk '
@@ -455,6 +467,7 @@ dp_section_ids(){
         m["横向对比"]         = "comparison"
         m["命令面"]           = "command-surface"
         m["流水线与审计闸"]   = "pipeline-audit-gates"
+        m["工作原理"]   = "pipeline-audit-gates"
         m["快速开始"]         = "quick-start"
         m["配置"]             = "configuration"
         m["架构"]             = "architecture"
@@ -473,7 +486,10 @@ dp_section_ids(){
         m["特别致谢"]         = "special-thanks"
         m["许可"]             = "license"
       }
-      /^## / { h=substr($0,4); sub(/\r$/,"",h); if (h in m) print m[h] }
+      # G4: an optional "N. " section number is not part of the heading name,
+      # and "Why <Project>" is section 1 for ANY project (generic template).
+      /^## / { h=substr($0,4); sub(/\r$/,"",h); sub(/^[0-9]+\.[ \t]+/,"",h)
+               if (h ~ /^为什么选择 /) print "why-gitx"; else if (h in m) print m[h] }
     ' "$readme"
   fi
 }
@@ -495,6 +511,7 @@ dp_map_headings(){
         m["Comparison"]                  = "comparison"
         m["Command Surface"]             = "command-surface"
         m["Pipeline & Audit Gates"]      = "pipeline-audit-gates"
+        m["How It Works"]                = "pipeline-audit-gates"
         m["Quick Start"]                 = "quick-start"
         m["Configuration"]               = "configuration"
         m["Architecture"]                = "architecture"
@@ -515,7 +532,9 @@ dp_map_headings(){
       }
       {
         h=$0; sub(/^## /, "", h); sub(/\r$/, "", h)
-        if (h in m) printf "%s\t%s\n", h, m[h]
+        k=h; sub(/^[0-9]+\.[ \t]+/, "", k)   # G4: number is not part of the name
+        if (k ~ /^Why /) printf "%s\t%s\n", h, "why-gitx"
+        else if (k in m) printf "%s\t%s\n", h, m[k]
       }
     '
   else
@@ -529,6 +548,7 @@ dp_map_headings(){
         m["横向对比"]         = "comparison"
         m["命令面"]           = "command-surface"
         m["流水线与审计闸"]   = "pipeline-audit-gates"
+        m["工作原理"]   = "pipeline-audit-gates"
         m["快速开始"]         = "quick-start"
         m["配置"]             = "configuration"
         m["架构"]             = "architecture"
@@ -549,10 +569,112 @@ dp_map_headings(){
       }
       {
         h=$0; sub(/^## /, "", h); sub(/\r$/, "", h)
-        if (h in m) printf "%s\t%s\n", h, m[h]
+        k=h; sub(/^[0-9]+\.[ \t]+/, "", k)   # G4: number is not part of the name
+        if (k ~ /^为什么选择 /) printf "%s\t%s\n", h, "why-gitx"
+        else if (k in m) printf "%s\t%s\n", h, m[k]
       }
     '
   fi
+}
+
+# --- A1 labeled sub-tokens: ONE rule shared by the rewriter and docs-audit H4 ---
+# The build-metrics region carries its two machine values after a label
+# (EN `Version **…**` / `Released **…**`, CN `版本 **…**` / `发版日期 **…**`).
+# The value is whatever sits between the bold markers (vX.Y.Z, an ISO date or
+# `unknown`), so a value written as `unknown` before the project had a VERSION
+# or a CHANGELOG is still refreshed later. Matching only a value SHAPE (the
+# pre-A1 rule) left such a token stuck forever and H4 blind to it.
+# Run these awk functions under LC_ALL=C: labels are matched byte-wise.
+DP_LABEL_VERSION='Version |版本 '
+DP_LABEL_DATE='Released |发版日期 '
+DP_SUBTOKEN_AWK='
+function dp_relabel(s, lbl, val,    out, m, p) {
+  out = ""
+  while (match(s, "(" lbl ")\\*\\*[^*]*\\*\\*")) {
+    m = substr(s, RSTART, RLENGTH); p = index(m, "**")
+    out = out substr(s, 1, RSTART - 1) substr(m, 1, p - 1) "**" val "**"
+    s = substr(s, RSTART + RLENGTH)
+  }
+  return out s
+}
+function dp_labeled(s, lbl,    m, p) {
+  dp_found = 0
+  if (!match(s, "(" lbl ")\\*\\*[^*]*\\*\\*")) return ""
+  dp_found = 1
+  m = substr(s, RSTART, RLENGTH); p = index(m, "**")
+  return substr(m, p + 2, length(m) - p - 3)
+}
+'
+# dp_subtoken_extract version|date <file>: print the labeled value found in the
+# file's build-metrics region (nothing when the label is absent).
+dp_subtoken_extract(){
+  local which="$1" file="$2" lbl
+  case "$which" in
+    version) lbl="$DP_LABEL_VERSION" ;;
+    date)    lbl="$DP_LABEL_DATE" ;;
+    *) echo "❌ dp_subtoken_extract: unknown token '$which'" >&2; return 2 ;;
+  esac
+  [ -f "$file" ] || return 0
+  LC_ALL=C awk -v lbl="$lbl" "$DP_SUBTOKEN_AWK"'
+    /^<!-- gitx:managed:build-metrics -->/   { f = 1; next }
+    /^<!-- \/gitx:managed:build-metrics -->/ { f = 0; next }
+    f { v = dp_labeled($0, lbl); if (dp_found) { print v; exit } }
+  ' "$file" || return 1
+}
+
+# --- GitHub heading slug (H12 anchors + the {{PROJECT_SLUG}} placeholder) ---
+# Byte-wise (LC_ALL=C): ASCII letters lower-cased; digits, `-`, `_` kept;
+# space → `-`; other ASCII dropped; no hyphen collapsing; a 3-byte UTF-8
+# sequence with lead byte E4–E9 (CJK ideographs) kept. Any other non-ASCII
+# byte means we cannot predict GitHub's anchor reliably → dp_noslug=1 (no
+# slug), so a link to that heading fails closed instead of guessing.
+DP_SLUG_AWK='
+function dp_gh_slug(h,    i, n, c, o, out, b1, b2) {
+  if (!dp_ord_ok) { for (i = 1; i < 256; i++) dp_ord[sprintf("%c", i)] = i; dp_ord_ok = 1 }
+  dp_noslug = 0; out = ""; n = length(h)
+  for (i = 1; i <= n; i++) {
+    c = substr(h, i, 1); o = dp_ord[c]
+    if (o >= 65 && o <= 90) { out = out sprintf("%c", o + 32); continue }
+    if ((o >= 97 && o <= 122) || (o >= 48 && o <= 57) || c == "-" || c == "_") { out = out c; continue }
+    if (c == " ") { out = out "-"; continue }
+    if (o < 128) continue
+    b1 = dp_ord[substr(h, i + 1, 1)]; b2 = dp_ord[substr(h, i + 2, 1)]
+    if (o >= 228 && o <= 233 && b1 >= 128 && b1 <= 191 && b2 >= 128 && b2 <= 191) {
+      out = out substr(h, i, 3); i += 2; continue
+    }
+    dp_noslug = 1; return ""
+  }
+  return out
+}
+'
+# dp_slug <text>: print the GitHub slug of one heading text (empty when the
+# text holds an unsupported character).
+dp_slug(){
+  LC_ALL=C awk "$DP_SLUG_AWK"'{ s = dp_gh_slug($0); if (!dp_noslug) print s }' <<<"$1" || return 1
+}
+
+# --- G6 metrics region: release count, first → latest date, suite count ---
+# All three come from files the project already keeps; a missing source shows
+# `—` for that value so a project without a CHANGELOG or tests/ still renders.
+dp_metrics(){
+  local cl="$PROJECT_ROOT/Release/CHANGELOG.md" n="—" span="—" sc="—" latest first
+  if [ -f "$cl" ]; then
+    n=$(grep -cE '^## v[0-9]' "$cl" || true)
+    if [ "${n:-0}" -gt 0 ]; then
+      latest=$(grep -E '^## v[0-9]' "$cl" | head -1 \
+        | sed -nE 's/^## v[^ ]+ —[[:space:]]*([0-9]{4}-[0-9]{2}-[0-9]{2}).*/\1/p' || true)
+      first=$(grep -E '^## v[0-9]' "$cl" | tail -1 \
+        | sed -nE 's/^## v[^ ]+ —[[:space:]]*([0-9]{4}-[0-9]{2}-[0-9]{2}).*/\1/p' || true)
+      [ -n "$latest" ] && [ -n "$first" ] && span="$first → $latest"
+    else
+      n="—"
+    fi
+  fi
+  [ -d "$PROJECT_ROOT/tests" ] && sc="$(dp_suite_count)"
+  case "${LOCALE:-en}" in
+    cn) printf '| 指标 | 数值 |\n|---|---|\n| 已发布版本 | %s |\n| 首次发版 → 最新发版 | %s |\n| 测试套件 | %s |\n' "$n" "$span" "$sc" ;;
+    *)  printf '| Measure | Value |\n|---|---|\n| Releases shipped | %s |\n| First release → latest | %s |\n| Test suites | %s |\n' "$n" "$span" "$sc" ;;
+  esac
 }
 
 # Sourced as a library for tests: stop before main.
@@ -565,32 +687,38 @@ dp_rewrite_file(){
   # §2b/H4 (T2.5): @machine ground-truth values computed ONCE per file.
   local _sc _ver _rd _mode
   _sc="$(dp_suite_count)"; _ver="$(dp_version)"; _rd="$(dp_release_date)"
-  for name in badges build-metrics whats-new command-surface suite-count; do
+  for name in $DP_REGIONS; do
     op="<!-- gitx:managed:${name} -->"; cl="<!-- /gitx:managed:${name} -->"
     grep -qE "^<!-- gitx:managed:${name} -->[[:space:]]*\$" "$file" 2>/dev/null || continue
     case "$name" in
       suite-count)     value="$(dp_suite_count)";     _mode=body ;;
       whats-new)       value="$(dp_whats_new)";       _mode=body ;;
+      metrics)         value="$(dp_metrics)";         _mode=body ;;
       command-surface) value="$(dp_command_surface)"; _mode=body ;;
       # §2b: badges + build-metrics are NOT whole-region generated (that would
       # destroy curated License/CLIs/Shell/Release/Status shields + the models/
       # token-estimate/snapshot prose). Only their @machine SUB-TOKENS are
       # rewritten to ground truth (T2.5):
       #   badges        : tests-<N>%20suites%20%2F%200%20fail  → live dp_suite_count
-      #   build-metrics : **v<semver>** → VERSION ; **<ISO date>** → top CHANGELOG date
+      #   build-metrics : Version/版本 **…** → VERSION ; Released/发版日期 **…**
+      #                   → top CHANGELOG date (A1 labeled sub-tokens)
       # Every other line in the region is reprinted verbatim → idempotent.
       badges|build-metrics) _mode=subtoken ;;
     esac
     if [ "$_mode" = subtoken ]; then
-      if awk -v o="$op" -v c="$cl" -v sc="$_sc" -v ver="$_ver" -v rd="$_rd" '
+      # A1: version/date are rewritten by the shared labeled rule (the same
+      # awk functions docs-audit H4 extracts with), so a stale `unknown` or
+      # any other value after the label is replaced, never left stuck.
+      if LC_ALL=C awk -v o="$op" -v c="$cl" -v sc="$_sc" -v ver="$_ver" -v rd="$_rd" \
+          -v bm="$([ "$name" = build-metrics ] && echo 1 || echo 0)" \
+          -v lv="$DP_LABEL_VERSION" -v ld="$DP_LABEL_DATE" "$DP_SUBTOKEN_AWK"'
           { lm=$0; sub(/[ \t\r]+$/,"",lm) }
           lm==o { print; inreg=1; next }
           lm==c { inreg=0; print; next }
           inreg==1 {
             L=$0
             gsub(/tests-[0-9]+%20suites%20%2F%200%20fail/, "tests-" sc "%20suites%20%2F%200%20fail", L)
-            gsub(/\*\*v[0-9]+\.[0-9]+\.[0-9]+\*\*/, "**" ver "**", L)
-            gsub(/\*\*[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\*\*/, "**" rd "**", L)
+            if (bm == 1) { L = dp_relabel(L, lv, ver); L = dp_relabel(L, ld, rd) }
             print L; next
           }
           { print }
@@ -627,6 +755,22 @@ dp_rewrite_file(){
   done
   return 0
 }
+# _dp_drifted_regions <live> <regenerated>: name every managed region whose
+# body differs, so a drift report says WHICH machine value was hand-edited.
+_dp_drifted_regions(){
+  local name
+  for name in $DP_REGIONS; do
+    [ "$(_dp_region_body "$1" "$name")" = "$(_dp_region_body "$2" "$name")" ] || printf ' %s' "$name"
+  done
+}
+_dp_region_body(){
+  awk -v o="<!-- gitx:managed:$2 -->" -v c="<!-- /gitx:managed:$2 -->" '
+    { l = $0; sub(/[ \t\r]+$/, "", l) }
+    l == c { f = 0 }
+    f { print }
+    l == o { f = 1 }
+  ' "$1"
+}
 case "$MODE" in
   changelog-parity) dp_changelog_parity; exit $? ;;
   section-ids)
@@ -647,9 +791,9 @@ case "$MODE" in
     exit 0 ;;
   print-regions)
     # Print the contracted region inventory (space-separated) and exit.
-    # Sourced from dp_validate_regions' _known; kept in sync by design.
-    # Locale-invariant: same 5 regions regardless of --locale (§2a frozen spec).
-    printf '%s\n' "badges build-metrics whats-new command-surface suite-count"
+    # DP_REGIONS is the single inventory (validator + rewriter read it too).
+    # Locale-invariant: same regions regardless of --locale (§2a frozen spec).
+    printf '%s\n' "$DP_REGIONS"
     exit 0 ;;
   print-target)
     # Print the resolved README basename(s) and exit.
@@ -660,18 +804,42 @@ case "$MODE" in
     done
     exit 0 ;;
   init)
-    t="$PROJECT_ROOT/README.md"
-    if [ -f "$t" ] && [ "$FORCE" -eq 0 ]; then echo "❌ $t exists — use --force" >&2; exit 4; fi
-    [ "$DRY_RUN" -eq 1 ] && { echo "would scaffold $t"; exit 0; }
+    t="$PROJECT_ROOT/README.md"; tcn="$PROJECT_ROOT/README_CN.md"
+    _has_cn=0; [ -f "$TPL_DIR/README_CN.template.md" ] && _has_cn=1
+    # A3: pre-flight EVERY README target before writing anything. Checking only
+    # README.md let an existing README_CN.md be overwritten without --force.
+    _refuse=0
+    if [ "$FORCE" -eq 0 ]; then
+      [ -e "$t" ] && { echo "❌ $t exists — use --force" >&2; _refuse=1; }
+      [ "$_has_cn" -eq 1 ] && [ -e "$tcn" ] && { echo "❌ $tcn exists — use --force" >&2; _refuse=1; }
+    fi
+    [ "$_refuse" -eq 1 ] && exit 4
+    _num_test="$PROJECT_ROOT/tests/test_readme_numeric_accuracy.sh"
+    _c_dir="$PROJECT_ROOT/references/docs-contract"
+    if [ "$DRY_RUN" -eq 1 ]; then
+      echo "would scaffold $t"
+      [ "$_has_cn" -eq 1 ] && echo "would scaffold $tcn"
+      [ ! -f "$_num_test" ] && [ -f "$TPL_DIR/test_readme_numeric_accuracy.sh.template" ] && echo "would scaffold $_num_test"
+      [ ! -f "$_c_dir/manifest.txt" ] && [ -f "$CONTRACT_SRC_DIR/manifest.txt" ] && echo "would scaffold $_c_dir/manifest.txt"
+      [ ! -f "$_c_dir/cjk-allow.txt" ] && [ -f "$CONTRACT_SRC_DIR/cjk-allow.txt" ] && echo "would scaffold $_c_dir/cjk-allow.txt"
+      exit 0
+    fi
     p="$(basename "$PROJECT_ROOT")"
-    # Literal {{PROJECT}} → $p substitution that is safe for ANY project
-    # dir name (&, |, \, / etc): awk split on the literal token then
-    # reassemble with string concat — never a regex/sed replacement, so
-    # no `&`/delimiter injection. Idempotent + portable (BSD awk).
+    ps="$(dp_slug "$p")"
+    # Literal {{PROJECT_SLUG}} → GitHub slug of $p (for in-page anchors such
+    # as #1-why-{{PROJECT_SLUG}}; same rule H12 checks) and {{PROJECT}} → $p.
+    # Safe for ANY project dir name (&, |, \, / etc): awk split on the
+    # literal token then reassemble with string concat — never a regex/sed
+    # replacement, so no `&`/delimiter injection. Slug first: {{PROJECT}}
+    # never matches inside {{PROJECT_SLUG}}, but the order makes it obvious.
+    # Idempotent + portable (BSD awk). Values pass via ENVIRON, not -v, so a
+    # backslash in a dir name is not escape-processed.
     _dp_render_tpl(){ # $1=template $2=dest
-      awk -v p="$p" '{
-        out=""; n=split($0, a, /\{\{PROJECT\}\}/)
-        for (i=1;i<=n;i++){ out=out a[i]; if (i<n) out=out p }
+      DP_P="$p" DP_PS="$ps" awk '{
+        out=""; n=split($0, a, /\{\{PROJECT_SLUG\}\}/)
+        for (i=1;i<=n;i++){ out=out a[i]; if (i<n) out=out ENVIRON["DP_PS"] }
+        line=out; out=""; n=split(line, a, /\{\{PROJECT\}\}/)
+        for (i=1;i<=n;i++){ out=out a[i]; if (i<n) out=out ENVIRON["DP_P"] }
         print out
       }' "$1" > "$2"
     }
@@ -691,6 +859,19 @@ case "$MODE" in
     # check/refresh contract: en→README.md, cn→README_CN.md.
     LOCALE="en"; dp_rewrite_file "$t" || exit 5
     [ -f "$PROJECT_ROOT/README_CN.md" ] && { LOCALE="cn"; dp_rewrite_file "$PROJECT_ROOT/README_CN.md" || exit 5; }
+    # G5/A4: scaffold the docs contract so docs-audit actually runs on the new
+    # project (no manifest = audit silently skipped). Source is this skill's
+    # own contract, minus the origin-only lines: hero_asset (the image ships
+    # only with GitX) and h11_allow (exemptions for GitX's own README text).
+    # Never overwrite a contract the project already has.
+    if [ -f "$CONTRACT_SRC_DIR/manifest.txt" ] && [ ! -f "$_c_dir/manifest.txt" ]; then
+      mkdir -p "$_c_dir"
+      awk '!/^(hero_asset|h11_allow):/' "$CONTRACT_SRC_DIR/manifest.txt" > "$_c_dir/manifest.txt"
+    fi
+    if [ -f "$CONTRACT_SRC_DIR/cjk-allow.txt" ] && [ ! -f "$_c_dir/cjk-allow.txt" ]; then
+      mkdir -p "$_c_dir"
+      cp "$CONTRACT_SRC_DIR/cjk-allow.txt" "$_c_dir/cjk-allow.txt"
+    fi
     exit 0 ;;
   check)
     # Iterate over all locales in scope (both when no --locale, one when --locale given).
@@ -709,7 +890,7 @@ case "$MODE" in
         exit 5
       fi
       diff -q "$PROJECT_ROOT/$_readme" "$PROJECT_ROOT/$_readme.gitxchk" >/dev/null 2>&1 \
-        || { echo "❌ managed-region drift in $_readme (run: docs-pipeline)" >&2; _overall_rc=1; }
+        || { echo "❌ managed-region drift in $_readme (run: docs-pipeline) — region(s):$(_dp_drifted_regions "$PROJECT_ROOT/$_readme" "$PROJECT_ROOT/$_readme.gitxchk")" >&2; _overall_rc=1; }
       rm -f "$PROJECT_ROOT/$_readme.gitxchk"
     done
     exit $_overall_rc ;;

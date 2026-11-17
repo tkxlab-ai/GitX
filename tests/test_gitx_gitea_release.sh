@@ -575,7 +575,10 @@ else fail "24b: fast command status '$r24'"; fi
 # files under $T: release-exists, release-assets (asset names the existing
 # Release already has, one per line), asset-checksums (body of the Release's
 # checksums.txt download; absent → 404), fail-release, release-noid, fail-asset
-# (holds the asset name to fail). The last --data-binary @file is kept as body.json.
+# (holds the asset name to fail), tag-codes (space-separated HTTP codes for
+# successive GET …/tags/VER calls, the last one repeats; absent → 200),
+# tag-slow (each tag GET sleeps 2 s first). The last --data-binary @file is kept
+# as body.json.
 cat > "$T/bin/curl" <<'MOCK'
 #!/bin/sh
 T=$(cd "$(dirname "$0")/.." && pwd)
@@ -604,6 +607,14 @@ case "$m $url" in
                 done < "$T/release-assets"
             fi
             body="$body]}"
+        fi ;;
+    "GET "*/repos/*/tags/*)
+        [ ! -e "$T/tag-slow" ] || sleep 2
+        code=200
+        if [ -f "$T/tag-codes" ]; then
+            set -- $(cat "$T/tag-codes")
+            code=$1
+            if [ $# -gt 1 ]; then shift; printf '%s\n' "$*" > "$T/tag-codes"; fi
         fi ;;
     "DELETE "*/releases/90) code=204; body='' ;;
     "GET "*/releases/download/*/checksums.txt)
@@ -650,6 +661,7 @@ BA="$T/bare-api.git"; mk_bare "$BA"
 API="https://$HOSTX/api/v1/repos/my-releases/$AN"
 REL_URL="🔗 release: https://$HOSTX/my-releases/$AN/releases/tag/$VER"
 SKIP_LINE="⚠️ no ~/.netrc entry for $HOSTX — skipping Gitea Release (tag + archive are published)"
+TAG_CALL="GET $API/tags/$VER"
 ASSET_CALLS="POST $API/releases/90/assets?name=$AN-$VER.skill
 POST $API/releases/90/assets?name=$AN-$VER-full.tar.gz
 POST $API/releases/90/assets?name=checksums.txt
@@ -689,12 +701,13 @@ printf '  machine %s\n  login x\n  password y\n' "$HOSTX" > "$NETRC"
 # --- b: netrc present, release absent → GET, POST release, 4× POST assets ---
 run_api "$PA" "$BA"
 exp_b="GET $API/releases/tags/$VER
+$TAG_CALL
 POST $API/releases
 $ASSET_CALLS"
 if [ "$RC" = 0 ] && [ "$(calls)" = "$exp_b" ] && has_line "$OUT" "✅ release $VER created (4 assets)" \
    && has_line "$OUT" "$REL_URL" && [ "$(grep -c "${US}-F${US}attachment=@" "$T/curl.log")" = 4 ] \
    && grep -q "${US}Content-Type: application/json${US}--data-binary${US}@" "$T/curl.log"; then
-    ok "b: release absent → GET, POST release (JSON file body), 4 asset POSTs in order with ?name=, ✅ + release URL"
+    ok "b: release absent → GET, tag GET (indexed), POST release (JSON file body), 4 asset POSTs in order with ?name=, ✅ + release URL"
 else fail "b: happy path (rc=$RC)"; show; show_calls; fi
 cp "$T/curl.log" "$T/curl.happy"
 
@@ -755,10 +768,11 @@ rm -f "$T/release-assets"
 run_api "$PA" "$BA" --force
 exp_d="GET $API/releases/tags/$VER
 DELETE $API/releases/90
+$TAG_CALL
 POST $API/releases
 $ASSET_CALLS"
 if [ "$RC" = 0 ] && [ "$(calls)" = "$exp_d" ] && has_line "$OUT" "✅ release $VER created (4 assets)"; then
-    ok "d: --force + existing release → DELETE …/releases/90 before POST, then 4 assets"
+    ok "d: --force + existing release → DELETE …/releases/90, tag GET, then POST, then 4 assets"
 else fail "d: --force recreate (rc=$RC)"; show; show_calls; fi
 rm -f "$T/release-exists" "$T/asset-checksums"
 
@@ -766,6 +780,7 @@ rm -f "$T/release-exists" "$T/asset-checksums"
 : > "$T/fail-release"
 run_api "$PA" "$BA"
 if [ "$RC" = 1 ] && [ "$(calls)" = "GET $API/releases/tags/$VER
+$TAG_CALL
 POST $API/releases" ] && has_line "$OUT" "❌ creating Gitea Release $VER failed (HTTP 500)"; then
     ok "c2: POST release 500 → exit 1 with ❌ line, no asset uploads"
 else fail "c2: release POST failure (rc=$RC)"; show; show_calls; fi
@@ -774,7 +789,7 @@ rm -f "$T/fail-release"
 # --- c4: POST release 201 without an id → exit 1 ❌, no asset call ---
 : > "$T/release-noid"
 run_api "$PA" "$BA"
-if [ "$RC" = 1 ] && [ "$(wc -l < "$T/curl.log" | tr -d ' ')" = 2 ] \
+if [ "$RC" = 1 ] && [ "$(wc -l < "$T/curl.log" | tr -d ' ')" = 3 ] \
    && has_line "$OUT" "❌ Gitea Release $VER: no release id in the API response — re-run to upload the missing asset(s), or --force to recreate"; then
     ok "c4: release created without an id → exit 1 with ❌ line, no asset uploads"
 else fail "c4: missing id (rc=$RC)"; show; show_calls; fi
@@ -783,7 +798,7 @@ rm -f "$T/release-noid"
 # --- c3: one asset POST → 500 → exit 1 naming that asset ---
 printf 'checksums.txt' > "$T/fail-asset"
 run_api "$PA" "$BA"
-if [ "$RC" = 1 ] && [ "$(wc -l < "$T/curl.log" | tr -d ' ')" = 5 ] \
+if [ "$RC" = 1 ] && [ "$(wc -l < "$T/curl.log" | tr -d ' ')" = 6 ] \
    && has_line "$OUT" "❌ uploading asset checksums.txt to Gitea Release $VER failed (HTTP 500) — re-run to upload the missing asset(s), or --force to recreate"; then
     ok "c3: asset upload 500 → exit 1 with ❌ line naming checksums.txt, later assets not sent"
 else fail "c3: asset failure (rc=$RC)"; show; show_calls; fi
@@ -861,6 +876,102 @@ if [ "$RC" = 0 ] && [ -f "$T/body.json" ] && has_line "$OUT" "✅ release $VER c
         else fail "j2: fallback body mismatch"; sed 's/^/    | /' < "$T/body.json"; fi
     else echo "  ➖ j2: python3 unusable in this test env — JSON parse assertion skipped"; fi
 else fail "j2: python3-hidden publish (rc=$RC)"; show; show_calls; fi
+
+# ══ G9: the Release waits for Gitea to index the pushed tag ══
+# Gitea dates a Release from its indexed tag; one created too early shows
+# 1970-01-01. WN is published once, then every run is "already published" and
+# goes straight to the API phase with no Release present (→ the POST path).
+WN=waitapp
+mk_project "$WN" "$VER"
+BW2="$T/bare-wait.git"; mk_bare "$BW2"
+WAPI="https://$HOSTX/api/v1/repos/my-releases/$WN"
+WTAG="GET $WAPI/tags/$VER"
+WPOST="POST $WAPI/releases"
+WARN_LINE="⚠️ Gitea has not indexed tag $VER after 3s — creating the Release anyway (its date may show as 1970-01-01; re-run after indexing to fix)"
+# tag_mt — the -m value of every recorded tag GET, one per line.
+tag_mt() {
+    awk -v FS="$US" -v u="$WAPI/tags/$VER" '{ hit = 0; mt = ""
+        for (i = 1; i <= NF; i++) { if ($i == u) hit = 1; if ($i == "-m") mt = $(i + 1) }
+        if (hit) print mt }' "$T/curl.log"
+}
+
+# --- w1: tag 404, 404, 200 → three tag GETs, then exactly one POST, no ⚠️ ---
+printf '404 404 200\n' > "$T/tag-codes"
+run_api "$T/$WN" "$BW2"
+w1_calls=$(calls)
+exp_w1="GET $WAPI/releases/tags/$VER
+$WTAG
+$WTAG
+$WTAG
+$WPOST"
+if [ "$RC" = 0 ] && [ "$(head -5 <<<"$w1_calls")" = "$exp_w1" ] \
+   && [ "$(grep -cxF -- "$WPOST" <<<"$w1_calls")" = 1 ] \
+   && ! has "$OUT" "has not indexed tag" && has_line "$OUT" "✅ release $VER created (4 assets)"; then
+    ok "w1: tag 404,404,200 → 3 tag GETs then exactly one POST /releases, no ⚠️"
+else fail "w1: wait until indexed (rc=$RC)"; show; show_calls; fi
+rm -f "$T/tag-codes"
+
+# --- w2: tag never indexed, WAIT=3 → one ⚠️ line, one POST, bounded wall clock ---
+# Bounds (w2 ≤ 10 s, w3 ≤ 12 s) only need to sit well under the 30 s default
+# wait, which is what a regression that ignores WAIT would take; tighter bounds
+# (5/6 s vs 4 s measured) flaked on a loaded machine.
+printf '404\n' > "$T/tag-codes"
+w_t0=$(date +%s)
+GITX_GITEA_TAG_WAIT=3 run_api "$T/$WN" "$BW2"
+w_el=$(( $(date +%s) - w_t0 ))
+w2_calls=$(calls)
+if [ "$RC" = 0 ] && [ "$(grep -cxF -- "$WARN_LINE" <<<"$OUT")" = 1 ] \
+   && [ "$(grep -c 'has not indexed tag' <<<"$OUT")" = 1 ] \
+   && [ "$(grep -cxF -- "$WPOST" <<<"$w2_calls")" = 1 ] \
+   && [ "$(grep -cxF -- "$WTAG" <<<"$w2_calls")" -ge 1 ] && [ "$w_el" -le 10 ]; then
+    ok "w2: tag never indexed (WAIT=3) → exactly one ⚠️ line, one POST, ${w_el}s ≤ 10s"
+else fail "w2: deadline (rc=$RC, elapsed=${w_el}s)"; show; show_calls; fi
+
+# --- w3: each tag GET takes 2 s, WAIT=3 → still bounded, every -m ≤ 3 ---
+: > "$T/tag-slow"
+w_t0=$(date +%s)
+GITX_GITEA_TAG_WAIT=3 run_api "$T/$WN" "$BW2"
+w_el=$(( $(date +%s) - w_t0 ))
+w3_mt=$(tag_mt)
+w3_bad=$(awk '!($1 ~ /^[0-9]+$/ && $1 >= 1 && $1 <= 3)' <<<"$w3_mt")
+w3_calls=$(calls)
+if [ "$RC" = 0 ] && [ -n "$w3_mt" ] && [ -z "$w3_bad" ] && [ "$w_el" -le 12 ] \
+   && [ "$(grep -cxF -- "$WARN_LINE" <<<"$OUT")" = 1 ] \
+   && [ "$(grep -cxF -- "$WPOST" <<<"$w3_calls")" = 1 ]; then
+    ok "w3: slow tag GETs (2 s each, WAIT=3) → ${w_el}s ≤ 12s, every tag GET -m in 1..3 ($(tr '\n' ' ' <<<"$w3_mt"))"
+else fail "w3: slow mock (rc=$RC, elapsed=${w_el}s, -m='$w3_mt')"; show; show_calls; fi
+rm -f "$T/tag-slow" "$T/tag-codes"
+
+# --- w4: WAIT=0 → no tag GET at all, the POST still happens ---
+GITX_GITEA_TAG_WAIT=0 run_api "$T/$WN" "$BW2"
+w4_calls=$(calls)
+if [ "$RC" = 0 ] && [ "$(grep -cxF -- "$WTAG" <<<"$w4_calls")" = 0 ] \
+   && [ "$(grep -cxF -- "$WPOST" <<<"$w4_calls")" = 1 ] && ! has "$OUT" "has not indexed tag"; then
+    ok "w4: GITX_GITEA_TAG_WAIT=0 → no GET …/tags/$VER, POST sent"
+else fail "w4: no wait (rc=$RC)"; show; show_calls; fi
+
+# --- w5: WAIT=abc → exit 2 ❌ before any git network call or curl ---
+BW5="$T/bare-wait5.git"; mk_bare "$BW5"
+: > "$T/git.log"
+GITX_GITEA_TAG_WAIT=abc run_api "$T/$WN" "$BW5"
+if [ "$RC" = 2 ] && has_line "$OUT" "❌ GITX_GITEA_TAG_WAIT must be a non-negative integer (got 'abc')" \
+   && no_net_git && [ ! -s "$T/curl.log" ] && [ "$(refs_n "$BW5")" = 0 ]; then
+    ok "w5: GITX_GITEA_TAG_WAIT=abc → exit 2 ❌, no git push/fetch/ls-remote, no curl"
+else fail "w5: invalid wait (rc=$RC)"; show; fi
+
+# --- w6: Release already exists (asset-only completion) → no tag GET ---
+: > "$T/release-exists"
+cp "$T/$WN/Release/$WN-$VER/checksums.txt" "$T/asset-checksums"
+printf '%s\n' "$WN-$VER.skill" checksums.txt > "$T/release-assets"
+printf '404\n' > "$T/tag-codes"
+run_api "$T/$WN" "$BW2"
+w6_calls=$(calls)
+if [ "$RC" = 0 ] && [ "$(grep -cxF -- "$WTAG" <<<"$w6_calls")" = 0 ] \
+   && [ "$(grep -cxF -- "$WPOST" <<<"$w6_calls")" = 0 ] \
+   && has_line "$OUT" "✅ release $VER completed (2 missing asset(s) uploaded)" && ! has "$OUT" "has not indexed tag"; then
+    ok "w6: existing Release, asset-only path → no tag GET, no POST /releases, 2 uploads"
+else fail "w6: asset-only path (rc=$RC)"; show; show_calls; fi
+rm -f "$T/release-exists" "$T/asset-checksums" "$T/release-assets" "$T/tag-codes"
 
 # --- e: the netrc fixture secret never reaches stdout/stderr ---
 if [ -n "$ALL_OUT" ] && ! has "$ALL_OUT" 'password y' && ! has "$ALL_OUT" 'login x'; then

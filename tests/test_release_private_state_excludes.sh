@@ -27,7 +27,7 @@ echo "══ test_release_private_state_excludes.sh ══"
 # shippable input; rsync staging ignores .gitignore so it must be on the
 # explicit --exclude list or it leaks into the public source tarball
 # (codex P2, v1.9.6). Dual-source byte-identity covers the bundle copy.
-for pat in ".omc" ".1by1" ".i18n-cache" ".cache" ".env*" ".ssh" ".aws" ".python-version" ".github-publish-wt" ".gitx" "graphify-out" "CLAUDE.md" "HANDOFFX.md" "Handoffx_Logs" "Handoffx_Decisions"; do
+for pat in ".omc" "wip/" ".serena" ".1by1" ".i18n-cache" ".cache" ".env*" ".ssh" ".aws" ".python-version" ".github-publish-wt" ".gitx" "graphify-out" "CLAUDE.md" "HANDOFFX.md" "Handoffx_Logs" "Handoffx_Decisions"; do
     if grep -Fq -- "--exclude='$pat'" "$RELEASE_SH" || grep -Fq -- "--exclude=\"$pat\"" "$RELEASE_SH"; then
         ok "release.sh excludes $pat"
     else
@@ -154,7 +154,7 @@ else
 fi
 
 # ── Test 2h: detection regex parity with release.sh's rsync exclude list ──
-# Why: release.sh excludes .omc/, memory/, docs/superpowers/, REVIEW.md,
+# Why: release.sh excludes .omc/, wip/, memory/, docs/superpowers/, REVIEW.md,
 # GitHub_STANDARD_ANALYSIS.md and NESTED HANDOFF.md/GOTCHAS.md/Handoff_*
 # (prevention), but the audit's fail-closed net lacked them (detection gap).
 # Tested against the REAL regex extracted from release-audit.sh — not a copy —
@@ -169,6 +169,7 @@ else
              p-v1/GitHub_STANDARD_ANALYSIS.md p-v1/skills/s/HANDOFF.md \
              p-v1/docs/GOTCHAS.md p-v1/a/Handoff_Logs/x \
              p-v1/a/.omc/x p-v1/a/memory/x \
+             p-v1/wip/x p-v1/a/wip/x p-v1/.serena/x p-v1/a/.serena/x \
              p-v1/.superpowers/x p-v1/a/.superpowers/x \
              p-v1/skills/s/HANDOFFX.md p-v1/a/Handoffx_Logs/x p-v1/b/Handoffx_Decisions/y; do
         if grep -qE "$_re" <<<"$p"; then
@@ -177,7 +178,8 @@ else
             fail "private-state regex MISSES $p (release.sh excludes it; audit must detect it)"
         fi
     done
-    for p in p-v1/docs/superpowers-guide.md p-v1/README.md p-v1/scripts/memory-notes.md; do
+    for p in p-v1/docs/superpowers-guide.md p-v1/README.md p-v1/scripts/memory-notes.md \
+             p-v1/docs/wip-notes.md p-v1/a/mywip/x p-v1/docs/serena-notes.md; do
         if grep -qE "$_re" <<<"$p"; then
             fail "private-state regex over-matches benign $p"
         else

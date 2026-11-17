@@ -51,29 +51,28 @@ for f in docs-contract/manifest.txt docs-contract/cjk-allow.txt; do
   fi
 done
 
-# --- T12: signed-template folds (C1/C3/F1/F2/F3 + --force, Gotcha #60) ---
+# --- v1.14.0: generic templates follow references/RELEASE_PAGE_STANDARD.md ---
+# The old C1/C3/F1/F2/F3/--force folds asserted GitX's own README copied into
+# the templates; v1.14.0 replaced them with generic scaffolds, so the checks
+# now lock the standard's structure instead of GitX-specific prose.
 EN="$ROOT/references/readme/README.template.md"
 CN="$ROOT/references/readme/README_CN.template.md"
 MAN="$ROOT/references/docs-contract/manifest.txt"
-# C1: Special Thanks relocated to bottom (in last 40 lines, NOT the first ## section)
-tail -40 "$EN" | grep -q '^## Special Thanks$' && ok "C1 EN Special Thanks at bottom" || fail "C1 EN Special Thanks not relocated"
-tail -40 "$CN" | grep -q '^## 特别致谢$' && ok "C1 CN 特别致谢 at bottom" || fail "C1 CN 特别致谢 not relocated"
-[ "$(grep -nE '^## ' "$EN" | head -1 | grep -c 'Special Thanks')" -eq 0 ] && ok "C1 EN Special Thanks not first section" || fail "C1 EN Special Thanks still first"
 # manifest: license is the last README section (v1.13.1 moved thanks into docs/JOURNEY.md)
-[ "$(grep -E '^section:' "$MAN" | tail -1 | awk '{print $2}')" = "license" ] && ok "C1 manifest ends with license" || fail "C1 manifest order wrong"
-# C3: Real-Machine Test Results present, EN + CN
-grep -q 'Real-Machine Test Results' "$EN" && ok "C3 EN Real-Machine block" || fail "C3 EN missing"
-grep -q '真机测试结果' "$CN" && ok "C3 CN 真机测试结果 block" || fail "C3 CN missing"
-# F1: CN must NOT reference CONTRIBUTING_CN.md (out of locked bilingual scope)
-grep -q 'CONTRIBUTING_CN\.md' "$CN" && fail "F1 CN still references CONTRIBUTING_CN.md" || ok "F1 CN → CONTRIBUTING.md"
-# F2: EN Testing has the Suite coverage lead-in (CN already had 套件覆盖：)
-grep -qF '**Suite coverage:**' "$EN" && ok "F2 EN Suite coverage lead-in" || fail "F2 EN missing"
-grep -qF '**套件覆盖：**' "$CN" && ok "F2 CN 套件覆盖 lead-in" || fail "F2 CN missing"
-# F3: EN Configuration files-row names _CN.md
-grep -qF '`Release/CHANGELOG.md` / `_CN.md`' "$EN" && ok "F3 EN _CN.md row" || fail "F3 EN missing _CN.md row"
-# Gotcha #60: install.sh --force documented in BOTH locales (data-loss op)
-grep -q 'install\.sh --force' "$EN" && ok "--force documented EN" || fail "--force missing EN"
-grep -q 'install\.sh --force' "$CN" && ok "--force documented CN" || fail "--force missing CN"
+[ "$(grep -E '^section:' "$MAN" | tail -1 | awk '{print $2}')" = "license" ] && ok "manifest ends with license" || fail "manifest order wrong"
+for tf in "$EN" "$CN"; do
+  b=$(basename "$tf")
+  grep -qF '{{PROJECT}}' "$tf" && ok "$b uses {{PROJECT}}" || fail "$b missing {{PROJECT}}"
+  grep -qF '{{PROJECT_SLUG}}' "$tf" && ok "$b uses {{PROJECT_SLUG}} anchors" || fail "$b missing {{PROJECT_SLUG}}"
+  grep -qE '^## 1\. ' "$tf" && ok "$b body headings numbered" || fail "$b headings not numbered"
+  grep -q '^> 🔄 ' "$tf" && ok "$b has 🔄 callout" || fail "$b missing 🔄 callout"
+  grep -qx '<!-- gitx:managed:metrics -->' "$tf" && ok "$b has metrics region" || fail "$b missing metrics region"
+  grep -qF 'OWNER/REPO/issues' "$tf" && ok "$b links bar has issues link" || fail "$b links bar missing issues link"
+  _body=$(grep -vE "^<!--|gitx:managed" "$tf" || true)
+  grep -qi gitx <<<"$_body" && fail "$b still carries GitX branding" || ok "$b is brand-free"
+done
+# standard §3: the CN page links the CN contributing guide
+grep -qF 'CONTRIBUTING_CN.md' "$CN" && ok "CN template links CONTRIBUTING_CN.md" || fail "CN template missing CONTRIBUTING_CN.md"
 # rot-proof: no static exact suite-count outside the managed region in either template
 for tf in "$EN" "$CN"; do
   if grep -nE '[0-9]+ / 0 (fail|failed|失败)|[0-9]+ (BDD suites|BDD 套件)' "$tf" \

@@ -3,7 +3,7 @@
 #
 # The central repo lets users run ONE:
 #   /plugin marketplace add tkxlab-ai/marketplace
-# then /plugin install <skill>@tkx-skills for any TKX skill. Each plugin's
+# then /plugin install <skill>@tkxlab for any TKX skill. Each plugin's
 # source is a github object pointing at that skill's OWN repo.
 # This validates the checked-in template the controller renders + pushes.
 #
@@ -28,17 +28,17 @@ else
     echo "FAIL"; exit 1
 fi
 
-# 2: name kebab-case == tkx-skills
+# 2: name kebab-case == tkxlab
 if python3 -c "
 import json,re
 m=json.load(open('$TPL'))
 n=m['name']
 assert re.fullmatch(r'[a-z0-9]+(-[a-z0-9]+)*', n), 'name not kebab: '+n
-assert n=='tkx-skills', 'name != tkx-skills: '+n
+assert n=='tkxlab', 'name != tkxlab: '+n
 " 2>/dev/null; then
-    ok "name kebab-case == tkx-skills"
+    ok "name kebab-case == tkxlab"
 else
-    fail "name not kebab-case / != tkx-skills"
+    fail "name not kebab-case / != tkxlab"
 fi
 
 # 3: every plugins[] entry has kebab name + github-object source w/ valid repo

@@ -839,6 +839,8 @@ build_source_tarball() {
         --exclude='tests/.tmp' \
         --exclude='.claude' \
         --exclude='.omc' \
+        --exclude='wip/' \
+        --exclude='.serena' \
         --exclude='.superpowers' \
         --exclude='.1by1' \
         --exclude='.i18n-cache' \
@@ -1170,6 +1172,14 @@ EOF_FF
     if [ -d "$SKILL_SRC_DIR/assets" ]; then
         run cp -R "$SKILL_SRC_DIR/assets" "$RELEASE_DIR/assets"
     fi
+    # schema/ — the JSON contracts bounding a skill's LLM boundaries. A skill
+    # that validates model output resolves them RELATIVE to its own install
+    # root (claudemex: `$SCRIPT_DIR/../schema/x.schema.json`), so a flattened
+    # bundle without schema/ installs a skill whose LLM stages then fail at
+    # their validation step. Generic-safe: copied only when present.
+    if [ -d "$SKILL_SRC_DIR/schema" ]; then
+        run cp -R "$SKILL_SRC_DIR/schema" "$RELEASE_DIR/schema"
+    fi
     echo "   → 已拷到 $RELEASE_DIR/（顶层）"
 }
 
@@ -1451,7 +1461,7 @@ build_source_tarball
 assert_changelog_tarball_parity
 run_sanity_scans
 flatten_docs
-echo "📋 Running docs-audit ......... document contract (H1–H7 + H10 + H11)"
+echo "📋 Running docs-audit ......... document contract (H1–H7 + H10 + H11 + H12)"
 if ! PROJECT_ROOT="$PROJECT_ROOT" bash "$SKILL_ROOT/docs-audit.sh"; then
     echo "❌ docs-audit failed — document contract violated. Release aborted." >&2
     exit 1

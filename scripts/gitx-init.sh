@@ -325,6 +325,6 @@ Next steps to publish:
      marketplace.json "plugins" array (commit + push there).
   2. Users then run:
        /plugin marketplace add tkxlab-ai/marketplace
-       /plugin install $PLUGIN_NAME@tkx-skills
+       /plugin install $PLUGIN_NAME@tkxlab
 EOF
 exit 0

@@ -8,6 +8,7 @@
 # H7: self shellcheck-clean at -S warning (generic-safe skip when shellcheck absent).
 # H10: every repo-local link / <img src> in each README resolves; declared hero exists.
 # H11: no README cites private working files (Gotcha / Dev Log / Decision / handoff).
+# H12: every in-page link ](#frag) in each README matches a heading slug.
 # Non-counting (Gotcha #62): never prints PASS/FAIL/SKIP tallies; owns STRUCTURE only.
 # Generic-safe SKIP (Gotcha #51): absent manifest -> "not applicable" + exit 0.
 # Usage: [PROJECT_ROOT=<dir>] docs-audit.sh
@@ -42,6 +43,7 @@ _section_ids_in_file() {
         m["Comparison"]                  = "comparison"
         m["Command Surface"]             = "command-surface"
         m["Pipeline & Audit Gates"]      = "pipeline-audit-gates"
+        m["How It Works"]                = "pipeline-audit-gates"
         m["Quick Start"]                 = "quick-start"
         m["Configuration"]               = "configuration"
         m["Architecture"]                = "architecture"
@@ -60,7 +62,10 @@ _section_ids_in_file() {
         m["Special Thanks"]              = "special-thanks"
         m["License"]                     = "license"
       }
-      /^## / { h=substr($0,4); sub(/\r$/,"",h); if (h in m) print m[h] }
+      # G4: an optional "N. " section number is not part of the heading name,
+      # and "Why <Project>" is section 1 for ANY project (generic template).
+      /^## / { h=substr($0,4); sub(/\r$/,"",h); sub(/^[0-9]+\.[ \t]+/,"",h)
+               if (h ~ /^Why /) print "why-gitx"; else if (h in m) print m[h] }
     ' "$file"
   else
     awk '
@@ -73,6 +78,7 @@ _section_ids_in_file() {
         m["横向对比"]          = "comparison"
         m["命令面"]            = "command-surface"
         m["流水线与审计闸"]    = "pipeline-audit-gates"
+        m["工作原理"]    = "pipeline-audit-gates"
         m["快速开始"]          = "quick-start"
         m["配置"]              = "configuration"
         m["架构"]              = "architecture"
@@ -91,7 +97,10 @@ _section_ids_in_file() {
         m["特别致谢"]          = "special-thanks"
         m["许可"]              = "license"
       }
-      /^## / { h=substr($0,4); sub(/\r$/,"",h); if (h in m) print m[h] }
+      # G4: an optional "N. " section number is not part of the heading name,
+      # and "Why <Project>" is section 1 for ANY project (generic template).
+      /^## / { h=substr($0,4); sub(/\r$/,"",h); sub(/^[0-9]+\.[ \t]+/,"",h)
+               if (h ~ /^为什么选择 /) print "why-gitx"; else if (h in m) print m[h] }
     ' "$file"
   fi
 }
@@ -307,31 +316,16 @@ _check_h4() {
     rc=1
   fi
 
-  # H4.2: build-metrics region — **vX.Y.Z** must match VERSION.
-  local readme_ver
-  readme_ver=$(LC_ALL=C awk '
-    /^<!-- gitx:managed:build-metrics -->/{f=1; next}
-    /^<!-- \/gitx:managed:build-metrics -->/{f=0; next}
-    f && /\*\*v[0-9]+\.[0-9]+\.[0-9]+\*\*/{
-      match($0,/\*\*v[0-9]+\.[0-9]+\.[0-9]+\*\*/)
-      s=substr($0,RSTART+2,RLENGTH-4); print s; exit
-    }
-  ' "$readme" || true)
+  # H4.2/H4.3: build-metrics labeled sub-tokens (A1) — extracted with the
+  # same labeled rule docs-pipeline rewrites with, so a value the rewriter
+  # would change (including a stale `unknown`) is always reported here.
+  local readme_ver readme_rd
+  readme_ver="$(dp_subtoken_extract version "$readme" || true)"
   if [ -n "$readme_ver" ] && [ "$readme_ver" != "$live_ver" ]; then
     echo "  docs-audit H4 [$label]: build-metrics version is $readme_ver, expected $live_ver" >&2
     rc=1
   fi
-
-  # H4.3: build-metrics region — **YYYY-MM-DD** must match top CHANGELOG date.
-  local readme_rd
-  readme_rd=$(LC_ALL=C awk '
-    /^<!-- gitx:managed:build-metrics -->/{f=1; next}
-    /^<!-- \/gitx:managed:build-metrics -->/{f=0; next}
-    f && /\*\*[0-9]{4}-[0-9]{2}-[0-9]{2}\*\*/{
-      match($0,/\*\*[0-9]{4}-[0-9]{2}-[0-9]{2}\*\*/)
-      s=substr($0,RSTART+2,RLENGTH-4); print s; exit
-    }
-  ' "$readme" || true)
+  readme_rd="$(dp_subtoken_extract date "$readme" || true)"
   if [ -n "$readme_rd" ] && [ "$readme_rd" != "$live_rd" ]; then
     echo "  docs-audit H4 [$label]: build-metrics date is $readme_rd, expected $live_rd" >&2
     rc=1
@@ -523,7 +517,77 @@ _check_h11() {
 _check_h11 "$EN_README" "en" || OVERALL_RC=1
 _check_h11 "$CN_README" "cn" || OVERALL_RC=1
 
+# H12: an in-page link whose fragment matches no heading is a dead click on
+# GitHub — typically a ToC left behind when headings gain numbers ("1. Why X"
+# → #1-why-x). Slugs follow GitHub's rule (DP_SLUG_AWK in docs-pipeline.sh,
+# kept separate from G4's number stripping: anchors KEEP the number). Headings
+# and links inside ``` / ~~~ fences are ignored; a fence closes only on the
+# same marker at least as long as the opener. Duplicates get -1, -2 … in
+# order, and a slug already taken (e.g. an explicit "FAQ-1") is skipped.
+_check_h12() {
+  local file="$1" label="$2" pipeline_sh out rc=0 kind val
+  [ -f "$file" ] || return 0
+  pipeline_sh="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/docs-pipeline.sh"
+  if [ ! -f "$pipeline_sh" ]; then
+    echo "  docs-audit H12 [$label]: docs-pipeline.sh not found — skipping H12" >&2
+    return 0
+  fi
+  # shellcheck disable=SC1090
+  set -- && DOCS_PIPELINE_LIB=1 source "$pipeline_sh"
+  out=$(LC_ALL=C awk "$DP_SLUG_AWK"'
+    function fence_open(s,    lead, m) {
+      if (!match(s, /^ *(```+|~~~+)/)) return 0
+      lead = s; sub(/[^ ].*$/, "", lead)
+      if (length(lead) > 3) return 0
+      m = substr(s, RSTART + length(lead), RLENGTH - length(lead))
+      fch = substr(m, 1, 1); flen = length(m); return 1
+    }
+    function fence_close(s,    t) {
+      t = s; sub(/^ */, "", t)
+      if (length(s) - length(t) > 3) return 0
+      sub(/[ \t\r]+$/, "", t)
+      if (length(t) < flen) return 0
+      if (t !~ /^(`+|~+)$/) return 0
+      return substr(t, 1, 1) == fch
+    }
+    infence { if (fence_close($0)) infence = 0; next }
+    fence_open($0) { infence = 1; next }
+    /^###?#?#?#? / {
+      h = $0; sub(/^#+ +/, "", h); sub(/[ \t\r]+$/, "", h)
+      s = dp_gh_slug(h)
+      if (dp_noslug) { print "N\t" h }
+      else {
+        base = s
+        while (s in occ) { occ[base]++; s = base "-" occ[base] }
+        occ[s] = 0
+      }
+    }
+    {
+      line = $0
+      while (match(line, /\]\(#[^)]*\)/)) {
+        nl++; links[nl] = substr(line, RSTART + 3, RLENGTH - 4)
+        line = substr(line, RSTART + RLENGTH)
+      }
+    }
+    END { for (i = 1; i <= nl; i++) if (!(links[i] in occ)) print "U\t" links[i] }
+  ' "$file") || { echo "  docs-audit H12 [$label]: slug scan failed on $file" >&2; return 1; }
+  while IFS="$(printf '\t')" read -r kind val; do
+    [ "$kind" = U ] || continue
+    echo "  docs-audit H12 [$label]: in-page link #$val in $file matches no heading" >&2
+    rc=1
+  done <<<"$out"
+  if [ "$rc" -ne 0 ]; then
+    while IFS="$(printf '\t')" read -r kind val; do
+      [ "$kind" = N ] || continue
+      echo "    hint: heading '$val' has a character outside the supported anchor set (emoji, ·, —, CJK punctuation) — it gets no checkable anchor" >&2
+    done <<<"$out"
+  fi
+  return $rc
+}
+_check_h12 "$EN_README" "en" || OVERALL_RC=1
+_check_h12 "$CN_README" "cn" || OVERALL_RC=1
+
 if [ "$OVERALL_RC" -eq 0 ]; then
-  echo "docs-audit: H1+H2+H3+H4+H5+H6+H7+H10+H11 clean"
+  echo "docs-audit: H1+H2+H3+H4+H5+H6+H7+H10+H11+H12 clean"
 fi
 exit $OVERALL_RC

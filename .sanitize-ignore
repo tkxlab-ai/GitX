@@ -29,6 +29,8 @@ SECURITY.md
 # they never enter a release artifact. Whitelisted here only so that
 # `release-sanitize.sh .` (local self-check on repo root) exits clean.
 .omc/*
+wip/*
+.serena/*
 .superpowers/*
 REVIEW.md
 GitHub_STANDARD_ANALYSIS.md

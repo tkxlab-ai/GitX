@@ -1,5 +1,5 @@
 #!/bin/bash
-# test_docs_contract.sh — manifest parse + cjk-allow + 5-region inventory
+# test_docs_contract.sh — manifest parse + cjk-allow + 6-region inventory
 set -euo pipefail
 
 ROOT="${PROJECT_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
@@ -14,8 +14,8 @@ echo "══ test_docs_contract.sh ══"
 [ -f "$M" ] && ok "manifest exists" || fail "manifest missing"
 [ -f "$A" ] && ok "cjk-allow exists" || fail "cjk-allow missing"
 regs=$(grep -E '^region:' "$M" 2>/dev/null | sed 's/^region:[[:space:]]*//' | sort | tr '\n' ' ')
-[ "$regs" = "badges build-metrics command-surface suite-count whats-new " ] \
-  && ok "5-region inventory exact" || fail "region set wrong: '$regs'"
+[ "$regs" = "badges build-metrics command-surface metrics suite-count whats-new " ] \
+  && ok "6-region inventory exact" || fail "region set wrong: '$regs'"
 grep -qE '^h3_threshold:[[:space:]]*8$' "$M" && ok "H3 threshold = 8" || fail "H3 threshold not 8"
 grep -qE '^doc:README\.md[[:space:]]+locale:en' "$M" && ok "EN README declared" || fail "EN README missing"
 grep -qE '^doc:README_CN\.md[[:space:]]+locale:cn' "$M" && ok "CN README declared" || fail "CN README missing"

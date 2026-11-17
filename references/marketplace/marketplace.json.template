@@ -1,10 +1,10 @@
 {
-  "name": "tkx-skills",
+  "name": "tkxlab",
   "owner": {
     "name": "TKXLAB.AI",
     "url": "https://github.com/tkxlab-ai"
   },
-  "description": "TKX skills marketplace. Add once via `/plugin marketplace add tkxlab-ai/marketplace`, then `/plugin install <skill>@tkx-skills` for any TKX skill.",
+  "description": "TKX skills marketplace. Add once via `/plugin marketplace add tkxlab-ai/marketplace`, then `/plugin install <skill>@tkxlab` for any TKX skill.",
   "plugins": [
     {
       "name": "gitx",
@@ -13,7 +13,7 @@
         "repo": "tkxlab-ai/GitX"
       },
       "description": "GitX — cross-project release pipeline.",
-      "version": "1.13.1",
+      "version": "1.14.0",
       "author": {
         "name": "TKXLAB.AI"
       },
@@ -26,5 +26,5 @@
       ]
     }
   ],
-  "version": "1.13.1"
+  "version": "1.14.0"
 }

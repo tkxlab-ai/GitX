@@ -41,6 +41,8 @@ compatibility: macOS/Linux, bash 3.2+ (POSIX shell), git 2.x, optional python3 +
 
 ## 执行流程
 
+> 脚本路径：下文 `scripts/…` 都在**本技能的安装目录**下，不在用户项目里。插件市场安装时是 `${CLAUDE_PLUGIN_ROOT}/scripts/…`；`install.sh` 安装时是 `~/.agents/skills/gitx-release/scripts/…`。调用时用实际存在的那一个，`PROJECT_ROOT` 指向用户项目。
+
 ### 发版（`release <version>`）
 
 `scripts/release.sh` 把发版管线拆为 15 个命名函数（主流程 ~25 行），严格按以下顺序调用：
@@ -72,7 +74,7 @@ wrapper 用法：`gitx-release.sh [--dry-run] [--version vX.Y.Z] [--skip-marketp
 
 在项目里放一个 `.gitx/gitea-release-target`（gitignored、本机专用、拒绝软链）即开启；没有它就什么都不做。内容只有一行，语法 `HOST[:SSH_PORT]/OWNER/REPO`，例如 `<gitea-host>:2222/my-releases/MySkill`（SSH 端口默认 22；不允许 `://`、空白、`password`/`token` 字样）。release 成功后 wrapper 调 `scripts/gitx-gitea-release.sh --version vX.Y.Z`：
 - 先校验 `checksums.txt`，再把平摊后的 `Release/<project>-<version>/` 作为 `main` 的一次提交 + 注解 tag `vX.Y.Z` 经 SSH 推到 `ssh://git@HOST:PORT/OWNER/REPO.git`（这是约束 1 的显式 opt-in 例外）；
-- 再经 `https://HOST/api/v1` 创建 Gitea Release，附 `.skill` / `-full.tar.gz` / `checksums.txt` / `install.sh`。这一步需要 `~/.netrc` 里有该 host 的 `machine` 条目（密码或 token；**绝不**存进仓库）；没有则跳过并 ⚠️ 提示。
+- 再经 `https://HOST/api/v1` 创建 Gitea Release，附 `.skill` / `-full.tar.gz` / `checksums.txt` / `install.sh`。这一步需要 `~/.netrc` 里有该 host 的 `machine` 条目（密码或 token；**绝不**存进仓库）；没有则跳过并 ⚠️ 提示。创建 Release 前会先轮询 `GET /repos/OWNER/REPO/tags/<ver>` 直到 Gitea 索引了新 tag（否则 Release 日期会显示为 1970-01-01），总时长上限 `GITX_GITEA_TAG_WAIT` 秒（默认 30，`0` = 不等；非负整数以外的值在任何推送前以退出码 2 拒绝），超时只 ⚠️ 提示并照常创建。
 
 运维前提：① host key 必须已在 `known_hosts`——先手动 `ssh -p PORT git@<gitea-host>` 一次（BatchMode 不会提示确认）；② API 固定为 `https://HOST`（443 端口），marker 里的端口只用于 SSH。
 
@@ -108,7 +110,7 @@ wrapper 用法：`gitx-release.sh [--dry-run] [--version vX.Y.Z] [--skip-marketp
 如果用户是在发版场景中调用 GitX，但当前项目缺少 `skills/*/SKILL.md` 或 `tests/run_all.sh`，不要只做人工结构检查后口头拒绝。必须至少运行一次：
 
 ```bash
-PROJECT_ROOT="$(pwd)" bash ~/.agents/skills/gitx-release/scripts/gitx-release.sh --dry-run
+PROJECT_ROOT="$(pwd)" bash <本技能目录>/scripts/gitx-release.sh --dry-run
 ```
 
 项目识别阶段会 fail-fast；如果发现旧式 flat `SKILL.md`，会在项目根目录生成 `GitX_Upgrade_Guideline.md`。生成 guideline 后再告诉用户：本次没有发版、没有 tag/push，需要先按该文件完成标准化迁移。
@@ -124,6 +126,10 @@ PROJECT_ROOT="$(pwd)" bash ~/.agents/skills/gitx-release/scripts/gitx-release.sh
 - §10 常见低级错误与防呆（10 大类）
 - §11 Git / GitHub 流程
 - §12 附录（LICENSE 模板 / 速检清单）
+
+### 发版页面标准（v1.14.0+）
+
+所有用 GitX 发版的项目，README / README_CN 与 Release 页面统一按 `references/RELEASE_PAGE_STANDARD.md`：引言式设计理念、编号章节标题、🔄 提示框、托管区块。新项目用 `scripts/docs-pipeline.sh --init` 生成骨架（已有 README 时先检后写，不加 `--force` 不覆盖），改完跑 `PROJECT_ROOT="$(pwd)" bash scripts/docs-audit.sh` 必须 clean。
 
 ## 何时**不**触发
 

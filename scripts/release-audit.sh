@@ -564,8 +564,8 @@ local name
 name="$(grep -m1 '"name"' "$pj" 2>/dev/null | sed -E 's/.*"name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/' || true)"
 check "README advertises central marketplace add" \
     grep -qF '/plugin marketplace add tkxlab-ai/marketplace' "$rf"
-check "README advertises central plugin install (${name}@tkx-skills)" \
-    grep -qF "/plugin install ${name}@tkx-skills" "$rf"
+check "README advertises central plugin install (${name}@tkxlab)" \
+    grep -qF "/plugin install ${name}@tkxlab" "$rf"
 }
 _track_start "§0h_central_install"
 audit_section_0_central_install
@@ -792,11 +792,11 @@ if [ -f "$DIR/$TAR_FILE" ]; then
     # detection of it, so the fail-closed net MUST positively reject it here
     # (detection) — same prevent-AND-detect pairing as .github-publish-wt.
     # Parity: every token in release.sh's rsync private-state excludes
-    # (.omc/, memory/, docs/superpowers/, REVIEW.md, GitHub_STANDARD_ANALYSIS.md,
+    # (.omc/, wip/, .serena/, memory/, docs/superpowers/, REVIEW.md, GitHub_STANDARD_ANALYSIS.md,
     # nested HANDOFF.md/GOTCHAS.md/Handoff_*) must also be detected here;
     # extended in this one regex so the check COUNT stays constant.
     check_not "不含 private local state dotdirs" \
-        grep -qE "^${PROJECT_NAME}-${VERSION}/(\.1by1/|\.i18n-cache/|\.cache/|\.ssh/|\.aws/|\.env[^/]*|\.python-version|\.github-publish-wt/|\.gitx/|docs/superpowers/|REVIEW\.md$|GitHub_STANDARD_ANALYSIS\.md$)|^${PROJECT_NAME}-${VERSION}/(.*/)?(\.omc/|memory/|\.superpowers/)|^${PROJECT_NAME}-${VERSION}/.*graphify-out/|^${PROJECT_NAME}-${VERSION}/(.*/)?CLAUDE\.md$|^${PROJECT_NAME}-${VERSION}/(.*/)+(HANDOFFX?\.md|GOTCHAS\.md|Handoffx?_Logs/|Handoffx?_Decisions/)" "$LIST"
+        grep -qE "^${PROJECT_NAME}-${VERSION}/(\.1by1/|\.i18n-cache/|\.cache/|\.ssh/|\.aws/|\.env[^/]*|\.python-version|\.github-publish-wt/|\.gitx/|docs/superpowers/|REVIEW\.md$|GitHub_STANDARD_ANALYSIS\.md$)|^${PROJECT_NAME}-${VERSION}/(.*/)?(\.omc/|wip/|\.serena/|memory/|\.superpowers/)|^${PROJECT_NAME}-${VERSION}/.*graphify-out/|^${PROJECT_NAME}-${VERSION}/(.*/)?CLAUDE\.md$|^${PROJECT_NAME}-${VERSION}/(.*/)+(HANDOFFX?\.md|GOTCHAS\.md|Handoffx?_Logs/|Handoffx?_Decisions/)" "$LIST"
     rm -f "$LIST"
     trap - RETURN   # clear the §5-scoped RETURN trap before leaving the function
 fi
@@ -1413,7 +1413,7 @@ else
 fi
 
 # --- §0k docs-audit document-contract gate (non-counting meta-gate, mirrors §0j) ---
-# Why: docs-audit.sh owns H1–H7+H10 (document structure); it is non-counting by
+# Why: docs-audit.sh owns H1–H7+H10–H12 (document structure); it is non-counting by
 # design (Gotcha #62) — never calls _track_start/_track_end so TOTAL is unchanged.
 # Generic-safe: no manifest → docs-audit SKIPs exit 0 (Gotcha #51). On the real
 # repo this surfaces ✅; dependent skills with no docs-contract manifest surface ➖.
@@ -1428,7 +1428,7 @@ if [ ! -f "$_da_script" ]; then
 else
     _da_out=$(PROJECT_ROOT="$PROJECT_ROOT" bash "$_da_script" 2>&1) && _da_rc=0 || _da_rc=$?
     if [ "$_da_rc" -eq 0 ]; then
-        echo "  ✅ docs-audit clean (H1–H7 + H10 + H11)"
+        echo "  ✅ docs-audit clean (H1–H7 + H10 + H11 + H12)"
         echo "$_da_out" | sed 's/^/    /'
     else
         echo "  ❌ docs-audit found document contract violations:"

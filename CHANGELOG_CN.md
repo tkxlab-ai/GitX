@@ -14,6 +14,27 @@
 
 ---
 
+## v1.14.0 — 2026-11-17
+
+### Added
+- 发版页面标准 `references/RELEASE_PAGE_STANDARD.md` 随技能下发：用 GitX 发版的项目统一 README 形态——引言式设计理念、带编号的章节标题、语言切换下方的 🔄 提示框，徽章、构建指标和数字由工具托管。
+- 新增 `metrics` 托管区块（已发布版本数、首个与最新版本、测试套件数），由 `docs-pipeline` 刷新；缺少数据来源时显示 `—`。
+- `docs-audit` 新规则 H12：页内链接（`#锚点`）必须指向同一页面里存在的标题。
+- Gitea 发布步骤先等服务器登记新推送的标签，再创建 Release（`GITX_GITEA_TAG_WAIT`，默认 30 秒），Release 日期不再显示为 1970 年。
+- 技能的 `schema/` 目录随 `scripts/` 一起复制进发布产物，按自己的 JSON 模式校验模型输出的技能安装后仍能找到它们。
+
+### Changed
+- `docs-pipeline --init` 使用的 README 模板改为通用模板（`{{PROJECT}}`、`{{PROJECT_SLUG}}` 与 TODO 标记），不再是 GitX 自己 README 的副本。
+- `docs-audit` 与 `docs-pipeline` 认识带编号的标题、任意项目的"为什么选择 <名称>"以及"工作原理"章节；版本号与发版日期按标签替换，`unknown` 占位可以刷新；`--check` 会指出哪些区块有漂移。
+- GitX 自己的 README 按新标准调整。
+- 插件市场改名为 `tkxlab`，插件安装名变为 `gitx@tkxlab`。Claude Code 没有市场改名的迁移方式：如果之前装的是 `gitx@tkx-skills`，请依次执行 `claude plugin marketplace remove tkx-skills`、`claude plugin marketplace add tkxlab-ai/marketplace`、`claude plugin install gitx@tkxlab`。`docs-pipeline` 生成的 README 与 Deep Audit 的安装检查都改用新名称。
+
+### Fixed
+- `docs-pipeline --init` 写入前先检查两个 README，没有 `--force` 时不再覆盖已有的 `README_CN.md`；同时生成文档契约，让 `docs-audit` 能检查新项目。
+- 只从插件市场安装 GitX 也能正常使用：`/gitx:*` 命令和技能从插件自己的安装目录找脚本，不再依赖 `install.sh` 的安装路径。
+
+---
+
 ## v1.13.1 — 2026-11-13
 
 ### Changed

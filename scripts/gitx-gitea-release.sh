@@ -29,6 +29,10 @@
 #                          push) may run before it is killed (default 300). SSH
 #                          keepalives only catch a dead link, not a remote git
 #                          that stalls on a live session.
+#   GITX_GITEA_TAG_WAIT    seconds (integer >= 0, default 30) to wait for
+#                          Gitea to index a pushed tag before creating its
+#                          Release; 0 = no wait. A Release created before the
+#                          tag is indexed is dated 1970-01-01 by Gitea.
 #
 # Inherited GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE / … are cleared before any
 # git call, so a caller's environment can never redirect them at its own repo.
@@ -498,7 +502,8 @@ ggr_api_publish() {
         # -n: the credential comes from ~/.netrc, never from argv; the timeouts
         # keep a hook from hanging the wrapper. Bodies go to a file, stdout is
         # only the status (000 when curl itself failed).
-        c() { "${GITX_GITEA_CURL:-curl}" -q -n -sS --connect-timeout 15 -m 300 \
+        # CM overrides -m for one call (the tag wait bounds each poll by it).
+        c() { "${GITX_GITEA_CURL:-curl}" -q -n -sS --connect-timeout 15 -m "${CM:-300}" \
                   -o "$W/resp" -w '%{http_code}' "$@"; }
         resp_id() { grep -oE '"id":[0-9]+' "$W/resp" 2>/dev/null | head -1 | cut -d: -f2 || true; }
         # upload_assets ID [have] — POST each of the four assets not named in
@@ -517,6 +522,38 @@ ggr_api_publish() {
                 k=$((k+1))
             done
             echo "$k"
+        }
+        # wait_tag — Gitea dates a Release from its indexed tag record; one
+        # created before the tag is indexed is stored with date 0 (shown
+        # 1970-01-01) and a delete/recreate reuses that row. So before the POST,
+        # poll GET …/tags/VER until 200 under one deadline of
+        # GITX_GITEA_TAG_WAIT seconds; on timeout warn once and let the single
+        # POST go ahead (a bad date beats a missing Release, and never hang).
+        wait_tag() {
+            local wait="${GITX_GITEA_TAG_WAIT:-30}" start now left t s tc
+            case "$wait" in *[!0-9]*)
+                echo "❌ GITX_GITEA_TAG_WAIT must be a non-negative integer (got '$wait')" >&2
+                return 1 ;;
+            esac
+            wait=$((10#$wait))
+            [ "$wait" -gt 0 ] || return 0
+            start=$(date +%s) || return 1
+            left=$wait
+            while :; do
+                t=$left; [ "$t" -le 10 ] || t=10; [ "$t" -ge 1 ] || t=1
+                tc=$(CM=$t c -X GET "$api/tags/$ver") || true
+                [ "$tc" = 200 ] && return 0
+                now=$(date +%s) || return 1
+                left=$((start + wait - now))
+                [ "$left" -gt 0 ] || break
+                s=2; [ "$left" -ge 2 ] || s=$left
+                sleep "$s" || return 1
+                now=$(date +%s) || return 1
+                left=$((start + wait - now))
+                [ "$left" -gt 0 ] || break
+            done
+            echo "⚠️ Gitea has not indexed tag $ver after ${wait}s — creating the Release anyway (its date may show as 1970-01-01; re-run after indexing to fix)" >&2
+            return 0
         }
         cd "$dir" || exit 1
 
@@ -586,6 +623,7 @@ ggr_api_publish() {
         printf '{"tag_name":"%s","name":"%s %s","body":%s,"draft":false,"prerelease":false}' \
             "$ver" "$PROJECT_NAME" "$ver" "$body" > "$W/body.json" || exit 1
 
+        wait_tag || exit 1
         code=$(c -X POST -H 'Content-Type: application/json' --data-binary "@$W/body.json" "$api/releases") || true
         [ "$code" = 201 ] || { echo "❌ creating Gitea Release $ver failed (HTTP ${code:-000})" >&2; exit 1; }
         id=$(resp_id)
@@ -614,6 +652,14 @@ ggr_main() {
         esac
         shift
     done
+
+    # Checked before any git network call, so a typo never half-publishes.
+    if [ -n "${GITX_GITEA_TAG_WAIT+x}" ]; then
+        case "$GITX_GITEA_TAG_WAIT" in ''|*[!0-9]*)
+            echo "❌ GITX_GITEA_TAG_WAIT must be a non-negative integer (got '$GITX_GITEA_TAG_WAIT')" >&2
+            return 2 ;;
+        esac
+    fi
 
     PROJECT_ROOT="${PROJECT_ROOT:-$(pwd)}"
     PROJECT_ROOT="$(cd "$PROJECT_ROOT" && pwd)" || { echo "❌ PROJECT_ROOT not found" >&2; return 1; }

@@ -29,11 +29,11 @@ chk(){ # $1=plugin.json path or '' ; $2=README ; expect $3 = PASS|FAIL|SKIP
   local pj="$1" rf="$2"
   if [ ! -f "$pj" ] || [ ! -f "$rf" ]; then echo SKIP; return; fi
   local n; n="$(grep -m1 '"name"' "$pj" 2>/dev/null | sed -E 's/.*"name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/' || true)"
-  if grep -qF '/plugin marketplace add tkxlab-ai/marketplace' "$rf" && grep -qF "/plugin install ${n}@tkx-skills" "$rf"; then echo PASS; else echo FAIL; fi
+  if grep -qF '/plugin marketplace add tkxlab-ai/marketplace' "$rf" && grep -qF "/plugin install ${n}@tkxlab" "$rf"; then echo PASS; else echo FAIL; fi
 }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 mkdir -p "$T/p"; printf '{\n  "name": "demoh"\n}\n' > "$T/p/plugin.json"
-printf '# demoh\n```bash\n/plugin marketplace add tkxlab-ai/marketplace\n/plugin install demoh@tkx-skills\n```\n' > "$T/good.md"
+printf '# demoh\n```bash\n/plugin marketplace add tkxlab-ai/marketplace\n/plugin install demoh@tkxlab\n```\n' > "$T/good.md"
 echo '# demoh no block' > "$T/bad.md"
 [ "$(chk "$T/p/plugin.json" "$T/good.md")" = PASS ] && ok "plugin + central block → PASS" || fail "good→PASS"
 [ "$(chk "$T/p/plugin.json" "$T/bad.md")" = FAIL ] && ok "plugin + missing block → FAIL" || fail "bad→FAIL"

@@ -3,7 +3,7 @@
 #
 # Makes the repo installable via:
 #   /plugin marketplace add tkxlab-ai/marketplace
-#   /plugin install gitx@tkx-skills
+#   /plugin install gitx@tkxlab
 # Dual-path: plugin manifests are ADDED; install.sh stays (flat /gitx-sop).
 #
 # exit: 0=all pass, 1=any fail

@@ -281,7 +281,7 @@ fi
 
 # === BEHAVIOR 13: SOP guides central marketplace + a CONCISE metrics line ===
 # Phase 4.6 must instruct: (a) register the plugin into ONE central
-# marketplace repo (tkxlab-ai/marketplace, install ONCE via @tkx-skills),
+# marketplace repo (tkxlab-ai/marketplace, install ONCE via @tkxlab),
 # and (b) require a concise ONE-LINE build-metrics block (no verbose
 # owner-disclaimer paragraph, no external-project name).
 if [ -x "$WRAPPER" ]; then
@@ -290,7 +290,7 @@ if [ -x "$WRAPPER" ]; then
     sop="$fx/.gitx/GITHUB_RELEASE_SOP.md"
     m=""
     grep -qF 'tkxlab-ai/marketplace'        "$sop" || m="$m central-repo"
-    grep -qF '@tkx-skills'                   "$sop" || m="$m tkx-skills"
+    grep -qF '@tkxlab'                   "$sop" || m="$m tkxlab"
     grep -qF 'marketplace-entry.json'        "$sop" || m="$m entry-json"
     grep -qiE '构建指标|build metrics'        "$sop" || m="$m metrics-block"
     grep -qiF 'ONE concise line'             "$sop" || m="$m concise-rule"

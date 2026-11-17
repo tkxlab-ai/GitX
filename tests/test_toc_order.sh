@@ -28,7 +28,9 @@ check() {
         }' "$f")
     # Body section headings, in order, restricted to those the ToC lists.
     local body
-    body=$(grep -E '^## ' "$f" | sed -E 's/^## //' \
+    # Headings may be numbered ("## 1. Why X") while the ToC item text is the
+    # bare name — strip the same "N. " prefix before comparing.
+    body=$(grep -E '^## ' "$f" | sed -E 's/^## //; s/^[0-9]+\. //' \
            | grep -Fxf <(printf '%s\n' "$toc") || true)
     if [ -z "$toc" ]; then fail "$(basename "$f"): no ToC entries parsed"; return; fi
     if [ "$toc" = "$body" ]; then

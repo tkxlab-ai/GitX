@@ -76,7 +76,7 @@ done
 echo ""
 echo "§ gitx-readme managed-region boundary (v1.10.0)"
 grep -qF '<!-- gitx:managed:suite-count -->' "$ROOT/README.md" && ok "README has managed suite-count" || fail "no managed suite-count"
-grep -qF '/plugin install gitx@tkx-skills' "$ROOT/README.md" && ok "README cites gitx@tkx-skills (feeds §0h)" || fail "missing central install"
+grep -qF '/plugin install gitx@tkxlab' "$ROOT/README.md" && ok "README cites gitx@tkxlab (feeds §0h)" || fail "missing central install"
 n=0; for _f in "$ROOT"/tests/test_*.sh; do [ -e "$_f" ] || continue; case "$_f" in */test_suite_structure.sh) ;; *) n=$((n+1));; esac; done; RC=$n
 awk '/gitx:managed:suite-count/{f=1;next}/\/gitx:managed:suite-count/{f=0}f' "$ROOT/README.md" | grep -qx "$RC" && ok "managed suite-count == filesystem ($RC)" || fail "suite-count mismatch want $RC"
 grep -qF '<!-- gitx:managed:whats-new -->' "$ROOT/README.md" && ok "README has managed whats-new (v1.10.1)" || fail "no managed whats-new"

@@ -73,13 +73,15 @@ cp "$REAL_ROOT/README.md" "$TMP_H1/README.md"
 cp "$REAL_ROOT/README_CN.md" "$TMP_H1/README_CN.md"
 
 # Remove the "## Testing" section heading from EN README → H1 must fire
-# (section-id "testing" is absent)
-sed -i.bak '/^## Testing$/d' "$TMP_H1/README.md"
+# (section-id "testing" is absent). Numbering-aware (G4): the heading may be
+# "## 7. Testing"; the mutation must actually change the file (A7).
+sed -i.bak -E '/^## ([0-9]+\. )?Testing$/d' "$TMP_H1/README.md"
 
 if [ -f "$AUDIT" ]; then
-  PROJECT_ROOT="$TMP_H1" bash "$AUDIT" >/dev/null 2>&1 && rc_h1=0 || rc_h1=$?
-  if [ "$rc_h1" -ne 0 ]; then
-    ok "H1 fires on missing section in EN README (exit $rc_h1 ≠ 0)"
+  err_h1=$(PROJECT_ROOT="$TMP_H1" bash "$AUDIT" 2>&1 >/dev/null) && rc_h1=0 || rc_h1=$?
+  if ! cmp -s "$TMP_H1/README.md" "$TMP_H1/README.md.bak" && [ "$rc_h1" -ne 0 ] \
+     && grep -qF "docs-audit H1 [en]: section 'testing' missing" <<<"$err_h1"; then
+    ok "H1 fires on missing section in EN README (exit $rc_h1, names 'testing')"
   else
     fail "H1 should have fired on missing section but got exit 0"
   fi
@@ -102,12 +104,13 @@ cp "$REAL_ROOT/README_CN.md" "$TMP_H2/README_CN.md"
 
 # Remove "## 测试" (the CN equivalent of Testing) from README_CN.md
 # so CN section-id list no longer includes "testing" → H2 divergence.
-sed -i.bak '/^## 测试$/d' "$TMP_H2/README_CN.md"
+sed -i.bak -E '/^## ([0-9]+\. )?测试$/d' "$TMP_H2/README_CN.md"
 
 if [ -f "$AUDIT" ]; then
-  PROJECT_ROOT="$TMP_H2" bash "$AUDIT" >/dev/null 2>&1 && rc_h2=0 || rc_h2=$?
-  if [ "$rc_h2" -ne 0 ]; then
-    ok "H2 fires on EN/CN section-id divergence (exit $rc_h2 ≠ 0)"
+  err_h2=$(PROJECT_ROOT="$TMP_H2" bash "$AUDIT" 2>&1 >/dev/null) && rc_h2=0 || rc_h2=$?
+  if ! cmp -s "$TMP_H2/README_CN.md" "$TMP_H2/README_CN.md.bak" && [ "$rc_h2" -ne 0 ] \
+     && grep -qF "docs-audit H2: EN/CN section-id lists diverge" <<<"$err_h2"; then
+    ok "H2 fires on EN/CN section-id divergence (exit $rc_h2, H2 line)"
   else
     fail "H2 should have fired on section-id divergence but got exit 0"
   fi
@@ -292,8 +295,8 @@ sed -i.bak 's/tests-[0-9]*%20suites%20%2F%200%20fail/tests-9999%20suites%20%2F%2
   "$TMP_H4B/README.md"
 
 if [ -f "$AUDIT" ]; then
-  PROJECT_ROOT="$TMP_H4B" bash "$AUDIT" >/dev/null 2>&1 && rc_h4b=0 || rc_h4b=$?
-  if [ "$rc_h4b" -ne 0 ]; then
+  err_h4b=$(PROJECT_ROOT="$TMP_H4B" bash "$AUDIT" 2>&1 >/dev/null) && rc_h4b=0 || rc_h4b=$?
+  if [ "$rc_h4b" -ne 0 ] && grep -qF 'docs-audit H4 [en]: badge suite count is 9999' <<<"$err_h4b"; then
     ok "H4 fires on tampered badge suite count (exit $rc_h4b ≠ 0)"
   else
     fail "H4 should have fired on tampered badge count but got exit 0"
@@ -322,8 +325,9 @@ ln -s "$REAL_ROOT/tests" "$TMP_H4V/tests"
 printf 'v99.99.99\n' > "$TMP_H4V/VERSION"
 
 if [ -f "$AUDIT" ]; then
-  PROJECT_ROOT="$TMP_H4V" bash "$AUDIT" >/dev/null 2>&1 && rc_h4v=0 || rc_h4v=$?
-  if [ "$rc_h4v" -ne 0 ]; then
+  err_h4v=$(PROJECT_ROOT="$TMP_H4V" bash "$AUDIT" 2>&1 >/dev/null) && rc_h4v=0 || rc_h4v=$?
+  if [ "$rc_h4v" -ne 0 ] && grep -qF 'expected v99.99.99' <<<"$err_h4v" \
+     && grep -qF 'docs-audit H4 [en]: build-metrics version is' <<<"$err_h4v"; then
     ok "H4 fires on mismatched VERSION vs build-metrics (exit $rc_h4v ≠ 0)"
   else
     fail "H4 should have fired on VERSION mismatch but got exit 0"
@@ -712,6 +716,153 @@ else
   ok "h11_allow in the manifest exempts a project's own product file name"
 fi
 rm -rf "$TMP_H11"
+
+# --- T20: G4 — numbered headings, "Why <Any>", "How It Works" are recognized ---
+# Scratch copies of the real READMEs; only H1/H2 lines are judged (the scratch
+# tree lacks link targets, so H10 etc. legitimately fire there).
+TMP_G4=$(mktemp -d)
+trap 'rm -rf "$TMP_G4"' EXIT
+mkdir -p "$TMP_G4/references/docs-contract"
+cp "$MANIFEST" "$TMP_G4/references/docs-contract/manifest.txt"
+_g4_run(){ { PROJECT_ROOT="$TMP_G4" bash "$AUDIT" >/dev/null || true; } 2>&1; }  # stderr only
+# (a) every body section numbered "## N. Title" (What's New / ToC stay bare)
+for _f in README.md README_CN.md; do
+  # .orig = the real README with any "N. " heading prefix stripped (the live
+  # README is itself numbered since v1.14.0), so (a) numbers a bare copy and
+  # (b) rewrites bare headings — both still differ from .orig.
+  sed -E 's/^## [0-9]+\. /## /' "$REAL_ROOT/$_f" > "$TMP_G4/$_f.orig"
+  awk '/^## / && $0 !~ /^## (What.s New|Table of Contents|更新摘要|目录)$/ { n++; sub(/^## /, "## " n ". ") } { print }' \
+    "$TMP_G4/$_f.orig" > "$TMP_G4/$_f"
+done
+err_g4=$(_g4_run)
+if ! cmp -s "$TMP_G4/README.md" "$TMP_G4/README.md.orig" && ! cmp -s "$TMP_G4/README_CN.md" "$TMP_G4/README_CN.md.orig" \
+   && grep -q '^## 1\. ' "$TMP_G4/README.md" && ! grep -qE 'docs-audit H(1|2)[ :]' <<<"$err_g4"; then
+  ok "G4 numbered '## N. Title' headings → H1/H2 clean (EN+CN)"
+else
+  fail "G4 numbered headings rejected: $(grep -E 'docs-audit H(1|2)' <<<"$err_g4" | head -3)"
+fi
+# (b) "Why <any project>" / "为什么选择 <any>" and "How It Works" / "工作原理"
+sed -E 's/^## ([0-9]+\. )?Why GitX$/## 1. Why HandoffX/; s/^## ([0-9]+\. )?Pipeline & Audit Gates$/## 3. How It Works/' \
+  "$TMP_G4/README.md.orig" > "$TMP_G4/README.md"
+sed -E 's/^## ([0-9]+\. )?为什么选择 GitX$/## 1. 为什么选择 HandoffX/; s/^## ([0-9]+\. )?流水线与审计闸$/## 3. 工作原理/' \
+  "$TMP_G4/README_CN.md.orig" > "$TMP_G4/README_CN.md"
+err_g4=$(_g4_run)
+if grep -qx '## 1. Why HandoffX' "$TMP_G4/README.md" && grep -qx '## 3. 工作原理' "$TMP_G4/README_CN.md" \
+   && grep -qx '## 3. How It Works' "$TMP_G4/README.md" && grep -qx '## 1. 为什么选择 HandoffX' "$TMP_G4/README_CN.md" \
+   && ! grep -qE 'docs-audit H(1|2)[ :]' <<<"$err_g4"; then
+  ok "G4 'Why HandoffX'/'为什么选择 HandoffX' + 'How It Works'/'工作原理' → H1/H2 clean"
+else
+  fail "G4 generic headings rejected: $(grep -E 'docs-audit H(1|2)' <<<"$err_g4" | head -3)"
+fi
+rm -rf "$TMP_G4"
+trap - EXIT
+
+# --- T21: A1 — H4 judges the LABELED build-metrics values ---
+TMP_A1=$(mktemp -d)
+trap 'rm -rf "$TMP_A1"' EXIT
+mkdir -p "$TMP_A1/references/docs-contract"
+cp "$MANIFEST" "$TMP_A1/references/docs-contract/manifest.txt"
+_a1_bm(){ # $1=version-value $2=date-value
+  printf '<!-- gitx:managed:build-metrics -->\n> Version **%s** · Released **%s**\n<!-- /gitx:managed:build-metrics -->\n' "$1" "$2" > "$TMP_A1/README.md"
+  printf '<!-- gitx:managed:build-metrics -->\n> 版本 **%s** · 发版日期 **%s**\n<!-- /gitx:managed:build-metrics -->\n' "$1" "$2" > "$TMP_A1/README_CN.md"
+}
+_a1_h4(){ PROJECT_ROOT="$TMP_A1" bash "$AUDIT" 2>&1 >/dev/null | grep -F 'docs-audit H4' || true; }
+_a1_bm unknown unknown
+h4=$(_a1_h4)
+[ -z "$h4" ] && ok "A1/H4 both unknown (no VERSION, no CHANGELOG) → no H4 line" || fail "A1/H4 both-unknown flagged: $h4"
+echo "v1.2.3" > "$TMP_A1/VERSION"; mkdir -p "$TMP_A1/Release"
+printf '## v1.2.3 — 2026-02-03\n- x\n' > "$TMP_A1/Release/CHANGELOG.md"
+_a1_bm v1.2.3 2026-02-03
+h4=$(_a1_h4)
+[ -z "$h4" ] && ok "A1/H4 both values current → no H4 line" || fail "A1/H4 current values flagged: $h4"
+_a1_bm v0.0.9 2026-02-03
+h4=$(_a1_h4)
+{ grep -qF 'docs-audit H4 [en]: build-metrics version is v0.0.9, expected v1.2.3' <<<"$h4" \
+  && grep -qF 'docs-audit H4 [cn]: build-metrics version is v0.0.9, expected v1.2.3' <<<"$h4" \
+  && ! grep -q 'date' <<<"$h4"; } \
+  && ok "A1/H4 stale version alone → H4 names the version only (EN+CN)" || fail "A1/H4 stale version: $h4"
+_a1_bm v1.2.3 2000-01-01
+h4=$(_a1_h4)
+{ grep -qF 'docs-audit H4 [en]: build-metrics date is 2000-01-01, expected 2026-02-03' <<<"$h4" \
+  && ! grep -q 'version' <<<"$h4"; } \
+  && ok "A1/H4 stale date alone → H4 names the date only" || fail "A1/H4 stale date: $h4"
+_a1_bm unknown unknown
+h4=$(_a1_h4)
+{ grep -qF 'build-metrics version is unknown, expected v1.2.3' <<<"$h4" \
+  && grep -qF 'build-metrics date is unknown, expected 2026-02-03' <<<"$h4"; } \
+  && ok "A1/H4 stale 'unknown' with live truths → H4 fails both" || fail "A1/H4 stale unknown passed: $h4"
+rm -rf "$TMP_A1"
+trap - EXIT
+
+# --- T22: G11 — GitHub slugs (golden) and rule H12 in-page anchors ---
+# `set --` before sourcing: the library parses its own positional args.
+_slug(){ bash -c 'export PROJECT_ROOT="$1" DOCS_PIPELINE_LIB=1; _lib="$2" _h="$3"; set --; . "$_lib"; dp_slug "$_h"' _ "$REAL_ROOT" "$SCRIPT_DIR/../scripts/docs-pipeline.sh" "$1"; }
+_slug_ok=1; _slug_bad=""
+while IFS='=' read -r _h _want; do
+  [ -n "$_h" ] || continue
+  _got=$(_slug "$_h")
+  [ "$_got" = "$_want" ] || { _slug_ok=0; _slug_bad="$_slug_bad [$_h→$_got≠$_want]"; }
+done <<'EOF_SLUGS'
+What's New=whats-new
+Pipeline & Audit Gates=pipeline--audit-gates
+1. Why GitX=1-why-gitx
+1. 为什么选择 GitX=1-为什么选择-gitx
+A / B=a--b
+Research & References=research--references
+a · b=
+EOF_SLUGS
+[ "$_slug_ok" = 1 ] && ok "G11 golden slugs (incl. '·' → no slug)" || fail "G11 slug mismatch:$_slug_bad"
+TMP_H12=$(mktemp -d)
+trap 'rm -rf "$TMP_H12"' EXIT
+mkdir -p "$TMP_H12/references/docs-contract"
+cp "$MANIFEST" "$TMP_H12/references/docs-contract/manifest.txt"
+_h12(){ PROJECT_ROOT="$TMP_H12" bash "$AUDIT" 2>&1 >/dev/null | grep -E 'docs-audit H12|hint:' || true; }
+cat > "$TMP_H12/README.md" <<'EOF_MD'
+## FAQ
+## FAQ
+## FAQ-1
+## 1. Why GitX
+~~~~
+## tilde
+```
+## still-tilde
+~~~
+~~~~
+```
+# hash
+## backtick
+```
+## a · b
+[a](#faq) [b](#faq-1) [c](#faq-1-1) [d](#1-why-gitx)
+EOF_MD
+h12=$(_h12)
+[ -z "$h12" ] && ok "H12 duplicates: FAQ, FAQ, FAQ-1 → faq, faq-1, faq-1-1 all resolve" || fail "H12 duplicate slugs: $h12"
+printf '[x](#faq-2) [y](#tilde) [z](#still-tilde) [w](#backtick) [v](#hash) [u](#a--b)\n' >> "$TMP_H12/README.md"
+h12=$(_h12)
+_miss=""
+for _fr in faq-2 tilde still-tilde backtick hash a--b; do
+  grep -qF "docs-audit H12 [en]: in-page link #$_fr in $TMP_H12/README.md matches no heading" <<<"$h12" || _miss="$_miss $_fr"
+done
+{ [ -z "$_miss" ] && grep -qF "hint: heading 'a · b'" <<<"$h12"; } \
+  && ok "H12 headings inside \`\`\`/~~~~ fences ignored; '·' heading has no anchor (hint printed)" \
+  || fail "H12 fence/unsupported cases missed:$_miss :: $h12"
+# Explicit FAQ-1 first: the auto suffix skips the taken slug.
+printf '## FAQ-1\n## FAQ\n## FAQ\n[a](#faq-1) [b](#faq) [c](#faq-2)\n' > "$TMP_H12/README.md"
+h12=$(_h12)
+[ -z "$h12" ] && ok "H12 explicit 'FAQ-1' heading vs auto suffix → faq-1, faq, faq-2" || fail "H12 explicit FAQ-1: $h12"
+# Real READMEs: clean, then one broken fragment → the exact H12 line.
+err_h12=$(PROJECT_ROOT="$REAL_ROOT" bash "$AUDIT" 2>&1 >/dev/null || true)
+! grep -q 'docs-audit H12' <<<"$err_h12" && ok "H12 clean on the real README.md / README_CN.md" || fail "H12 on real READMEs: $err_h12"
+cp "$REAL_ROOT/README.md" "$TMP_H12/README.md"; cp "$REAL_ROOT/README.md" "$TMP_H12/README.md.orig"
+cp "$REAL_ROOT/README_CN.md" "$TMP_H12/README_CN.md"
+printf '\nSee [gone](#no-such-heading).\n' >> "$TMP_H12/README.md"
+h12=$(_h12)
+{ ! cmp -s "$TMP_H12/README.md" "$TMP_H12/README.md.orig" \
+  && grep -qF "  docs-audit H12 [en]: in-page link #no-such-heading in $TMP_H12/README.md matches no heading" <<<"$h12" \
+  && [ "$(grep -c 'docs-audit H12' <<<"$h12")" -eq 1 ]; } \
+  && ok "H12 broken fragment on a real README copy → exactly that H12 line" || fail "H12 broken fragment: $h12"
+rm -rf "$TMP_H12"
+trap - EXIT
 
 # --- Summary ---
 echo ""

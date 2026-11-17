@@ -1,6 +1,6 @@
 #!/bin/bash
 # test_docs_pipeline.sh — TDD for T2: docs-pipeline.sh core
-# Assertions: file exists+executable, --print-regions exact 5-region set,
+# Assertions: file exists+executable, --print-regions exact 6-region set,
 # SC2010-free (no ls|grep), shellcheck clean (or skip), --help contains --check
 # exit: 0=all pass, 1=any fail
 
@@ -29,16 +29,16 @@ else
   fail "scripts/docs-pipeline.sh is NOT executable"
 fi
 
-# --- T2: --print-regions emits exactly the 5 contracted regions (§2a frozen spec) ---
-# sorted+space-joined must equal exactly: "badges build-metrics command-surface suite-count whats-new "
+# --- T2: --print-regions emits exactly the 6 contracted regions (DP_REGIONS, A2) ---
+# sorted+space-joined must equal exactly: "badges build-metrics command-surface metrics suite-count whats-new "
 # version and install are NOT managed regions (they fold at T12/template work, not T2).
 if [ -f "$PIPELINE" ]; then
   REGIONS_RAW=$(bash "$PIPELINE" --print-regions 2>/dev/null || true)
   # sort each whitespace-separated token and rejoin with a trailing space
   REGIONS_SORTED=$(printf '%s\n' $REGIONS_RAW | sort | tr '\n' ' ')
-  EXPECTED="badges build-metrics command-surface suite-count whats-new "
+  EXPECTED="badges build-metrics command-surface metrics suite-count whats-new "
   if [ "$REGIONS_SORTED" = "$EXPECTED" ]; then
-    ok "--print-regions emits exactly the 5 contracted regions (sorted: $REGIONS_SORTED)"
+    ok "--print-regions emits exactly the 6 contracted regions (sorted: $REGIONS_SORTED)"
   else
     fail "--print-regions output wrong: got '$REGIONS_SORTED' expected '$EXPECTED'"
   fi
@@ -87,9 +87,9 @@ fi
 DPT=$(mktemp -d "${TMPDIR:-/tmp}/dp_test.XXXXXX"); trap 'rm -rf "$DPT"' EXIT
 bash "$PIPELINE" --locale cn --print-regions >"$DPT/lc.out" 2>"$DPT/lc.err" && rc=0 || rc=$?
 [ "$rc" -eq 0 ] && ok "--locale cn accepted (rc=0)" || fail "--locale cn rc=$rc (expected 0)"
-# inventory must be the same 5 regions regardless of locale
+# inventory must be the same 6 regions regardless of locale
 lc=$(tr ' ' '\n' <"$DPT/lc.out" | sort | tr '\n' ' ')
-[ "$lc" = "badges build-metrics command-surface suite-count whats-new " ] \
+[ "$lc" = "badges build-metrics command-surface metrics suite-count whats-new " ] \
   && ok "inventory locale-invariant under cn" || fail "inventory changed under cn: '$lc'"
 bash "$PIPELINE" --locale en --print-regions >/dev/null 2>&1 && ok "--locale en accepted" || fail "--locale en rc=$?"
 # unknown locale must fail-closed with usage exit 2
@@ -298,10 +298,10 @@ printf '{\n  "name": "myplugin"\n}\n' > "$_WG/.claude-plugin/plugin.json"
 _dp_lib_test "$_WG" '
   _o=$(dp_install)
   grep -q "marketplace add" <<<"$_o" &&
-  grep -q "myplugin@tkx-skills" <<<"$_o"
+  grep -q "myplugin@tkxlab" <<<"$_o"
 ' >/dev/null 2>&1 \
-  && ok  "dp_install: marketplace-add + plugin install <name>@tkx-skills when plugin present (g)" \
-  || fail "dp_install: marketplace-add + plugin install <name>@tkx-skills when plugin present (g)"
+  && ok  "dp_install: marketplace-add + plugin install <name>@tkxlab when plugin present (g)" \
+  || fail "dp_install: marketplace-add + plugin install <name>@tkxlab when plugin present (g)"
 rm -rf "$_WG"
 
 # (h) dp_install: generic-safe (no .claude-plugin) → bash install.sh, no marketplace
@@ -373,6 +373,207 @@ _dp_lib_test "$_WKR" '
   && ok  "dp_whats_new: CRLF CHANGELOG → zero \\r in output (k)" \
   || fail "dp_whats_new: CRLF CHANGELOG → zero \\r in output (k)"
 rm -rf "$_WKR"
+
+# --- A1: labeled build-metrics sub-tokens (Version/Released, 版本/发版日期) ---
+# The value after each label is replaced whatever it holds, so `unknown`
+# written before VERSION/CHANGELOG existed is refreshed later (never stuck).
+echo "§ A1 labeled sub-tokens"
+_a1_readme(){ # $1=dir $2=version-value $3=date-value
+  {
+    printf '<!-- gitx:managed:build-metrics -->\n'
+    printf '> **Build metrics** — Version **%s** · Released **%s** · Models **x**\n' "$2" "$3"
+    printf '<!-- /gitx:managed:build-metrics -->\n'
+  } > "$1/README.md"
+  {
+    printf '<!-- gitx:managed:build-metrics -->\n'
+    printf '> **构建指标** — 版本 **%s** · 发版日期 **%s** · 模型 **x**\n' "$2" "$3"
+    printf '<!-- /gitx:managed:build-metrics -->\n'
+  } > "$1/README_CN.md"
+}
+A1=$(mktemp -d)
+# (1) both unknown → refresh keeps both unknown
+_a1_readme "$A1" unknown unknown; cp "$A1/README.md" "$A1/before.md"
+PROJECT_ROOT="$A1" bash "$P" >/dev/null 2>&1 && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && cmp -s "$A1/README.md" "$A1/before.md"; } \
+  && ok "A1 both unknown → refresh leaves both unknown (rc0, unchanged)" || fail "A1 both-unknown refresh rc=$rc"
+# (2) version known, date unknown → only version filled (EN + CN labels)
+echo "v1.2.3" > "$A1/VERSION"
+PROJECT_ROOT="$A1" bash "$P" >/dev/null 2>&1 || true
+{ grep -qF 'Version **v1.2.3** · Released **unknown**' "$A1/README.md" \
+  && grep -qF '版本 **v1.2.3** · 发版日期 **unknown**' "$A1/README_CN.md"; } \
+  && ok "A1 version known + date unknown → only version filled (EN+CN)" \
+  || fail "A1 version-only fill wrong: $(grep Version "$A1/README.md")"
+# (3) reverse: date known, version unknown
+rm -f "$A1/VERSION"; mkdir -p "$A1/Release"
+printf '## v1.2.3 — 2026-02-03\n\n### Added\n- x\n' > "$A1/Release/CHANGELOG.md"
+_a1_readme "$A1" unknown unknown
+PROJECT_ROOT="$A1" bash "$P" >/dev/null 2>&1 || true
+{ grep -qF 'Version **unknown** · Released **2026-02-03**' "$A1/README.md" \
+  && grep -qF '版本 **unknown** · 发版日期 **2026-02-03**' "$A1/README_CN.md"; } \
+  && ok "A1 date known + version unknown → only date filled (EN+CN)" \
+  || fail "A1 date-only fill wrong: $(grep Version "$A1/README.md")"
+# (4) crossed shapes: the version rewrite never touches the date token and
+# vice versa (the pre-A1 shape rule rewrote by value shape, not by label).
+echo "v1.2.3" > "$A1/VERSION"
+_a1_readme "$A1" 2020-01-01 v0.0.1
+PROJECT_ROOT="$A1" bash "$P" >/dev/null 2>&1 || true
+{ grep -qF 'Version **v1.2.3** · Released **2026-02-03** · Models **x**' "$A1/README.md" \
+  && grep -qF '版本 **v1.2.3** · 发版日期 **2026-02-03** · 模型 **x**' "$A1/README_CN.md"; } \
+  && ok "A1 version/date rewrites are label-bound (crossed shapes resolved, other tokens kept)" \
+  || fail "A1 label-bound rewrite wrong: $(grep Version "$A1/README.md")"
+# (5) second refresh byte-identical
+cp "$A1/README.md" "$A1/once.md"; cp "$A1/README_CN.md" "$A1/once_cn.md"
+PROJECT_ROOT="$A1" bash "$P" >/dev/null 2>&1 || true
+{ cmp -s "$A1/README.md" "$A1/once.md" && cmp -s "$A1/README_CN.md" "$A1/once_cn.md"; } \
+  && ok "A1 second refresh byte-identical (EN+CN)" || fail "A1 refresh not idempotent"
+# (6) a stale `unknown` is not stuck once both truths exist
+_a1_readme "$A1" unknown unknown
+PROJECT_ROOT="$A1" bash "$P" --check >/dev/null 2>&1 && rc=0 || rc=$?
+[ "$rc" -eq 1 ] && ok "A1 stale unknown → --check drift (rc 1)" || fail "A1 stale unknown not drift (rc=$rc)"
+rm -rf "$A1"
+
+# --- A2/G6: metrics region (release count, first → latest, suites) ---
+echo "§ G6 metrics region"
+G6=$(mktemp -d); mkdir -p "$G6/Release" "$G6/tests"
+: > "$G6/tests/test_a.sh"; : > "$G6/tests/test_b.sh"
+printf '## v1.2.0 — 2026-03-03\n- c\n\n## v1.1.0 — 2026-02-02\n- b\n\n## v1.0.0 — 2026-01-01\n- a\n' > "$G6/Release/CHANGELOG.md"
+printf '## 1. Why X\n\n<!-- gitx:managed:metrics -->\nstale\n<!-- /gitx:managed:metrics -->\n' > "$G6/README.md"
+printf '## 1. 为什么选择 X\n\n<!-- gitx:managed:metrics -->\nstale\n<!-- /gitx:managed:metrics -->\n' > "$G6/README_CN.md"
+PROJECT_ROOT="$G6" bash "$P" >/dev/null 2>&1 && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] \
+  && grep -qxF '| Measure | Value |' "$G6/README.md" \
+  && grep -qxF '| Releases shipped | 3 |' "$G6/README.md" \
+  && grep -qxF '| First release → latest | 2026-01-01 → 2026-03-03 |' "$G6/README.md" \
+  && grep -qxF '| Test suites | 2 |' "$G6/README.md"; } \
+  && ok "G6 EN metrics: 3 releases, 2026-01-01 → 2026-03-03, 2 suites" \
+  || fail "G6 EN metrics wrong (rc=$rc): $(tr '\n' '~' < "$G6/README.md")"
+{ grep -qxF '| 指标 | 数值 |' "$G6/README_CN.md" \
+  && grep -qxF '| 已发布版本 | 3 |' "$G6/README_CN.md" \
+  && grep -qxF '| 首次发版 → 最新发版 | 2026-01-01 → 2026-03-03 |' "$G6/README_CN.md" \
+  && grep -qxF '| 测试套件 | 2 |' "$G6/README_CN.md"; } \
+  && ok "G6 CN metrics rendered with CN labels" || fail "G6 CN metrics wrong: $(tr '\n' '~' < "$G6/README_CN.md")"
+cp "$G6/README.md" "$G6/before.md"
+sed -i.bak 's/^| Releases shipped | 3 |$/| Releases shipped | 30 |/' "$G6/README.md"
+err=$(PROJECT_ROOT="$G6" bash "$P" --check 2>&1 >/dev/null) && rc=0 || rc=$?
+{ ! cmp -s "$G6/README.md" "$G6/before.md" && [ "$rc" -eq 1 ] && grep -q 'region(s):.* metrics' <<<"$err"; } \
+  && ok "G6 hand-edited metrics number → --check rc 1 naming 'metrics'" \
+  || fail "G6 hand-edit not caught (rc=$rc err=$err)"
+rm -rf "$G6/Release" "$G6/tests"
+PROJECT_ROOT="$G6" bash "$P" --locale en >/dev/null 2>&1 || true
+{ grep -qxF '| Releases shipped | — |' "$G6/README.md" \
+  && grep -qxF '| First release → latest | — |' "$G6/README.md" \
+  && grep -qxF '| Test suites | — |' "$G6/README.md"; } \
+  && ok "G6 no CHANGELOG / no tests → — for each value" || fail "G6 missing-source rendering wrong: $(tr '\n' '~' < "$G6/README.md")"
+rm -rf "$G6"
+
+# --- A3: --init pre-flights EVERY README target; refusal writes NOTHING ---
+echo "§ A3 --init pre-flight"
+_tree_sum(){ # recursive listing + checksums of every file
+  ( cd "$1" && find . -print | LC_ALL=C sort \
+    && find . -type f -print | LC_ALL=C sort | while IFS= read -r _f; do cksum "$_f"; done )
+}
+_a3_fixture(){ mkdir -p "$1/tests" "$1/references"; : > "$1/tests/test_x.sh"; echo keep > "$1/references/other.txt"; }
+A3=$(mktemp -d)
+_a3_fixture "$A3/en"; echo "EN mine" > "$A3/en/README.md"
+before=$(_tree_sum "$A3/en")
+err=$(PROJECT_ROOT="$A3/en" bash "$P" --init 2>&1 >/dev/null) && rc=0 || rc=$?
+{ [ "$rc" -eq 4 ] && grep -qF "$A3/en/README.md exists — use --force" <<<"$err" \
+  && [ "$before" = "$(_tree_sum "$A3/en")" ]; } \
+  && ok "A3 EN-only existing → exit 4 naming README.md, whole tree unchanged" \
+  || fail "A3 EN-only (rc=$rc err=$err)"
+_a3_fixture "$A3/cn"; echo "CN mine" > "$A3/cn/README_CN.md"
+before=$(_tree_sum "$A3/cn")
+err=$(PROJECT_ROOT="$A3/cn" bash "$P" --init 2>&1 >/dev/null) && rc=0 || rc=$?
+{ [ "$rc" -eq 4 ] && grep -qF "$A3/cn/README_CN.md exists — use --force" <<<"$err" \
+  && [ "$before" = "$(_tree_sum "$A3/cn")" ]; } \
+  && ok "A3 CN-only existing → exit 4 naming README_CN.md, whole tree unchanged" \
+  || fail "A3 CN-only (rc=$rc err=$err)"
+_a3_fixture "$A3/none"
+before=$(_tree_sum "$A3/none")
+out=$(PROJECT_ROOT="$A3/none" bash "$P" --init --dry-run 2>&1) && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && [ "$before" = "$(_tree_sum "$A3/none")" ] \
+  && grep -qF "would scaffold $A3/none/README.md" <<<"$out" \
+  && grep -qF "would scaffold $A3/none/README_CN.md" <<<"$out" \
+  && grep -qF "would scaffold $A3/none/tests/test_readme_numeric_accuracy.sh" <<<"$out" \
+  && grep -qF "would scaffold $A3/none/references/docs-contract/manifest.txt" <<<"$out" \
+  && grep -qF "would scaffold $A3/none/references/docs-contract/cjk-allow.txt" <<<"$out"; } \
+  && ok "A3 --dry-run lists every file it would write and writes nothing" \
+  || fail "A3 --dry-run (rc=$rc out=$out)"
+PROJECT_ROOT="$A3/none" bash "$P" --init >/dev/null 2>&1 && rc=0 || rc=$?
+{ [ "$rc" -eq 0 ] && [ -f "$A3/none/README.md" ] && [ -f "$A3/none/README_CN.md" ] \
+  && [ "$(cat "$A3/none/references/other.txt")" = keep ]; } \
+  && ok "A3 both absent → --init writes README.md + README_CN.md (rc0)" || fail "A3 both-absent init rc=$rc"
+rm -rf "$A3"
+
+# --- {{PROJECT_SLUG}}: rendered with the same GitHub slug rule H12 checks ---
+echo "§ {{PROJECT_SLUG}} placeholder"
+PS=$(mktemp -d); mkdir -p "$PS/kit/scripts" "$PS/kit/references/readme"
+cp "$PIPELINE" "$PS/kit/scripts/docs-pipeline.sh"
+printf '1. [Why {{PROJECT}}](#1-why-{{PROJECT_SLUG}})\n{{PROJECT}}|{{PROJECT_SLUG}}\n' > "$PS/kit/references/readme/README.template.md"
+for _pn in "My Tool:my-tool" "HandoffX:handoffx"; do
+  _dir="${_pn%%:*}"; _want="${_pn#*:}"
+  mkdir -p "$PS/$_dir"
+  PROJECT_ROOT="$PS/$_dir" bash "$PS/kit/scripts/docs-pipeline.sh" --init >/dev/null 2>&1 && rc=0 || rc=$?
+  { [ "$rc" -eq 0 ] && grep -qxF "1. [Why $_dir](#1-why-$_want)" "$PS/$_dir/README.md" \
+    && grep -qxF "$_dir|$_want" "$PS/$_dir/README.md"; } \
+    && ok "{{PROJECT_SLUG}} for '$_dir' → $_want" \
+    || fail "{{PROJECT_SLUG}} for '$_dir' wrong (rc=$rc): $(cat "$PS/$_dir/README.md" 2>/dev/null)"
+done
+rm -rf "$PS"
+
+# --- G5/A4 acceptance: a realistic skill project, --init → refresh → audit ---
+# Runs through BOTH entry points (repo scripts/ and the bundled skill copy):
+# the scaffolded contract must be identical and free of origin-only lines.
+# Template-dependent: "docs-audit exits 0 overall" needs the generic
+# {{PROJECT_SLUG}} templates. Until they land, the old GitX-branded template
+# may only fail on its CONTENT (H1 order, H10 GitX-only links, H11 GitX
+# history) — never on the tooling rules H4/H5/H6/H12. Strict once the
+# template carries {{PROJECT_SLUG}}.
+echo "§ G5/A4 acceptance (both entry points)"
+_acc_fixture(){
+  local d="$1"
+  mkdir -p "$d/Release" "$d/tests"
+  echo "v0.1.0" > "$d/VERSION"
+  printf '## v0.1.0 — 2026-11-01\n\n### Added\n- first release\n' > "$d/Release/CHANGELOG.md"
+  printf '## v0.1.0 — 2026-11-01\n\n### Added\n- 首个版本\n' > "$d/Release/CHANGELOG_CN.md"
+  for _f in LICENSE SECURITY.md CONTRIBUTING.md CONTRIBUTING_CN.md INSTALL.md CHANGELOG.md CHANGELOG_CN.md CODE_OF_CONDUCT.md; do
+    echo "x" > "$d/$_f"
+  done
+  printf '#!/bin/bash\nexit 0\n' > "$d/tests/test_x.sh"
+}
+ACC=$(mktemp -d)
+for _ep in "repo:$SCRIPT_DIR/../scripts" "bundle:$SCRIPT_DIR/../skills/gitx-release/scripts"; do
+  _tag="${_ep%%:*}"; _sd="${_ep#*:}"; _d="$ACC/$_tag/fixskill"
+  _acc_fixture "$_d"
+  PROJECT_ROOT="$_d" bash "$_sd/docs-pipeline.sh" --init >/dev/null 2>&1 && rc=0 || rc=$?
+  _m="$_d/references/docs-contract/manifest.txt"
+  { [ "$rc" -eq 0 ] && [ -f "$_m" ] && [ -f "$_d/references/docs-contract/cjk-allow.txt" ] \
+    && ! grep -qE '^(hero_asset|h11_allow):' "$_m" && grep -q '^section:' "$_m"; } \
+    && ok "acceptance[$_tag] --init scaffolds manifest (no hero_asset/h11_allow) + cjk-allow" \
+    || fail "acceptance[$_tag] contract scaffold wrong (rc=$rc)"
+  PROJECT_ROOT="$_d" bash "$_sd/docs-pipeline.sh" >/dev/null 2>&1 && rc=0 || rc=$?
+  [ "$rc" -eq 0 ] && ok "acceptance[$_tag] refresh rc0" || fail "acceptance[$_tag] refresh rc=$rc"
+  err=$(PROJECT_ROOT="$_d" bash "$_sd/docs-audit.sh" 2>&1 >/dev/null) && rc=0 || rc=$?
+  if grep -qF '{{PROJECT_SLUG}}' "$_sd/../references/readme/README.template.md"; then
+    [ "$rc" -eq 0 ] && ok "acceptance[$_tag] docs-audit exits 0 overall" \
+      || fail "acceptance[$_tag] docs-audit rc=$rc: $(grep 'docs-audit H' <<<"$err" | head -5)"
+  else
+    _tool=$(grep -E 'docs-audit H(4|5|6|7|12)' <<<"$err" || true)
+    _other=$(grep -E '^  docs-audit H' <<<"$err" | grep -vE 'docs-audit H(1|10|11) ' || true)
+    { [ -z "$_tool" ] && [ -z "$_other" ]; } \
+      && ok "acceptance[$_tag] old template: only content rules H1/H10/H11 fail (rc=$rc; strict once {{PROJECT_SLUG}} template lands)" \
+      || fail "acceptance[$_tag] tooling rule failed: $_tool $_other"
+  fi
+done
+cmp -s "$ACC/repo/fixskill/references/docs-contract/manifest.txt" "$ACC/bundle/fixskill/references/docs-contract/manifest.txt" \
+  && ok "acceptance: scaffolded manifest identical through both entry points" \
+  || fail "acceptance: manifest differs between entry points"
+# Never overwrite an existing contract.
+echo "# mine" > "$ACC/repo/fixskill/references/docs-contract/manifest.txt"
+PROJECT_ROOT="$ACC/repo/fixskill" bash "$SCRIPT_DIR/../scripts/docs-pipeline.sh" --init --force >/dev/null 2>&1 || true
+[ "$(cat "$ACC/repo/fixskill/references/docs-contract/manifest.txt")" = "# mine" ] \
+  && ok "acceptance: --init --force never overwrites an existing manifest" || fail "acceptance: existing manifest overwritten"
+rm -rf "$ACC"
 
 # --- Summary ---
 echo ""

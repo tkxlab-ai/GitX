@@ -331,7 +331,7 @@ fi
     # Create marketplace.json with source:"./" and valid .homepage URL
     cat > .claude-plugin/marketplace.json <<'JSON'
 {
-  "name": "tkx-skills",
+  "name": "tkxlab",
   "plugins": [{
     "name": "demo-self-ref",
     "source": "./",

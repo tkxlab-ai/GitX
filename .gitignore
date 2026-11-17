@@ -108,6 +108,10 @@ tests/.tmp/
 
 # ── OMC working memory ──────────────────────────────────────────────────
 .omc/
+# Per-project working folder (plans, research, reviews, logs); took over from .omc/
+/wip/
+# Serena MCP per-project cache (symbol index, memories) — local tool state
+/.serena/
 # SDD controller workspace (briefs, review diffs, reports) — private like .omc/
 .superpowers/
 
