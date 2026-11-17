@@ -26,20 +26,36 @@
 > 🔄 **One install, four agent CLIs.** GitX runs inside Claude Code, Codex, OpenCode and Gemini, and releases any project laid out as `skills/<name>/SKILL.md`. Most release incidents are not code bugs — a version bumped in one file but not another, a README that no longer matches the code, a token in a public archive, a tarball nobody can rebuild. GitX turns that checklist into one local command, and GitX itself is released with GitX.
 
 <!-- gitx:managed:build-metrics -->
-> 🛠 **Build metrics** — Version **v1.15.0** · Released **2026-11-17** · Engineered with **Claude (Opus/Sonnet) · Codex · Gemini** across hundreds of sessions · Cumulative AI tokens since the first prototype (v0.9.4, 2026-04-22), estimated: **≈ 300M+ input/output + ≈ 3B+ cached**
+> 🛠 **Build metrics** — Version **v1.15.1** · Released **2026-11-17** · Engineered with **Claude (Opus/Sonnet) · Codex · Gemini** across hundreds of sessions · Cumulative AI tokens since the first prototype (v0.9.4, 2026-04-22), estimated: **≈ 300M+ input/output + ≈ 3B+ cached**
 <!-- /gitx:managed:build-metrics -->
 
 **[Documentation](#table-of-contents) · [Changelog](CHANGELOG.md) · [Report a bug](https://github.com/tkxlab-ai/GitX/issues) · [Security](SECURITY.md)**
+
+**Install**
+
+```text
+# Claude Code — plugin marketplace
+/plugin marketplace add tkxlab-ai/marketplace
+/plugin install gitx@tkxlab
+```
+
+```bash
+# Codex · OpenCode · Gemini CLI (and Claude Code without plugins) — one installer
+git clone --depth 1 https://github.com/tkxlab-ai/GitX.git && bash GitX/install.sh
+# already installed? add --force to upgrade in place
+```
+
+Then run it: Claude Code `/gitx-release` (plugin: `/gitx:release`) · Codex `$gitx-release` · OpenCode `@gitx-release` · Gemini CLI: ask for "gitx release". Details in [Quick Start](#4-quick-start).
 
 ---
 
 ## What's New
 
 <!-- gitx:managed:whats-new -->
-**v1.15.0 — 2026-11-17**
+**v1.15.1 — 2026-11-17**
 
-- The skill now says where its scripts live for all three install methods: plugin marketplace (`${CLAUDE_PLUGIN_ROOT}/scripts/`), `install.sh` (`~/.agents/skills/gitx-release/scripts/`) and a `.skill` unpacked into `~/.claude/skills/` (`~/.claude/skills/gitx-release/scripts/`).
-- `RELEASE_NOTES.md` gives the current install command, `gitx@tkxlab`.
+- The README opens with a copyable install block right under the links bar: the two plugin-marketplace commands for Claude Code, one installer command for Codex, OpenCode and Gemini CLI, and how to invoke GitX in each.
+- The release page standard requires that block (row 9) and the README templates scaffold it, so every project released with GitX shows how to install it at the top of its page.
 <!-- /gitx:managed:whats-new -->
 
 Full history → [`CHANGELOG.md`](CHANGELOG.md).
@@ -88,7 +104,7 @@ A release is a checklist, and every item on it can be skipped by accident. Each 
 <!-- gitx:managed:metrics -->
 | Measure | Value |
 |---|---|
-| Releases shipped | 67 |
+| Releases shipped | 68 |
 | First release → latest | 2026-04-22 → 2026-11-17 |
 | Test suites | 121 |
 <!-- /gitx:managed:metrics -->

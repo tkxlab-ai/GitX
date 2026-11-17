@@ -23,6 +23,21 @@
 
 **[文档](#目录) · [更新日志](CHANGELOG_CN.md) · [报告缺陷](https://github.com/OWNER/REPO/issues) · [安全](SECURITY.md)**
 
+**安装**
+
+```text
+# TODO: Claude Code 插件市场（没有插件就删掉这一段）
+/plugin marketplace add OWNER/MARKETPLACE-REPO
+/plugin install PLUGIN-NAME@MARKETPLACE-NAME
+```
+
+```bash
+# TODO: 给没有插件机制的智能体用的安装命令
+git clone --depth 1 https://github.com/OWNER/REPO.git && bash REPO/install.sh
+```
+
+TODO：写明各智能体里的调用方式。详见[快速开始](#4-快速开始)。
+
 ---
 
 ## 更新摘要

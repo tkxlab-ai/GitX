@@ -68,6 +68,9 @@ for tf in "$EN" "$CN"; do
   grep -q '^> 🔄 ' "$tf" && ok "$b has 🔄 callout" || fail "$b missing 🔄 callout"
   grep -qx '<!-- gitx:managed:metrics -->' "$tf" && ok "$b has metrics region" || fail "$b missing metrics region"
   grep -qF 'OWNER/REPO/issues' "$tf" && ok "$b links bar has issues link" || fail "$b links bar missing issues link"
+  # standard row 9: copyable install block right under the links bar
+  grep -qxE '\*\*(Install|安装)\*\*' "$tf" && grep -qF '/plugin install PLUGIN-NAME@' "$tf" \
+    && ok "$b has the install block" || fail "$b missing the install block"
   _body=$(grep -vE "^<!--|gitx:managed" "$tf" || true)
   grep -qi gitx <<<"$_body" && fail "$b still carries GitX branding" || ok "$b is brand-free"
 done

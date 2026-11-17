@@ -26,20 +26,36 @@
 > 🔄 **一次安装，覆盖四个智能体 CLI。** GitX 可在 Claude Code、Codex、OpenCode 与 Gemini 中运行，能发布任何 `skills/<name>/SKILL.md` 结构的项目。大多数发版事故并不是代码缺陷，而是：版本号改了一处漏了另一处、README 和代码对不上、令牌混进公开归档、tarball 谁也重建不出来。GitX 把这张清单变成一条本地命令，GitX 自己也用 GitX 发布。
 
 <!-- gitx:managed:build-metrics -->
-> 🛠 **构建指标** — 版本 **v1.15.0** · 发版日期 **2026-11-17** · 由 **Claude（Opus/Sonnet）· Codex · Gemini** 跨数百会话打造 · 自首个原型（v0.9.4，2026-04-22）起累计 AI token 估算：**≈ 3 亿+ 输入/输出 + ≈ 30 亿+ 缓存**
+> 🛠 **构建指标** — 版本 **v1.15.1** · 发版日期 **2026-11-17** · 由 **Claude（Opus/Sonnet）· Codex · Gemini** 跨数百会话打造 · 自首个原型（v0.9.4，2026-04-22）起累计 AI token 估算：**≈ 3 亿+ 输入/输出 + ≈ 30 亿+ 缓存**
 <!-- /gitx:managed:build-metrics -->
 
 **[文档](#目录) · [更新日志](CHANGELOG_CN.md) · [报告缺陷](https://github.com/tkxlab-ai/GitX/issues) · [安全](SECURITY.md)**
+
+**安装**
+
+```text
+# Claude Code —— 插件市场
+/plugin marketplace add tkxlab-ai/marketplace
+/plugin install gitx@tkxlab
+```
+
+```bash
+# Codex · OpenCode · Gemini CLI（以及不用插件的 Claude Code）—— 一个安装脚本
+git clone --depth 1 https://github.com/tkxlab-ai/GitX.git && bash GitX/install.sh
+# 已经装过？加 --force 原地升级
+```
+
+装好后调用：`Claude Code` 用 `/gitx-release`（插件版 `/gitx:release`）；`Codex` 用 `$gitx-release`；`OpenCode` 用 `@gitx-release`；`Gemini CLI` 直接说"gitx release"。详见[快速开始](#4-快速开始)。
 
 ---
 
 ## 更新摘要
 
 <!-- gitx:managed:whats-new -->
-**v1.15.0 — 2026-11-17**
+**v1.15.1 — 2026-11-17**
 
-- 技能说明写清三种安装方式下脚本所在位置：插件市场（`${CLAUDE_PLUGIN_ROOT}/scripts/`）、`install.sh`（`~/.agents/skills/gitx-release/scripts/`）、把 `.skill` 解压到 `~/.claude/skills/`（`~/.claude/skills/gitx-release/scripts/`）。
-- `RELEASE_NOTES.md` 改为现行安装命令 `gitx@tkxlab`。
+- README 在链接栏下方加了可直接复制的安装块：`Claude Code` 的两条插件市场命令、`Codex`、`OpenCode`、`Gemini CLI` 共用的一条安装命令，以及在各智能体里的调用方式。
+- 发版页面标准新增这一块（第 9 项），README 模板也会生成它，用 GitX 发版的项目都会在页面顶部写明安装方法。
 <!-- /gitx:managed:whats-new -->
 
 完整历史 → [`CHANGELOG_CN.md`](CHANGELOG_CN.md)。
@@ -88,7 +104,7 @@
 <!-- gitx:managed:metrics -->
 | 指标 | 数值 |
 |---|---|
-| 已发布版本 | 67 |
+| 已发布版本 | 68 |
 | 首次发版 → 最新发版 | 2026-04-22 → 2026-11-17 |
 | 测试套件 | 121 |
 <!-- /gitx:managed:metrics -->

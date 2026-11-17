@@ -23,6 +23,21 @@
 
 **[Documentation](#table-of-contents) · [Changelog](CHANGELOG.md) · [Report a bug](https://github.com/OWNER/REPO/issues) · [Security](SECURITY.md)**
 
+**Install**
+
+```text
+# TODO: Claude Code plugin marketplace (delete this block if there is no plugin)
+/plugin marketplace add OWNER/MARKETPLACE-REPO
+/plugin install PLUGIN-NAME@MARKETPLACE-NAME
+```
+
+```bash
+# TODO: installer for agents without a plugin system
+git clone --depth 1 https://github.com/OWNER/REPO.git && bash REPO/install.sh
+```
+
+TODO: how to invoke it in each supported agent. Details in [Quick Start](#4-quick-start).
+
 ---
 
 ## What's New

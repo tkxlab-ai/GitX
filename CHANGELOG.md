@@ -2,6 +2,16 @@
 
 All notable changes per release, newest first. Chinese parallel: [`CHANGELOG_CN.md`](CHANGELOG_CN.md).
 
+## v1.15.1 — 2026-11-17
+
+### Added
+- The README opens with a copyable install block right under the links bar:
+  the two plugin-marketplace commands for Claude Code, one installer command
+  for Codex, OpenCode and Gemini CLI, and how to invoke GitX in each.
+- The release page standard requires that block (row 9) and the README
+  templates scaffold it, so every project released with GitX shows how to
+  install it at the top of its page.
+
 ## v1.15.0 — 2026-11-17
 
 First public release of the v1.14.0 work (release page standard, plugin

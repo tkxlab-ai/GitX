@@ -24,6 +24,7 @@
 | 6 | 提示框 | 一行 `> 🔄 …`：说明能在哪些智能体 / CLI 中使用，或最重要的一条使用前提 | 评审 |
 | 7 | 构建指标 | 自动区块 `build-metrics`；版本与日期写在标签后：`Version **…**` · `Released **…**`（中文：`版本 **…**` · `发版日期 **…**`），由脚本填写 | H4、H6 |
 | 8 | 快捷链接栏 | `**[Documentation](#table-of-contents) · [Changelog](CHANGELOG.md) · [Report a bug](…/issues) · [Security](SECURITY.md)**` | H10 |
+| 9 | 安装块 | 紧接链接栏、不加标题（`**Install**` / `**安装**`）：每种安装方式一段可直接复制的命令——有插件时先列 `/plugin marketplace add <市场仓库>` 与 `/plugin install <名称>@<市场名>`，再列不依赖插件的安装命令；最后一行写各智能体的调用方式，并链接到快速开始。读者打开项目页就能装，不必翻到第 4 节 | 评审、H10、H12 |
 
 ## 2. 正文章节（编号与顺序）
 
