@@ -12,7 +12,7 @@
 - **Installable as a Claude Code plugin**: `.claude-plugin/marketplace.json`
   + `.claude-plugin/plugin.json` →
   `/plugin marketplace add tkxlab-ai/marketplace` then
-  `/plugin install gitx@tkx-skills`. Dual-path: `install.sh` (flat
+  `/plugin install gitx@tkxlab`. Dual-path: `install.sh` (flat
   `/gitx-sop`, 4 CLIs) is retained alongside the plugin path (namespaced
   `/gitx:sop`, Claude-Code-only, marketplace-updatable).
 - **Community-file standard**: bilingual `README` + `CONTRIBUTING` /

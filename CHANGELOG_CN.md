@@ -14,6 +14,16 @@
 
 ---
 
+## v1.15.0 — 2026-11-17
+
+v1.14.0 的内容（发版页面标准、插件市场 `tkxlab`、只装插件也能用）经独立审查后的首个公开版本。
+
+### Fixed
+- 技能说明写清三种安装方式下脚本所在位置：插件市场（`${CLAUDE_PLUGIN_ROOT}/scripts/`）、`install.sh`（`~/.agents/skills/gitx-release/scripts/`）、把 `.skill` 解压到 `~/.claude/skills/`（`~/.claude/skills/gitx-release/scripts/`）。
+- `RELEASE_NOTES.md` 改为现行安装命令 `gitx@tkxlab`。
+
+---
+
 ## v1.14.0 — 2026-11-17
 
 ### Added

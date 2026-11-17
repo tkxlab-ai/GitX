@@ -26,7 +26,7 @@
 > 🔄 **一次安装，覆盖四个智能体 CLI。** GitX 可在 Claude Code、Codex、OpenCode 与 Gemini 中运行，能发布任何 `skills/<name>/SKILL.md` 结构的项目。大多数发版事故并不是代码缺陷，而是：版本号改了一处漏了另一处、README 和代码对不上、令牌混进公开归档、tarball 谁也重建不出来。GitX 把这张清单变成一条本地命令，GitX 自己也用 GitX 发布。
 
 <!-- gitx:managed:build-metrics -->
-> 🛠 **构建指标** — 版本 **v1.14.0** · 发版日期 **2026-11-17** · 由 **Claude（Opus/Sonnet）· Codex · Gemini** 跨数百会话打造 · 自首个原型（v0.9.4，2026-04-22）起累计 AI token 估算：**≈ 3 亿+ 输入/输出 + ≈ 30 亿+ 缓存**
+> 🛠 **构建指标** — 版本 **v1.15.0** · 发版日期 **2026-11-17** · 由 **Claude（Opus/Sonnet）· Codex · Gemini** 跨数百会话打造 · 自首个原型（v0.9.4，2026-04-22）起累计 AI token 估算：**≈ 3 亿+ 输入/输出 + ≈ 30 亿+ 缓存**
 <!-- /gitx:managed:build-metrics -->
 
 **[文档](#目录) · [更新日志](CHANGELOG_CN.md) · [报告缺陷](https://github.com/tkxlab-ai/GitX/issues) · [安全](SECURITY.md)**
@@ -36,14 +36,10 @@
 ## 更新摘要
 
 <!-- gitx:managed:whats-new -->
-**v1.14.0 — 2026-11-17**
+**v1.15.0 — 2026-11-17**
 
-- 发版页面标准 `references/RELEASE_PAGE_STANDARD.md` 随技能下发：用 GitX 发版的项目统一 README 形态——引言式设计理念、带编号的章节标题、语言切换下方的 🔄 提示框，徽章、构建指标和数字由工具托管。
-- 新增 `metrics` 托管区块（已发布版本数、首个与最新版本、测试套件数），由 `docs-pipeline` 刷新；缺少数据来源时显示 `—`。
-- `docs-audit` 新规则 H12：页内链接（`#锚点`）必须指向同一页面里存在的标题。
-- Gitea 发布步骤先等服务器登记新推送的标签，再创建 Release（`GITX_GITEA_TAG_WAIT`，默认 30 秒），Release 日期不再显示为 1970 年。
-- 技能的 `schema/` 目录随 `scripts/` 一起复制进发布产物，按自己的 JSON 模式校验模型输出的技能安装后仍能找到它们。
-- `docs-pipeline --init` 使用的 README 模板改为通用模板（`{{PROJECT}}`、`{{PROJECT_SLUG}}` 与 TODO 标记），不再是 GitX 自己 README 的副本。
+- 技能说明写清三种安装方式下脚本所在位置：插件市场（`${CLAUDE_PLUGIN_ROOT}/scripts/`）、`install.sh`（`~/.agents/skills/gitx-release/scripts/`）、把 `.skill` 解压到 `~/.claude/skills/`（`~/.claude/skills/gitx-release/scripts/`）。
+- `RELEASE_NOTES.md` 改为现行安装命令 `gitx@tkxlab`。
 <!-- /gitx:managed:whats-new -->
 
 完整历史 → [`CHANGELOG_CN.md`](CHANGELOG_CN.md)。
@@ -92,7 +88,7 @@
 <!-- gitx:managed:metrics -->
 | 指标 | 数值 |
 |---|---|
-| 已发布版本 | 66 |
+| 已发布版本 | 67 |
 | 首次发版 → 最新发版 | 2026-04-22 → 2026-11-17 |
 | 测试套件 | 121 |
 <!-- /gitx:managed:metrics -->

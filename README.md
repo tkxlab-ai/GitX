@@ -26,7 +26,7 @@
 > 🔄 **One install, four agent CLIs.** GitX runs inside Claude Code, Codex, OpenCode and Gemini, and releases any project laid out as `skills/<name>/SKILL.md`. Most release incidents are not code bugs — a version bumped in one file but not another, a README that no longer matches the code, a token in a public archive, a tarball nobody can rebuild. GitX turns that checklist into one local command, and GitX itself is released with GitX.
 
 <!-- gitx:managed:build-metrics -->
-> 🛠 **Build metrics** — Version **v1.14.0** · Released **2026-11-17** · Engineered with **Claude (Opus/Sonnet) · Codex · Gemini** across hundreds of sessions · Cumulative AI tokens since the first prototype (v0.9.4, 2026-04-22), estimated: **≈ 300M+ input/output + ≈ 3B+ cached**
+> 🛠 **Build metrics** — Version **v1.15.0** · Released **2026-11-17** · Engineered with **Claude (Opus/Sonnet) · Codex · Gemini** across hundreds of sessions · Cumulative AI tokens since the first prototype (v0.9.4, 2026-04-22), estimated: **≈ 300M+ input/output + ≈ 3B+ cached**
 <!-- /gitx:managed:build-metrics -->
 
 **[Documentation](#table-of-contents) · [Changelog](CHANGELOG.md) · [Report a bug](https://github.com/tkxlab-ai/GitX/issues) · [Security](SECURITY.md)**
@@ -36,14 +36,10 @@
 ## What's New
 
 <!-- gitx:managed:whats-new -->
-**v1.14.0 — 2026-11-17**
+**v1.15.0 — 2026-11-17**
 
-- A release page standard, `references/RELEASE_PAGE_STANDARD.md`, shipped with the skill: every project released with GitX gets the same README shape — a quoted design philosophy, numbered section headings, a 🔄 callout under the language switch, and machine-managed badges, build metrics and numbers.
-- A `metrics` managed region (releases shipped, first and latest release, test suites), refreshed by `docs-pipeline`; a missing source shows `—`.
-- `docs-audit` rule H12: every in-page link (`#anchor`) must resolve to a heading on the same page.
-- Gitea release step waits for the server to index a pushed tag before it creates the Release (`GITX_GITEA_TAG_WAIT`, default 30 seconds), so the Release no longer shows a 1970 date.
-- A skill's `schema/` directory is copied into the release next to `scripts/`, so a skill that validates model output against its own JSON schemas still finds them after installation.
-- The README templates used by `docs-pipeline --init` are now generic (`{{PROJECT}}`, `{{PROJECT_SLUG}}`, TODO markers) instead of a copy of GitX's own README.
+- The skill now says where its scripts live for all three install methods: plugin marketplace (`${CLAUDE_PLUGIN_ROOT}/scripts/`), `install.sh` (`~/.agents/skills/gitx-release/scripts/`) and a `.skill` unpacked into `~/.claude/skills/` (`~/.claude/skills/gitx-release/scripts/`).
+- `RELEASE_NOTES.md` gives the current install command, `gitx@tkxlab`.
 <!-- /gitx:managed:whats-new -->
 
 Full history → [`CHANGELOG.md`](CHANGELOG.md).
@@ -92,7 +88,7 @@ A release is a checklist, and every item on it can be skipped by accident. Each 
 <!-- gitx:managed:metrics -->
 | Measure | Value |
 |---|---|
-| Releases shipped | 66 |
+| Releases shipped | 67 |
 | First release → latest | 2026-04-22 → 2026-11-17 |
 | Test suites | 121 |
 <!-- /gitx:managed:metrics -->

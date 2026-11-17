@@ -41,7 +41,7 @@ compatibility: macOS/Linux, bash 3.2+ (POSIX shell), git 2.x, optional python3 +
 
 ## 执行流程
 
-> 脚本路径：下文 `scripts/…` 都在**本技能的安装目录**下，不在用户项目里。插件市场安装时是 `${CLAUDE_PLUGIN_ROOT}/scripts/…`；`install.sh` 安装时是 `~/.agents/skills/gitx-release/scripts/…`。调用时用实际存在的那一个，`PROJECT_ROOT` 指向用户项目。
+> 脚本路径：下文 `scripts/…` 指**本 SKILL.md 所在目录**下的 `scripts/`，不在用户项目里。常见位置：插件市场安装 `${CLAUDE_PLUGIN_ROOT}/scripts/…`；`install.sh` 安装 `~/.agents/skills/gitx-release/scripts/…`；解压 `.skill` 到 `~/.claude/skills/` 时 `~/.claude/skills/gitx-release/scripts/…`。`PROJECT_ROOT` 指向用户项目。
 
 ### 发版（`release <version>`）
 

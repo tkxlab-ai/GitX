@@ -2,6 +2,18 @@
 
 All notable changes per release, newest first. Chinese parallel: [`CHANGELOG_CN.md`](CHANGELOG_CN.md).
 
+## v1.15.0 — 2026-11-17
+
+First public release of the v1.14.0 work (release page standard, plugin
+marketplace `tkxlab`, plugin-only installs) after an independent review.
+
+### Fixed
+- The skill now says where its scripts live for all three install methods:
+  plugin marketplace (`${CLAUDE_PLUGIN_ROOT}/scripts/`), `install.sh`
+  (`~/.agents/skills/gitx-release/scripts/`) and a `.skill` unpacked into
+  `~/.claude/skills/` (`~/.claude/skills/gitx-release/scripts/`).
+- `RELEASE_NOTES.md` gives the current install command, `gitx@tkxlab`.
+
 ## v1.14.0 — 2026-11-17
 
 ### Added
