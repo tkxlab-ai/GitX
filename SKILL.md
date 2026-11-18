@@ -1,6 +1,6 @@
 ---
 name: gitx-release
-description: GitX skill — use whenever user mentions release, ship, audit, publish, or version bump for a skill — even without naming it. Packages .skill + tarball, runs Deep Audit, scans secrets. Use via /gitx-release or 发版.
+description: GitX skill — use whenever user mentions release, ship, audit, go public, or version bump for a skill — even without naming it. Packages .skill + tarball, runs Deep Audit, scans secrets. Use via /gitx-release or 发版.
 license: MIT
 compatibility: macOS/Linux, bash 3.2+ (POSIX shell), git 2.x, optional python3 + venv for vendored skill-creator path; falls back to deterministic zip packager when Python/PyYAML unavailable.
 ---
@@ -13,7 +13,7 @@ compatibility: macOS/Linux, bash 3.2+ (POSIX shell), git 2.x, optional python3 +
 
 - 用户输入 `/gitx-release`
 - 用户说 `GitX release` / `GitX 发版` / `一键发版` / `自动打包发布`
-- 兼容：用户说 `release` / `发版` / `打版本` / `publish` / `bump` / `出一版`
+- 兼容：用户说 `release` / `发版` / `打版本` / `bump` / `出一版`（`公开发布` / `go public` 指 GitHub 草稿确认后的「公开发布」，见下表；单说 `publish` 不触发它）
 - 用户在**任何符合结构的项目**里（Handoff / 1by1 / ...）要求自动化发版
 
 ## 工作模式
@@ -25,9 +25,10 @@ compatibility: macOS/Linux, bash 3.2+ (POSIX shell), git 2.x, optional python3 +
 | **补跑审计** | `audit <version>` | `scripts/release-audit.sh` | 对已有 `Release/<ver>/` 重新跑 40+ 项静态审查（断网也能跑）|
 | **sanity 扫描** | `scan <dir>` | `scripts/release-sanitize.sh` | 扫指定目录的 6 类敏感信息（凭证 / 绝对用户路径 / 真实邮箱 / 公网 IP / MAC / SSH-GPG 指纹） |
 | **项目初始化** | `/gitx-init` · 项目初始化 · `init guideline` | `scripts/gitx-init.sh` | 在当前项目根生成 `.gitx/` 政策包 + `RELEASE_GUIDELINE.md`；auto-detect skill / mac / both / empty（v1.6.0+）|
-| **marketplace 同步** | `/gitx-marketplace` · `gitx-marketplace register/bump/list` | `scripts/gitx-marketplace.sh` | 把当前技能加入 / 更新中央 marketplace。首次手动 `register --repo OWNER/REPO`；之后 `gitx-release` 自动 bump（v1.13.0+）|
+| **marketplace 同步** | `/gitx-marketplace` · `gitx-marketplace register/bump/list` | `scripts/gitx-marketplace.sh` | 把当前技能加入 / 更新中央 marketplace。首次手动 `register --repo OWNER/REPO`；之后由「公开发布」（`gitx-publish.sh`）在 GitHub Release 公开时 bump（v1.16.0+；`gitx-release` 不再 bump）|
 | **GitHub 发版 SOP** | `/gitx-sop` · `推 GitHub` | `scripts/gitx-sop.sh` | 在当前项目根生成 `.gitx/GITHUB_RELEASE_SOP.md`（GitHub 公开镜像发布 runbook，占位符渲染，**只生成不执行 git/gh**）（v1.7.0+）|
-| **推送并发布** | `推送并发布` · `使用 GitX 推送并发布` · `push and publish` | 无新脚本（AI 依次执行两条现有命令） | ① `git push origin main`（只接受 fast-forward，被拒即停）→ ② `scripts/gitx-gitea-release.sh --version <ver>`，远端同版本 tag 字节不同时自动改用 `--force`；不碰 GitHub。详见下方「推送并发布」（v1.13.0+）|
+| **推送并发布** | `推送并发布` · `使用 GitX 推送并发布` · `push and publish` | 无新脚本（AI 依次执行两条现有命令） | ① `git push origin main`（只接受 fast-forward，被拒即停）→ ② `scripts/gitx-gitea-release.sh --version <ver>`，远端同版本 tag 字节不同时自动改用 `--force`；不碰 GitHub，也不 bump 中央市场（已移到「公开发布」）。详见下方「推送并发布」（v1.13.0+）|
+| **公开发布** | `公开发布` · `go public` | `scripts/gitx-publish.sh --version <ver>` | 用户确认 GitHub 草稿后执行：先做全部核对，再依次公开 GitHub Release（并重新确认 Latest）→ bump 中央市场 → 发 npm 包；任一步失败即停，修好后重跑同一命令。详见下方「公开发布」（v1.16.0+）|
 
 `/gitx-release` 每次正式运行都会写入本地诊断日志：`Release/logs/gitx-release-<timestamp>-<version>.log`，成功后在同目录生成 `.sha256` 摘要。日志**不**进入 `Release/<project>-<version>/`——那是可分发产物目录（已审计、每个文件都在 `checksums.txt` 里），而日志含绝对路径等本机信息，会被 sanitizer 拦下（v1.13.0 起）。日志包含项目、skill、版本、子流程输出和退出码；默认不联网、不自动回传，需要 debug 时由用户或 CI artifact 主动提供。
 
@@ -41,7 +42,7 @@ compatibility: macOS/Linux, bash 3.2+ (POSIX shell), git 2.x, optional python3 +
 
 ## 执行流程
 
-> 脚本路径：下文 `scripts/…` 指**本 SKILL.md 所在目录**下的 `scripts/`，不在用户项目里。常见位置：插件市场安装 `${CLAUDE_PLUGIN_ROOT}/scripts/…`；`install.sh` 安装 `~/.agents/skills/gitx-release/scripts/…`；解压 `.skill` 到 `~/.claude/skills/` 时 `~/.claude/skills/gitx-release/scripts/…`。`PROJECT_ROOT` 指向用户项目。
+> 脚本路径：下文 `scripts/…` 指**本 SKILL.md 所在目录**下的 `scripts/`，不在用户项目里。常见位置：插件市场安装 `${CLAUDE_PLUGIN_ROOT}/skills/gitx-release/scripts/…`；`install.sh` 安装 `~/.agents/skills/gitx-release/scripts/…`；解压 `.skill` 到 `~/.claude/skills/` 时 `~/.claude/skills/gitx-release/scripts/…`。`PROJECT_ROOT` 指向用户项目。
 
 ### 发版（`release <version>`）
 
@@ -68,7 +69,7 @@ compatibility: macOS/Linux, bash 3.2+ (POSIX shell), git 2.x, optional python3 +
 
 入口 wrapper 会在调用 `release.sh` 前创建 `Release/logs/gitx-release-*.log`，并用 `tee` 保存完整输出。无论 release 成功与否，日志和它的 `.sha256` 都只留在 `Release/logs/`，不进入 `Release/<project>-<version>/`（v1.13.0 起；Gitea 发布步骤也以"目录内每个文件都在 checksums.txt 里"为前提）。
 
-wrapper 用法：`gitx-release.sh [--dry-run] [--version vX.Y.Z] [--skip-marketplace] [--skip-gitea-release]`。`--skip-*` 只跳过本次；要长期关闭，删除对应 marker（`rm .gitx/marketplace-target` / `rm .gitx/gitea-release-target`）。
+wrapper 用法：`gitx-release.sh [--dry-run] [--version vX.Y.Z] [--skip-marketplace] [--skip-gitea-release]`。`--skip-gitea-release` 只跳过本次；要长期关闭，删除 marker `rm .gitx/gitea-release-target`。`--skip-marketplace` 自 v1.16.0 起是空操作（中央市场 bump 已移到 `gitx-publish.sh`；要关闭它，删除 `.gitx/marketplace-target`）。
 
 #### Gitea release repo（可选，v1.13.0+）
 
@@ -87,7 +88,20 @@ wrapper 用法：`gitx-release.sh [--dry-run] [--version vX.Y.Z] [--skip-marketp
 1. **推送源码仓**：`git push origin main`。前提：工作树干净、当前在 `main`。只接受 fast-forward；被拒就停下报告，**不** `--force`、不 `--no-verify`、不推 tag，也不进入第 2 步（源码还没上去的产物不能先发出去）。
 2. **发布到 Gitea 发布仓**：`bash scripts/gitx-gitea-release.sh --version vX.Y.Z`（版本取 `VERSION` sidecar）。退出码 0 = 已发布（或远端已有且字节一致，输出 ℹ️），正常；退出码 1 且输出里有 `use --force` 字样 = 远端同版本 tag 已存在但 checksums 不同，或 Release 附件过期——这句话术的语义就是「让远端等于本地发布目录」，所以直接改用 `--force` 重跑一次；退出码 2 = 没有 `.gitx/gitea-release-target`（或用法错误），只做第 1 步并说明；其他退出码 1 原样报告、不重试。
 
-前置判断：若发布目录比 HEAD 旧（上次 `gitx-release.sh` 之后又有提交改过会进产物的文件），先重切（`gitx-release.sh --version vX.Y.Z`），再走上面两步。完成后回报两个仓库的 `main` commit、tag 与 Release 链接。GitHub 侧（打 tag、推 GitHub、GitHub Release）不在这句话术里，仍按政策 §4 由用户手动。
+前置判断：若发布目录比 HEAD 旧（上次 `gitx-release.sh` 之后又有提交改过会进产物的文件），先重切（`gitx-release.sh --version vX.Y.Z`），再走上面两步。完成后回报两个仓库的 `main` commit、tag 与 Release 链接。GitHub 侧（打 tag、推 GitHub、GitHub Release）不在这句话术里，仍按政策 §4 由用户手动；中央市场 bump 也不在这里（v1.16.0 起属于「公开发布」）。
+
+#### 公开发布（v1.16.0+）
+
+GitHub 侧按 `.gitx/GITHUB_RELEASE_SOP.md` 推 main + tag、建好草稿后，用户确认草稿并说 `公开发布` / `go public` 时，AI 运行（在项目根）。这一步不可撤销，只认这两个说法：单说 `publish`、`推 GitHub`、`推送并发布` / `push and publish` 都不触发它；说法含糊时先问清楚。
+
+```bash
+bash <gitx-skill-dir>/scripts/gitx-publish.sh --version vX.Y.Z --dry-run   # 只核对、打印计划，不写任何远端
+bash <gitx-skill-dir>/scripts/gitx-publish.sh --version vX.Y.Z
+```
+
+`<gitx-skill-dir>` 是本技能所在目录（GitX 自身仓库里就是 `.`；`install.sh` 安装后是 `~/.agents/skills/gitx-release`；Claude Code 插件是 `${CLAUDE_PLUGIN_ROOT}/skills/gitx-release`），脚本不在下游项目自己的 `scripts/` 里。GitHub 仓库依次取 `--repo OWNER/REPO`、`.claude-plugin/plugin.json` 的 `repository`、github.com 的 `origin`；`origin` 是私有主机时传 `--repo`。若 npm 要一次性验证码而 AI 的 shell 没有终端（TTY）无法输入，就停下，请用户在自己的终端里运行同一条 `gitx-publish.sh` 命令（第 ①② 步已完成的会显示 ℹ️，只补第 ③ 步）。
+
+这是约束 1 的第三个显式 opt-in 例外，只在用户确认草稿后执行。脚本先做全部核对（草稿附件恰好是 `checksums.txt`、`<project>-vX.Y.Z.skill`、`sbom.cyclonedx.json` 且与本地 `Release/<project>-vX.Y.Z/` 逐字节一致、都列在 `checksums.txt` 里；GitHub `main` 的 `VERSION` 等于该版本；npm 包名 / 版本 / 内容，包里每个文件与 GitHub tag 逐字节一致；有 `.gitx/marketplace-target` 时预演一次 `gitx-marketplace bump --dry-run`，中央市场没有本条目就在这里失败，先手动 `gitx-marketplace register` 再重跑），全部通过后才依次：① 草稿转公开并把 Latest 重新确认到最高 semver；② bump 中央市场（没有 `.gitx/marketplace-target` → ➖ 跳过）；③ 从本次源码包发布 npm 包（没有 `.gitx/npm-target` → ➖ 跳过；双重认证验证码由 npm 自己询问）。退出码 0 = 完成或各步已完成（ℹ️）；1 = 失败，输出写明完成到第几步，修好后重跑同一命令；2 = 用法错误。npm 同一版本只能发一次：第 ③ 步之后再重切同一版本，npm 上仍是第一次发布的内容，需要发新版本号。
 
 辅助脚本：
 - `scripts/lib/detect-project.sh` — PROJECT_NAME/SKILL_NAME 自动检测（被 release.sh + audit.sh + sync-dual-source.sh 共享）
@@ -134,7 +148,7 @@ PROJECT_ROOT="$(pwd)" bash <本技能目录>/scripts/gitx-release.sh --dry-run
 ## 何时**不**触发
 
 - 用户问"怎么发版" → 这是**问知识**，引用 `references/` 回答即可，不要直接跑脚本
-- 用户要推 GitHub / 打 tag / 发 GitHub Release → 这些是**影响 upstream 的不可逆操作**，必须用户手动，按 CLAUDE.md 规则
+- 用户要推 GitHub / 打 tag / 发 GitHub Release → 这些是**影响 upstream 的不可逆操作**，必须用户手动，按 CLAUDE.md 规则（例外：用户确认草稿后明确说「公开发布」，见上文）
 - 用户只是做静态咨询且没有要求发版/打包/升级 → 不运行 wrapper；但一旦是发版场景，非标准项目也要运行 `gitx-release.sh --dry-run` 生成升级指南
 
 ## 设计哲学

@@ -791,6 +791,11 @@ Post-release audit 只保证产物结构合法，**不**保证真实可用性。
 - 不自动发 GitHub Release
 - 不自动 `FORCE=1`
 
+**显式 opt-in 例外**（只在对应开关或用户原话出现时执行，流水线本身仍不推）：
+1. `.gitx/gitea-release-target` 存在时，发版后推私有 Gitea 发布仓（`gitx-gitea-release.sh`）。
+2. 用户说「推送并发布」/ `push and publish`：推源码仓 `main` + 发布到 Gitea 发布仓。
+3. 用户确认 GitHub 草稿后说「公开发布」/ `go public`：运行 `gitx-publish.sh`，全部核对通过后公开 GitHub Release、bump 中央市场、发 npm 包（v1.16.0+，不可撤销）。单说 `publish` 不触发。
+
 ---
 
 ## 10. 常见低级错误与防呆清单（v2.0 扩展）

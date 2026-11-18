@@ -52,7 +52,7 @@ GitX/
 | 16 | `run_deep_audit` | runs `release-audit.sh` in inline mode; any failure aborts |
 | 17 | `update_latest_symlink` | atomically points `Release/latest` at the new release |
 
-After a successful release, `gitx-release.sh` runs two optional, best-effort steps when their per-machine switch files exist: the central marketplace bump (`.gitx/marketplace-target`: branch, PR, merge on the marketplace repository) and the private Gitea release repository (`.gitx/gitea-release-target`: push `main` and the tag, then create the Release). They are the only steps that write to a remote, and neither can change the release result.
+After a successful release, `gitx-release.sh` runs one optional, best-effort step when its per-machine switch file exists: the private Gitea release repository (`.gitx/gitea-release-target`: push `main` and the tag, then create the Release); it cannot change the release result. Going public is a separate command, run after a person approves the GitHub draft: `gitx-publish.sh --version vX.Y.Z` checks the draft's assets, GitHub `main`'s `VERSION` and the npm package first, then makes the GitHub Release public (re-asserting Latest), bumps the central marketplace (`.gitx/marketplace-target`: branch, PR, merge) and publishes the npm package (`.gitx/npm-target`). Since v1.16.0 the release run no longer bumps the marketplace, so the marketplace never points at a version that is not public yet.
 
 ---
 

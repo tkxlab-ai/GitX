@@ -29,12 +29,29 @@
 # TODO: Claude Code plugin marketplace (delete this block if there is no plugin)
 /plugin marketplace add OWNER/MARKETPLACE-REPO
 /plugin install PLUGIN-NAME@MARKETPLACE-NAME
+# upgrade: /plugin → enable auto-update, or `claude plugin update PLUGIN-NAME@MARKETPLACE-NAME`
+```
+
+```bash
+# TODO: Codex plugin marketplace (delete this block if there is no plugin)
+codex plugin marketplace add OWNER/MARKETPLACE-REPO
+codex plugin add PLUGIN-NAME@MARKETPLACE-NAME
+# upgrade: codex plugin marketplace upgrade, then codex plugin add PLUGIN-NAME@MARKETPLACE-NAME again
+```
+
+```bash
+# TODO: OpenCode npm plugin (delete this block if there is no npm package)
+opencode plugin add NPM-PACKAGE   # no version pin, so update checks keep working
+# upgrade (inside a project directory): opencode plugin update
 ```
 
 ```bash
 # TODO: installer for agents without a plugin system
 git clone --depth 1 https://github.com/OWNER/REPO.git && bash REPO/install.sh
+# upgrade: add --force
 ```
+
+Pick one install method per agent — two methods load two copies.
 
 TODO: how to invoke it in each supported agent. Details in [Quick Start](#4-quick-start).
 

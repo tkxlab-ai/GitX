@@ -219,8 +219,19 @@ if [ -x "$WRAPPER" ]; then
     grep -qF 'residual private marker'    "$sop"        || m="$m H1-verify"
     # H2: Rollback D deletes the leaked-snapshot tag, not just main.
     grep -qF 'tag built from the leaked snapshot' "$sop" || m="$m H2-tag"
-    # H3: Phase 7 multi-release Latest re-assertion on backfill.
+    # H3: Phase 7 multi-release Latest re-assertion on backfill. Since
+    #     v1.16.0 gitx-publish.sh owns it (promote + re-assert in one
+    #     checked command), so the SOP must hand promotion to that script
+    #     and must not keep a manual promote that skips its preflight.
     grep -qF 'backfilling older releases' "$sop"        || m="$m H3-latest"
+    grep -qF 'gitx-publish.sh --version "${VER}"' "$sop" || m="$m H3-publish-cmd"
+    grep -qF 're-asserts Latest on the highest semver' "$sop" || m="$m H3-owner"
+    grep -qF -- '--draft=false' "$sop"                  && m="$m H3-manual-promote"
+    grep -qF 'invoke_marketplace_sync' "$sop"           && m="$m H3-stale-hook"
+    # A bare "publish vX.Y.Z" must not trigger the SOP: SKILL.md maps the
+    # irreversible go-public step to 公开发布 / go public only.
+    grep -qF 'publish vX.Y.Z' "$sop"                    && m="$m H3-ambiguous-trigger"
+    grep -qF '`公开发布` / `go public`' "$sop"           || m="$m H3-go-public-trigger"
     # H4: Phase 8 completeness gate — every tag must have a Release.
     grep -qF 'has no GitHub Release'      "$sop"        || m="$m H4-gate"
     if [ -z "$m" ]; then

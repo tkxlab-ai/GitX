@@ -71,6 +71,13 @@ for tf in "$EN" "$CN"; do
   # standard row 9: copyable install block right under the links bar
   grep -qxE '\*\*(Install|安装)\*\*' "$tf" && grep -qF '/plugin install PLUGIN-NAME@' "$tf" \
     && ok "$b has the install block" || fail "$b missing the install block"
+  # row 9 (v1.16.0): Codex + OpenCode placeholder blocks, and the one-method rule
+  grep -qF 'codex plugin add PLUGIN-NAME@MARKETPLACE-NAME' "$tf" && grep -qF 'codex plugin marketplace upgrade' "$tf" \
+    && ok "$b has the Codex install + upgrade block" || fail "$b missing the Codex install block"
+  grep -qF 'opencode plugin add NPM-PACKAGE' "$tf" && grep -qF 'opencode plugin update' "$tf" \
+    && ok "$b has the OpenCode install + upgrade block" || fail "$b missing the OpenCode install block"
+  grep -qE 'Pick one install method per agent|同一个智能体只选一种安装方式' "$tf" \
+    && ok "$b states one install method per agent" || fail "$b missing the one-method-per-agent line"
   _body=$(grep -vE "^<!--|gitx:managed" "$tf" || true)
   grep -qi gitx <<<"$_body" && fail "$b still carries GitX branding" || ok "$b is brand-free"
 done

@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
-# tests/test_gitx_release_marketplace_hook.sh — v1.13.0 wrapper hook BDD.
-# Mocks release.sh + gitx-marketplace.sh; asserts on hook orchestration only.
+# tests/test_gitx_release_marketplace_hook.sh — post-release hook contract of
+# the internal release wrapper (gitx-release.sh).
+#
+# Marketplace: the central-marketplace bump is an outward-facing step and
+# moved to gitx-publish.sh (design D5: public GitHub Release, marketplace bump
+# and npm publish all happen together, after the owner approves the GitHub
+# draft). The internal release must therefore NEVER touch gitx-marketplace.sh
+# — not even when .gitx/marketplace-target is present. These cases guard that.
+# Gitea: invoke_gitea_release (internal SH Gitea publish) stays; G1-G6 below.
 
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -8,10 +15,9 @@ ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 WRAPPER="$ROOT/scripts/gitx-release.sh"
 
 # Hermetic env (Gotcha #74): under the real pipeline, release.sh exports
-# PROJECT_ROOT = the real repo, and invoke_marketplace_sync cd's there — the
+# PROJECT_ROOT = the real repo, and invoke_gitea_release cd's there — the
 # extracted-hook cases would then run against the real repo instead of their
-# scratch dirs. Every case starts from "cwd is the project"; T13 sets
-# PROJECT_ROOT explicitly.
+# scratch dirs. Every case starts from "cwd is the project".
 unset PROJECT_ROOT SKILL_NAME PROJECT_NAME SKIP_MARKETPLACE DRY_RUN RELEASE_LOG MARKETPLACE_BIN
 unset SKIP_GITEA_RELEASE GITEA_RELEASE_BIN
 
@@ -25,269 +31,93 @@ if [ ! -f "$WRAPPER" ]; then
     echo "SUMMARY: $PASS passed, $FAIL failed, $SKIP skipped"; exit 0
 fi
 
-# --- T0: log_warn / log_info / interpret_marketplace_exit are defined ---
-# Extract the function definitions from the wrapper and test them
-set +e
+# ---- Marketplace: the internal release never invokes it ---------------------
 
-# Use grep to find and verify the function signatures exist in the wrapper
-if grep -q "^log_warn()" "$WRAPPER" && \
-   grep -q "^log_info()" "$WRAPPER" && \
-   grep -q "^interpret_marketplace_exit()" "$WRAPPER"; then
-    echo "  ✅ T0: logging + interpret helpers exported"
-    PASS=$((PASS+1))
+# --- M0: no marketplace hook code left in the wrapper ---
+if grep -q 'invoke_marketplace_sync\|interpret_marketplace_exit\|gitx-marketplace' "$WRAPPER"; then
+    fail "M0: wrapper still references the marketplace hook: $(grep -n 'invoke_marketplace_sync\|interpret_marketplace_exit\|gitx-marketplace' "$WRAPPER" | head -3)"
 else
-    echo "  ❌ T0: helper functions missing from wrapper"
-    FAIL=$((FAIL+1))
+    ok "M0: wrapper has no invoke_marketplace_sync / interpret_marketplace_exit / gitx-marketplace reference"
 fi
 
-set -e
-
-# Extract function definitions from wrapper and gitx-marketplace helper
-setup_functions() {
-    local SCRIPT_DIR="$ROOT/scripts"
-    # Create a minimal functions file with just what we need
-    {
-        # log_warn, log_info, interpret_marketplace_exit from wrapper
-        sed -n '/^log_warn()/,/^}/p' "$SCRIPT_DIR/gitx-release.sh"
-        sed -n '/^log_info()/,/^}/p' "$SCRIPT_DIR/gitx-release.sh"
-        sed -n '/^interpret_marketplace_exit()/,/^}/p' "$SCRIPT_DIR/gitx-release.sh"
-        sed -n '/^invoke_marketplace_sync()/,/^}/p' "$SCRIPT_DIR/gitx-release.sh"
-        sed -n '/^invoke_gitea_release()/,/^}/p' "$SCRIPT_DIR/gitx-release.sh"
-        # Helpers from gitx-marketplace.sh
-        sed -n '/^validate_marker_content()/,/^}/p' "$SCRIPT_DIR/gitx-marketplace.sh"
-        sed -n '/^read_marker()/,/^}/p' "$SCRIPT_DIR/gitx-marketplace.sh"
-        sed -n '/^fetch_marketplace_json()/,/^}/p' "$SCRIPT_DIR/gitx-marketplace.sh"
-        echo "true" # Ensure success exit
-    } > "$1"
+# Full-wrapper fixture: an opted-in project (.gitx/marketplace-target +
+# .claude-plugin/marketplace.json) and a recorder at the wrapper's sibling
+# gitx-marketplace.sh, which is where the old hook both sourced and ran it.
+# A fake `gh` on PATH records too, so no case can ever reach real GitHub.
+MP_FIXTURES=""
+trap 'rm -rf $MP_FIXTURES' EXIT
+_mp_fixture() {
+    local g="$1"
+    MP_FIXTURES="$MP_FIXTURES $g"
+    mkdir -p "$g/project/skills/demo-skill" "$g/project/Release" "$g/project/.gitx" \
+        "$g/project/.claude-plugin" "$g/scripts/lib" "$g/bin"
+    cp "$WRAPPER" "$g/scripts/gitx-release.sh"
+    cp "$ROOT/scripts/lib/detect-project.sh" "$g/scripts/lib/detect-project.sh"
+    chmod +x "$g/scripts/gitx-release.sh"
+    printf '#!/bin/bash\nmkdir -p "$PROJECT_ROOT/Release/project-$1"\nexit 0\n' > "$g/scripts/release.sh"
+    chmod +x "$g/scripts/release.sh"
+    # `return` first: the old wrapper sourced this file, and a bare `exit`
+    # would end the wrapper itself instead of just recording.
+    printf '#!/bin/bash\nprintf "market %%s\\n" "$*" >> "%s/rec.log"\nreturn 0 2>/dev/null || exit 0\n' "$g" \
+        > "$g/scripts/gitx-marketplace.sh"
+    chmod +x "$g/scripts/gitx-marketplace.sh"
+    printf '#!/bin/bash\nprintf "gh %%s\\n" "$*" >> "%s/rec.log"\nexit 1\n' "$g" > "$g/bin/gh"
+    chmod +x "$g/bin/gh"
+    printf -- '---\nname: demo-skill\ndescription: Demo skill for the GitX marketplace guard test.\n---\n' \
+        > "$g/project/skills/demo-skill/SKILL.md"
+    printf 'v0.0.1\n' > "$g/project/skills/demo-skill/VERSION"
+    printf 'v0.0.1\n' > "$g/project/VERSION"
+    echo "tkxlab-ai/marketplace" > "$g/project/.gitx/marketplace-target"
+    printf '{"name":"tkxlab","plugins":[{"name":"demo-skill","version":"0.0.1"}]}\n' \
+        > "$g/project/.claude-plugin/marketplace.json"
+}
+_run_mp_fixture() {
+    local g="$1"; shift
+    env -u PROJECT_NAME -u SKILL_NAME -u SKIP_GITEA_RELEASE PATH="$g/bin:$PATH" \
+        PROJECT_ROOT="$g/project" bash "$g/scripts/gitx-release.sh" "$@" > "$g/stdout.txt" 2>&1
+    mp_status=$?
 }
 
-FUNCS_FILE=$(mktemp)
-trap 'rm -f "$FUNCS_FILE"' EXIT
-setup_functions "$FUNCS_FILE"
+# --- M1: marker present, full release → marketplace recorder never called ---
+MP_RUN=$(mktemp -d)
+_mp_fixture "$MP_RUN"
+_run_mp_fixture "$MP_RUN" --version v0.0.2
+if [ "$mp_status" -eq 0 ] && [ ! -s "$MP_RUN/rec.log" ]; then
+    ok "M1: .gitx/marketplace-target present → full release exit 0, marketplace script + gh never invoked"
+else
+    fail "M1: status=$mp_status rec=$(cat "$MP_RUN/rec.log" 2>/dev/null) out=$(cat "$MP_RUN/stdout.txt")"
+fi
 
-# Helper to install a stub gitx-marketplace.sh that just echoes its argv
-_install_stub_market() {
-    cat > "$1/scripts/gitx-marketplace.sh" <<'STUB'
-#!/usr/bin/env bash
-printf 'STUB-MARKET argv=%s\n' "$*" >&2
-exit "${STUB_MARKET_RC:-0}"
-STUB
-    chmod +x "$1/scripts/gitx-marketplace.sh"
-}
+# --- M2: --skip-marketplace is an accepted no-op that points at gitx-publish.sh ---
+MP_SKIP=$(mktemp -d)
+_mp_fixture "$MP_SKIP"
+_run_mp_fixture "$MP_SKIP" --version v0.0.2 --skip-marketplace
+if [ "$mp_status" -eq 0 ] && [ ! -s "$MP_SKIP/rec.log" ] \
+    && grep -q 'gitx-publish.sh' "$MP_SKIP/stdout.txt"; then
+    ok "M2: --skip-marketplace → rc 0, notice names gitx-publish.sh, nothing invoked"
+else
+    fail "M2: status=$mp_status rec=$(cat "$MP_SKIP/rec.log" 2>/dev/null) out=$(cat "$MP_SKIP/stdout.txt")"
+fi
 
-# --- T1: marker absent → invoke_marketplace_sync returns 0 silently ---
-(
-    set -e
-    # shellcheck disable=SC1090
-    . "$FUNCS_FILE"
-    tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT; cd "$tmp"
-    invoke_marketplace_sync; rc=$?
-    [ "$rc" = 0 ] || { echo "  ❌ T1: rc=$rc"; exit 1; }
-    echo "  ✅ T1: marker absent → silent skip rc 0"
-) && PASS=$((PASS+1)) || FAIL=$((FAIL+1))
-
-# --- T10: marker present but tampered → log_warn + skip, rc 0 ---
-(
-    set -e
-    # shellcheck disable=SC1090
-    . "$FUNCS_FILE"
-    tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT; cd "$tmp"
-    mkdir -p .gitx .claude-plugin
-    printf 'invalid\x00marker' > .gitx/marketplace-target
-    cp "$ROOT/tests/fixtures/marketplace.json" .claude-plugin/marketplace.json 2>/dev/null || echo '{"plugins":[{"name":"test"}]}' > .claude-plugin/marketplace.json
-    echo "1.0.0" > VERSION
-    out=$(invoke_marketplace_sync 2>&1); rc=$?
-    [ "$rc" = 0 ] || { echo "  ❌ T10: rc=$rc"; exit 1; }
-    grep -qi 'marker.*invalid' <<<"$out" || { echo "  ❌ T10: missing warn"; exit 1; }
-    echo "  ✅ T10: tampered marker → warn + skip rc 0"
-) && PASS=$((PASS+1)) || FAIL=$((FAIL+1))
-
-# --- T11: .claude-plugin/marketplace.json missing → log_warn + skip, rc 0 ---
-(
-    set -e
-    # shellcheck disable=SC1090
-    . "$FUNCS_FILE"
-    tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT; cd "$tmp"
-    mkdir -p .gitx
-    echo "tkxlab-ai/marketplace" > .gitx/marketplace-target
-    out=$(invoke_marketplace_sync 2>&1); rc=$?
-    [ "$rc" = 0 ] || { echo "  ❌ T11: rc=$rc"; exit 1; }
-    grep -qi 'marketplace.json' <<<"$out" || { echo "  ❌ T11: missing warn"; exit 1; }
-    echo "  ✅ T11: marketplace.json missing → warn + skip rc 0"
-) && PASS=$((PASS+1)) || FAIL=$((FAIL+1))
-
-# --- T2/T3: --skip-marketplace bypasses hook (marker absent or present) ---
-(
-    set -e
-    # shellcheck disable=SC1090
-    . "$FUNCS_FILE"
-    tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT; cd "$tmp"
-    SKIP_MARKETPLACE=1 invoke_marketplace_sync; rc=$?
-    [ "$rc" = 0 ] || { echo "  ❌ T2/T3: rc=$rc"; exit 1; }
-    echo "  ✅ T2/T3: SKIP_MARKETPLACE=1 bypasses hook silently"
-) && PASS=$((PASS+1)) || FAIL=$((FAIL+1))
-
-# --- T7: arg-parse exposes --skip-marketplace flag ---
+# --- M3: --help keeps --skip-marketplace and says the bump lives in gitx-publish.sh ---
 out=$(bash "$WRAPPER" --help 2>&1) || true
-if grep -q -- '--skip-marketplace' <<<"$out"; then
-    PASS=$((PASS+1)); echo "  ✅ T7: --help advertises --skip-marketplace"
+if grep -q -- '--skip-marketplace' <<<"$out" && grep -q 'gitx-publish.sh' <<<"$out"; then
+    ok "M3: --help lists --skip-marketplace (no-op) and points at gitx-publish.sh"
 else
-    FAIL=$((FAIL+1)); echo "  ❌ T7: --help missing --skip-marketplace"
+    fail "M3: --help missing --skip-marketplace or gitx-publish.sh"
 fi
-
-# --- T4: marker present, probe=present → bump invoked once ---
-(
-    set -e
-    # shellcheck disable=SC1090
-    . "$FUNCS_FILE"
-    tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT; cd "$tmp"
-    mkdir -p .gitx .claude-plugin scripts
-    echo "tkxlab-ai/marketplace" > .gitx/marketplace-target
-    cp "$ROOT/tests/fixtures/marketplace.json" .claude-plugin/marketplace.json
-    echo "1.13.0" > VERSION
-    _install_stub_market "$tmp"
-    export MARKETPLACE_BIN="$tmp/scripts/gitx-marketplace.sh"
-    gh() { printf '%s' "$(jq -nc '{plugins:[{name:"demo-skill-one"}]}' | base64)"; return 0; }
-    export -f gh
-    out=$(invoke_marketplace_sync 2>&1); rc=$?
-    [ "$rc" = 0 ] || { echo "  ❌ T4: rc=$rc"; exit 1; }
-    grep -q 'STUB-MARKET argv=bump' <<<"$out" \
-        || { echo "  ❌ T4: stub not called with bump"; echo "$out"; exit 1; }
-    echo "  ✅ T4: probe=present → bump invoked"
-) && PASS=$((PASS+1)) || FAIL=$((FAIL+1))
-
-# --- T5: marker present, probe=absent (gh api 200 but entry missing) → register fallback ---
-(
-    set -e
-    # shellcheck disable=SC1090
-    . "$FUNCS_FILE"
-    tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT; cd "$tmp"
-    mkdir -p .gitx .claude-plugin scripts
-    echo "tkxlab-ai/marketplace" > .gitx/marketplace-target
-    cp "$ROOT/tests/fixtures/marketplace.json" .claude-plugin/marketplace.json
-    echo "1.13.0" > VERSION
-    _install_stub_market "$tmp"
-    export MARKETPLACE_BIN="$tmp/scripts/gitx-marketplace.sh"
-    gh() { printf '%s' "$(jq -nc '{plugins:[]}' | base64)"; return 0; }
-    export -f gh
-    out=$(invoke_marketplace_sync 2>&1); rc=$?
-    [ "$rc" = 0 ] || { echo "  ❌ T5: rc=$rc"; exit 1; }
-    grep -q 'STUB-MARKET argv=register' <<<"$out" \
-        || { echo "  ❌ T5: stub not called with register"; echo "$out"; exit 1; }
-    grep -qi 'falling back to register' <<<"$out" \
-        || { echo "  ❌ T5: missing cold-restart warn"; exit 1; }
-    echo "  ✅ T5: probe=absent → register fallback + warn"
-) && PASS=$((PASS+1)) || FAIL=$((FAIL+1))
-
-# --- T6: gh probe fails entirely → still register fallback with different warn text ---
-(
-    set -e
-    # shellcheck disable=SC1090
-    . "$FUNCS_FILE"
-    tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT; cd "$tmp"
-    mkdir -p .gitx .claude-plugin scripts
-    echo "tkxlab-ai/marketplace" > .gitx/marketplace-target
-    cp "$ROOT/tests/fixtures/marketplace.json" .claude-plugin/marketplace.json
-    echo "1.13.0" > VERSION
-    _install_stub_market "$tmp"
-    export MARKETPLACE_BIN="$tmp/scripts/gitx-marketplace.sh"
-    gh() { return 1; }   # all gh calls fail
-    export -f gh
-    out=$(invoke_marketplace_sync 2>&1); rc=$?
-    [ "$rc" = 0 ] || { echo "  ❌ T6: rc=$rc"; exit 1; }
-    grep -qi 'probe failed' <<<"$out" \
-        || { echo "  ❌ T6: missing probe-failed warn"; exit 1; }
-    echo "  ✅ T6: probe failure → register fallback with diagnostic"
-) && PASS=$((PASS+1)) || FAIL=$((FAIL+1))
-
-# --- T8: stub returns rc=4 → wrapper still exit 0, warn message shown ---
-(
-    set -e
-    # shellcheck disable=SC1090
-    . "$FUNCS_FILE"
-    tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT; cd "$tmp"
-    mkdir -p .gitx .claude-plugin scripts
-    echo "tkxlab-ai/marketplace" > .gitx/marketplace-target
-    cp "$ROOT/tests/fixtures/marketplace.json" .claude-plugin/marketplace.json
-    echo "1.13.0" > VERSION
-    _install_stub_market "$tmp"
-    export MARKETPLACE_BIN="$tmp/scripts/gitx-marketplace.sh"
-    gh() { printf '%s' "$(jq -nc '{plugins:[{name:"demo-skill-one"}]}' | base64)"; return 0; }
-    export -f gh
-    out=$(STUB_MARKET_RC=4 invoke_marketplace_sync 2>&1); rc=$?
-    [ "$rc" = 0 ] || { echo "  ❌ T8: rc=$rc"; exit 1; }
-    grep -qi 'gh auth missing' <<<"$out" \
-        || { echo "  ❌ T8: missing exit-4 interpretation"; exit 1; }
-    echo "  ✅ T8: sub-exit 4 → wrapper exit 0 + actionable warn"
-) && PASS=$((PASS+1)) || FAIL=$((FAIL+1))
-
-# --- T9: DRY_RUN=1 propagates --dry-run to stub ---
-(
-    set -e
-    # shellcheck disable=SC1090
-    . "$FUNCS_FILE"
-    tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT; cd "$tmp"
-    mkdir -p .gitx .claude-plugin scripts
-    echo "tkxlab-ai/marketplace" > .gitx/marketplace-target
-    cp "$ROOT/tests/fixtures/marketplace.json" .claude-plugin/marketplace.json
-    echo "1.13.0" > VERSION
-    _install_stub_market "$tmp"
-    export MARKETPLACE_BIN="$tmp/scripts/gitx-marketplace.sh"
-    gh() { printf '%s' "$(jq -nc '{plugins:[{name:"demo-skill-one"}]}' | base64)"; return 0; }
-    export -f gh
-    out=$(DRY_RUN=1 invoke_marketplace_sync 2>&1); rc=$?
-    [ "$rc" = 0 ] || { echo "  ❌ T9: rc=$rc"; exit 1; }
-    grep -q -- '--dry-run' <<<"$out" \
-        || { echo "  ❌ T9: --dry-run not propagated"; exit 1; }
-    echo "  ✅ T9: --dry-run propagated to gitx-marketplace stub"
-) && PASS=$((PASS+1)) || FAIL=$((FAIL+1))
-
-# --- T12: warning lands in BOTH stderr AND RELEASE_LOG file ---
-(
-    set -e
-    # shellcheck disable=SC1090
-    . "$FUNCS_FILE"
-    tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT; cd "$tmp"
-    mkdir -p .gitx .claude-plugin scripts Release/logs
-    echo "tkxlab-ai/marketplace" > .gitx/marketplace-target
-    cp "$ROOT/tests/fixtures/marketplace.json" .claude-plugin/marketplace.json
-    echo "1.13.0" > VERSION
-    _install_stub_market "$tmp"
-    export MARKETPLACE_BIN="$tmp/scripts/gitx-marketplace.sh"
-    gh() { printf '%s' "$(jq -nc '{plugins:[{name:"demo-skill-one"}]}' | base64)"; return 0; }
-    export -f gh
-    RELEASE_LOG="$tmp/Release/logs/test.log"
-    STUB_MARKET_RC=1 invoke_marketplace_sync 2>&1 | grep -qi 'marketplace step failed' || { echo "  ❌ T12 stderr"; exit 1; }
-    grep -qi 'WARN.*marketplace' "$RELEASE_LOG" || { echo "  ❌ T12: no warn in RELEASE_LOG"; exit 1; }
-    echo "  ✅ T12: warning in BOTH stderr AND RELEASE_LOG"
-) && PASS=$((PASS+1)) || FAIL=$((FAIL+1))
-
-# --- T13: hook resolves marker/VERSION from $PROJECT_ROOT, not the caller's cwd ---
-# The wrapper honours PROJECT_ROOT=… from any directory; the hook used bare
-# relative paths, so an out-of-tree invocation silently skipped marketplace sync.
-(
-    set -e
-    # shellcheck disable=SC1090
-    . "$FUNCS_FILE"
-    fix=$(mktemp -d); other=$(mktemp -d); trap 'rm -rf "$fix" "$other"' EXIT
-    mkdir -p "$fix/.gitx" "$fix/.claude-plugin" "$fix/scripts"
-    echo "tkxlab-ai/marketplace" > "$fix/.gitx/marketplace-target"
-    cp "$ROOT/tests/fixtures/marketplace.json" "$fix/.claude-plugin/marketplace.json"
-    echo "1.13.0" > "$fix/VERSION"
-    _install_stub_market "$fix"
-    export MARKETPLACE_BIN="$fix/scripts/gitx-marketplace.sh"
-    gh() { printf '%s' "$(jq -nc '{plugins:[{name:"demo-skill-one"}]}' | base64)"; return 0; }
-    export -f gh
-    cd "$other"
-    out=$(PROJECT_ROOT="$fix" invoke_marketplace_sync 2>&1); rc=$?
-    [ "$rc" = 0 ] || { echo "  ❌ T13: rc=$rc"; exit 1; }
-    grep -q 'STUB-MARKET argv=bump' <<<"$out" \
-        || { echo "  ❌ T13: hook did not find \$PROJECT_ROOT/.gitx/marketplace-target from another cwd"; echo "$out"; exit 1; }
-    [ "$(pwd)" = "$other" ] || { echo "  ❌ T13: hook changed the caller's cwd"; exit 1; }
-    echo "  ✅ T13: PROJECT_ROOT out of cwd → hook runs in project root (caller cwd unchanged)"
-) && PASS=$((PASS+1)) || FAIL=$((FAIL+1))
 
 # ---- Gitea release hook (invoke_gitea_release) ------------------------------
+# Extract the hook and its log helpers from the wrapper into a sourceable file.
+set -e
+FUNCS_FILE=$(mktemp)
+trap 'rm -rf $MP_FIXTURES; rm -f "$FUNCS_FILE"' EXIT
+{
+    sed -n '/^log_warn()/,/^}/p' "$WRAPPER"
+    sed -n '/^invoke_gitea_release()/,/^}/p' "$WRAPPER"
+    echo "true"
+} > "$FUNCS_FILE"
+
 # The recorder stands in for gitx-gitea-release.sh: it appends its argv to
 # $GITEA_REC_LOG and exits $STUB_GITEA_RC, so the cases assert on whether and
 # how the hook called it — never on any network behaviour.

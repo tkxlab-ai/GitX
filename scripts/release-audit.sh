@@ -729,6 +729,25 @@ _track_end "§4_changelog"
 echo ""
 
 # --- §5 Tarball 内容 ---
+# True only when every ERE argument matches some line of the §5 tarball list.
+_s5_all_listed() {
+    local re
+    for re in "$@"; do
+        grep -qE "$re" "$LIST" || return 1
+    done
+}
+# True when the tarball carries a stray skill dir: any <name>-workspace, or —
+# for root-SKILL.md projects, which ship skills/${SKILL_NAME}/ only — any other
+# skills/* entry. Captured before the second grep so an early-exiting grep -q
+# cannot SIGPIPE the producer under pipefail (Gotcha #106).
+_s5_stray_skill_dirs() {
+    local under
+    grep -qE "/${SKILL_NAME}-workspace(/|$)" "$LIST" && return 0
+    [ -f "$PROJECT_ROOT/SKILL.md" ] || return 1
+    under=$(grep -E "^[^/]+/skills/[^/]+" "$LIST" || true)
+    [ -n "$under" ] || return 1
+    grep -vqE "^[^/]+/skills/${SKILL_NAME}(/|$)" <<<"$under"
+}
 audit_section_5_tarball() {
 echo "§5. Source tarball 内容"
 if [ -f "$DIR/$TAR_FILE" ]; then
@@ -741,13 +760,16 @@ if [ -f "$DIR/$TAR_FILE" ]; then
     tar tzf "$DIR/$TAR_FILE" > "$LIST" 2>/dev/null || true
     check "含 install.sh"            grep -q "install.sh" "$LIST"
     check "含 README.md"              grep -q "README.md" "$LIST"
-    # v0.9.7 (self-review F1): flat-layout projects (SKILL.md at root) use
-    # skills/<name>/ as an internal self-release mirror that release.sh
-    # deliberately excludes from the tarball. For those projects, tarball
-    # should have root-level scripts/ + SKILL.md instead of a skills/ tree.
+    # v0.9.7 (self-review F1): flat-layout projects (SKILL.md at root) ship
+    # root-level scripts/ + SKILL.md. Since the four-channel release they ALSO
+    # ship skills/<name>/ (Codex plugins only discover skills under skills/),
+    # so each flat-layout check requires both copies — extended in place
+    # rather than added (Gotcha #62: new checks rot the cited audit total).
     if [ -f "$PROJECT_ROOT/SKILL.md" ]; then
-        check "含 SKILL.md (flat layout)" grep -qE "^[^/]+/SKILL\.md$" "$LIST"
-        check "含 scripts/ 目录 (flat layout)" grep -qE "^[^/]+/scripts/" "$LIST"
+        check "含 SKILL.md (root + skills/${SKILL_NAME}/)" \
+            _s5_all_listed "^[^/]+/SKILL\.md$" "^[^/]+/skills/${SKILL_NAME}/SKILL\.md$"
+        check "含 scripts/ 目录 (root + skills/${SKILL_NAME}/)" \
+            _s5_all_listed "^[^/]+/scripts/" "^[^/]+/skills/${SKILL_NAME}/scripts/"
     else
         check "含 skills/ 目录"          grep -q "skills/${SKILL_NAME}/" "$LIST"
     fi
@@ -757,7 +779,7 @@ if [ -f "$DIR/$TAR_FILE" ]; then
         check "含 skills/${SKILL_NAME}/commands/" grep -q "skills/${SKILL_NAME}/commands/" "$LIST"
     fi
     check_not "不含 Release/"        grep -qE "^${PROJECT_NAME}-${VERSION}/Release/" "$LIST"
-    check_not "不含 *-workspace"     grep -qE "/${SKILL_NAME}-workspace(/|$)" "$LIST"
+    check_not "不含 *-workspace / 其他 skills/*" _s5_stray_skill_dirs
     check_not "不含 settings.local"  grep -q "settings.local" "$LIST"
     check_not "不含 .DS_Store"       grep -q "\.DS_Store" "$LIST"
     check_not "不含 *.bak"           grep -qE "\.bak($|/)" "$LIST"

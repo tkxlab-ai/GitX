@@ -77,27 +77,55 @@ fetch_marketplace_json() {
         | base64 -d 2>/dev/null || true
 }
 
+# valid_github_git_url URL
+# Returns 0 if URL is https://github.com/OWNER/REPO.git with no '..'.
+# Whole-string match: a line-based grep would accept "<valid url>\n<anything>".
+valid_github_git_url() {
+    local re='^https://github\.com/[A-Za-z0-9-]+/[A-Za-z0-9._-]+\.git$'
+    case "$1" in *..*|*[![:print:]]*) return 1 ;; esac
+    [[ $1 =~ $re ]]
+}
+
+# _pick_pr CLONE_DIR BRANCH SHA
+# Echoes the number of the one open PR we may merge: same repo, base main, head at
+# SHA. Echoes nothing when no open PR uses BRANCH as head name. Returns 1 when the
+# listing fails or any open PR with that head name is cross-repository, targets
+# another base, or sits at another commit — `gh pr list --head` matches by branch
+# NAME only, so on a public marketplace a fork PR could otherwise be merged. The
+# list is deliberately not filtered by --base so other-base PRs are seen and refused.
+_pick_pr() {
+    local prs
+    prs=$(cd "$1" && gh pr list --head "$2" --state open \
+            --json number,headRefOid,isCrossRepository,headRepositoryOwner,baseRefName 2>/dev/null) || return 1
+    printf '%s' "$prs" | jq -e 'type == "array"' >/dev/null 2>&1 || return 1
+    printf '%s' "$prs" | jq -er --arg s "$3" '
+        if length == 0 then ""
+        elif length == 1 and .[0].isCrossRepository == false and .[0].baseRefName == "main"
+             and $s != "" and .[0].headRefOid == $s and (.[0].number | type) == "number"
+        then .[0].number | tostring
+        else error("unverified PR") end' 2>/dev/null || return 1
+}
+
 # validate_entry ENTRY_JSON
 # Returns 0 if all required fields pass per Section 3 entry-validation table.
+# Central entries use {"source":"url","url":"https://github.com/O/R.git"}: it is
+# the only entry type both Claude Code and Codex install from — Codex reports
+# "plugin not found" for {"source":"github"}.
 validate_entry() {
     local entry_json="$1"
-    local name source_type source_repo version desc
+    local name source_type source_url version desc
     name=$(printf '%s' "$entry_json"        | jq -r '.name // ""')
-    source_type=$(printf '%s' "$entry_json" | jq -r '.source.source // ""')
-    source_repo=$(printf '%s' "$entry_json" | jq -r '.source.repo // ""')
+    source_type=$(printf '%s' "$entry_json" | jq -r '.source.source? // ""')
+    source_url=$(printf '%s' "$entry_json"  | jq -r '.source.url? // ""')
     version=$(printf '%s' "$entry_json"     | jq -r '.version // ""')
     desc=$(printf '%s' "$entry_json"        | jq -r '.description // ""')
 
     printf '%s' "$name"        | grep -qE '^[a-z0-9][a-z0-9-]{0,63}$' \
         || { echo "error: entry.name invalid: $name" >&2; return 1; }
-    [ "$source_type" = "github" ] \
-        || { echo "error: entry.source.source must be 'github': $source_type" >&2; return 1; }
-    # Codex round-5 [low]: reject .. in source.repo (defense-in-depth against path traversal)
-    case "$source_repo" in
-        *..*) echo "error: entry.source.repo contains '..': $source_repo" >&2; return 1 ;;
-    esac
-    printf '%s' "$source_repo" | grep -qE '^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9._-]{1,100}$' \
-        || { echo "error: entry.source.repo invalid: $source_repo" >&2; return 1; }
+    [ "$source_type" = "url" ] \
+        || { echo "error: entry.source.source must be 'url': $source_type" >&2; return 1; }
+    valid_github_git_url "$source_url" \
+        || { echo "error: entry.source.url must be https://github.com/OWNER/REPO.git (no '..'): $source_url" >&2; return 1; }
     printf '%s' "$version"     | grep -qE '^v?[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$' \
         || { echo "error: entry.version invalid: $version" >&2; return 1; }
     [ -n "$desc" ] && [ "${#desc}" -le 500 ] \
@@ -197,11 +225,11 @@ cmd_register() {
     # Extract + validate entry
     local entry; entry=$(jq '.plugins[0]' .claude-plugin/marketplace.json)
 
-    # Transform self-source "./" to {"source":"github","repo":...} via .homepage.
-    # Claude Code marketplace.json allows source:"./" for plugins co-located with
-    # their listing (plugin-self-reference). But the CENTRAL marketplace needs
-    # an explicit github source. Infer from .homepage (https://github.com/OWNER/REPO).
-    # Codex round-4 [high] — cross-skill register dogfood gap.
+    # Transform self-source "./" to {"source":"url","url":"https://github.com/O/R.git"}
+    # via .homepage. Claude Code marketplace.json allows source:"./" for plugins
+    # co-located with their listing (plugin-self-reference). But the CENTRAL
+    # marketplace needs an explicit remote source. Infer from .homepage
+    # (https://github.com/OWNER/REPO). Codex round-4 [high] — cross-skill register dogfood gap.
     local entry_source_type; entry_source_type=$(printf '%s' "$entry" | jq -r '.source | type')
     if [ "$entry_source_type" = "string" ]; then
         local raw_source hp inferred_repo
@@ -216,16 +244,22 @@ cmd_register() {
                         echo "error: inferred github repo contains '..' ($inferred_repo); fix .homepage" >&2
                         return 1 ;;
                 esac
-                entry=$(printf '%s' "$entry" | jq --arg r "$inferred_repo" '.source = {source:"github", repo:$r}')
+                entry=$(printf '%s' "$entry" | jq --arg u "https://github.com/${inferred_repo%.git}.git" '.source = {source:"url", url:$u}')
             else
                 echo "error: .plugins[0].source is './' but cannot infer github repo from .homepage ($hp)." >&2
-                echo "       Set explicit '.source = {source: \"github\", repo: \"OWNER/REPO\"}' or fix .homepage to 'https://github.com/OWNER/REPO'." >&2
+                echo "       Set explicit '.source = {source: \"url\", url: \"https://github.com/OWNER/REPO.git\"}' or fix .homepage to 'https://github.com/OWNER/REPO'." >&2
                 return 1
             fi
         else
-            echo "error: .plugins[0].source is a string ($raw_source) but only './' is supported. Use object form: {source:'github', repo:'OWNER/REPO'}." >&2
+            echo "error: .plugins[0].source is a string ($raw_source) but only './' is supported. Use object form: {source:'url', url:'https://github.com/OWNER/REPO.git'}." >&2
             return 1
         fi
+    elif [ "$(printf '%s' "$entry" | jq -r '.source.source? // ""')" = "github" ]; then
+        # Legacy {"source":"github","repo":R} → url form (Codex cannot install github entries).
+        local legacy_repo
+        legacy_repo=$(printf '%s' "$entry" | jq -r '.source.repo // ""')
+        entry=$(printf '%s' "$entry" | jq --arg u "https://github.com/${legacy_repo%.git}.git" \
+            '.source = ({source:"url", url:$u} + (.source | del(.source, .repo, .url)))')
     fi
 
     validate_entry "$entry" || return 1
@@ -301,11 +335,12 @@ EOF
         || git clone --depth=1 "https://github.com/$repo" "$tmp_clone" >/dev/null 2>&1 \
         || { echo "error: clone of $repo failed (network/auth/branch protection)" >&2; return 1; }
 
-    # Stale branch / orphan PR check
-    if (cd "$tmp_clone" && gh pr list --head "$branch" --state open --json number --jq '.[0].number' 2>/dev/null | grep -q '^[0-9]'); then
-        echo "error: orphan open PR for branch $branch in $repo; close it manually or wait" >&2
+    # Stale branch / orphan PR check (an unreadable PR list counts as orphan)
+    local pr_num sha
+    pr_num=$(_pick_pr "$tmp_clone" "$branch" "") && [ -z "$pr_num" ] || {
+        echo "error: open PR(s) for branch $branch in $repo, or PR list unreadable; inspect 'gh pr list -R $repo --head $branch', close it manually or wait" >&2
         return 1
-    fi
+    }
     if (cd "$tmp_clone" && git ls-remote --heads origin "$branch" 2>/dev/null | grep -q "refs/heads/$branch$"); then
         echo "error: orphan remote branch $branch in $repo; delete it or 'gh pr' close" >&2
         return 1
@@ -326,8 +361,12 @@ EOF
         git commit -m "$pr_title" -m "$pr_body" >/dev/null 2>&1
         git push -u origin "$branch" >/dev/null 2>&1 || exit 1
         gh pr create --title "$pr_title" --body "$pr_body" --head "$branch" --base main >/dev/null 2>&1 || exit 1
-        gh pr merge --squash --delete-branch >/dev/null 2>&1 || exit 1
     ) || { echo "error: marketplace PR flow failed; check 'gh pr list -R $repo'" >&2; return 1; }
+    # Merge only the PR whose head is the commit we just pushed, pinned to it.
+    sha=$(cd "$tmp_clone" && git rev-parse HEAD) \
+        && pr_num=$(_pick_pr "$tmp_clone" "$branch" "$sha") && [ -n "$pr_num" ] \
+        && (cd "$tmp_clone" && gh pr merge "$pr_num" --squash --delete-branch --match-head-commit "$sha" >/dev/null 2>&1) \
+        || { echo "error: marketplace PR for $branch could not be verified/merged; check 'gh pr list -R $repo --head $branch'" >&2; return 1; }
 
     echo "✅ marketplace registered: $repo → $entry_name v$version"
     return 0
@@ -393,22 +432,53 @@ cmd_bump() {
         echo "error: $repo/.claude-plugin/marketplace.json appears corrupt (not valid JSON with plugins[] array); aborting bump" >&2
         return 1
     fi
-    current_v=$(printf '%s' "$_decoded" | jq -r --arg n "$entry_name" '.plugins[] | select(.name == $n) | .version' 2>/dev/null | sed 's/^v//' | head -1 || true)
+    local cur_entry cur_src_type cur_src canon_url=""
+    cur_entry=$(printf '%s' "$_decoded" | jq -c --arg n "$entry_name" 'first(.plugins[] | select(.name == $n)) // empty' 2>/dev/null || true)
+    current_v=$(printf '%s' "$cur_entry" | jq -r '.version // ""' 2>/dev/null | sed 's/^v//' || true)
 
     [ -n "$current_v" ] \
         || { echo "error: entry '$entry_name' NOT in $repo; run 'gitx-marketplace register --repo $repo' first" >&2; return 3; }
 
-    if [ "$current_v" = "$target_v" ]; then
-        echo "no-op: marketplace already at v$target_v"
+    # Canonical source is {"source":"url","url":"https://github.com/O/R.git"} (Codex
+    # cannot install {"source":"github"}). A legacy github entry is migrated by every
+    # bump — even at an unchanged version — so the live central entry converges
+    # without anyone knowing whether it was already migrated by hand.
+    cur_src=$(printf '%s' "$cur_entry" | jq -c '.source // null')
+    cur_src_type=$(printf '%s' "$cur_entry" | jq -r '.source.source? // ""')
+    if [ "$cur_src_type" = "url" ]; then
+        canon_url=$(printf '%s' "$cur_entry" | jq -r '.source.url // ""')
+    elif [ "$cur_src_type" = "github" ]; then
+        canon_url=$(printf '%s' "$cur_entry" | jq -r '.source.repo // ""')
+        canon_url="https://github.com/${canon_url%.git}.git"
+    fi
+    valid_github_git_url "$canon_url" || {
+        echo "error: entry '$entry_name' in $repo has an unrecognised source $cur_src;" >&2
+        echo "       fix it by hand to {\"source\":\"url\",\"url\":\"https://github.com/OWNER/REPO.git\"}" >&2
+        return 1
+    }
+
+    if [ "$current_v" = "$target_v" ] && [ "$cur_src_type" = "url" ]; then
+        echo "no-op: marketplace already at v$target_v (url source)"
         return 0
+    fi
+
+    # The one intended change, applied to the central marketplace.json. Fields other
+    # than .version and .source (and extra source keys such as ref/sha) stay as-is.
+    local xform='(.plugins[] | select(.name == $n)) |= (.version = $v | .source = ({source:"url", url:$u} + (.source | del(.source, .repo, .url))))'
+    local branch="bump-$entry_name-v$target_v" title
+    if [ "$current_v" = "$target_v" ]; then
+        title="bump($entry_name): v$target_v source → url"
+    else
+        title="bump($entry_name): v$current_v → v$target_v"
     fi
 
     if [ "$dry_run" = 1 ]; then
         cat <<EOF
 Intended marketplace.json diff:
   ~ plugins[name=$entry_name].version: $current_v → $target_v
-Intended branch: bump-$entry_name-v$target_v
-Intended PR title: bump($entry_name): v$current_v → v$target_v
+  ~ plugins[name=$entry_name].source:  $cur_src → {"source":"url","url":"$canon_url"}
+Intended branch: $branch
+Intended PR title: $title
 EOF
         return 0
     fi
@@ -420,32 +490,85 @@ EOF
     git clone --depth=1 "https://github.com/$repo" "$tmp_clone" >/dev/null 2>&1 \
         || { echo "error: clone of $repo failed" >&2; return 1; }
 
-    local branch="bump-$entry_name-v$target_v"
-    if (cd "$tmp_clone" && gh pr list --head "$branch" --state open --json number --jq '.[0].number' 2>/dev/null | grep -q '^[0-9]'); then
-        echo "error: orphan open PR for $branch" >&2; return 1
+    local mfile="$tmp_clone/.claude-plugin/marketplace.json" expected
+    [ -f "$mfile" ] || { echo "error: $repo missing .claude-plugin/marketplace.json" >&2; return 1; }
+    expected=$(jq -S -c --arg n "$entry_name" --arg v "$target_v" --arg u "$canon_url" "$xform" "$mfile") \
+        || { echo "error: cannot apply bump to $repo marketplace.json" >&2; return 1; }
+
+    # Resume state. Anything we cannot determine is a failure, never "absent":
+    # guessing "no branch / no PR" here would push or merge on top of unknown state.
+    local ls_out sha="" pr_num
+    ls_out=$(cd "$tmp_clone" && git ls-remote --heads origin "refs/heads/$branch" 2>/dev/null) \
+        || { echo "error: cannot list branches of $repo; refusing to guess (re-run later)" >&2; return 1; }
+
+    local recover="       recovery: inspect it ('gh pr list -R $repo --head $branch --state all'; compare the branch with main);
+                 if it is stale, close its PR and delete the branch by hand, then re-run
+                 'gitx-marketplace bump --version v$target_v'. Nothing was deleted or overwritten."
+
+    if [ -n "$ls_out" ]; then
+        # A previous run (or someone else) left $branch. Reuse it only if its whole
+        # diff against main is exactly this bump: marketplace.json alone, and that
+        # file semantically equal to the intended result. The SHA verified here is
+        # the only head we will later merge.
+        case "$ls_out" in
+            *$'\n'*) echo "error: several remote refs match $branch in $repo" >&2; echo "$recover" >&2; return 1 ;;
+        esac
+        sha="${ls_out%%[[:space:]]*}"
+        local changed got fetched
+        (cd "$tmp_clone" && git fetch --depth=1 origin "refs/heads/$branch:refs/remotes/origin/$branch" >/dev/null 2>&1) \
+            || { echo "error: cannot fetch existing branch $branch from $repo" >&2; return 1; }
+        fetched=$(cd "$tmp_clone" && git rev-parse "refs/remotes/origin/$branch") \
+            || { echo "error: cannot resolve fetched branch $branch" >&2; return 1; }
+        [ "$fetched" = "$sha" ] \
+            || { echo "error: branch $branch moved while being verified ($sha → $fetched)" >&2; echo "$recover" >&2; return 1; }
+        changed=$(cd "$tmp_clone" && git diff --name-only HEAD "$sha") \
+            || { echo "error: cannot diff existing branch $branch against main" >&2; return 1; }
+        got=$(cd "$tmp_clone" && git show "$sha:.claude-plugin/marketplace.json" 2>/dev/null | jq -S -c . 2>/dev/null || true)
+        if [ "$changed" != ".claude-plugin/marketplace.json" ] || [ "$got" != "$expected" ]; then
+            echo "error: remote branch $branch in $repo already exists but differs from this bump (relative to main); refusing to reuse it." >&2
+            echo "$recover" >&2
+            return 1
+        fi
+        echo "resuming: reusing existing branch $branch at $sha" >&2
+    else
+        pr_num=$(_pick_pr "$tmp_clone" "$branch" "") && [ -z "$pr_num" ] || {
+            echo "error: open PR(s) use head name $branch but no such branch exists in $repo (or the PR list is unreadable)." >&2
+            echo "$recover" >&2
+            return 1
+        }
+        jq --arg n "$entry_name" --arg v "$target_v" --arg u "$canon_url" "$xform" "$mfile" > "$mfile.new" \
+            && mv "$mfile.new" "$mfile"
+        (
+            cd "$tmp_clone"
+            git config user.name  "gitx-marketplace"
+            git config user.email "noreply@github.com"
+            git checkout -b "$branch" >/dev/null 2>&1
+            git add .claude-plugin/marketplace.json
+            git commit -m "$title" >/dev/null 2>&1
+            git push -u origin "$branch" >/dev/null 2>&1
+        ) || { echo "error: push of $branch to $repo failed; re-run 'gitx-marketplace bump --version v$target_v'" >&2; return 1; }
+        sha=$(cd "$tmp_clone" && git rev-parse HEAD) \
+            || { echo "error: cannot resolve pushed commit" >&2; return 1; }
     fi
-    # Parity with cmd_register: check for orphan remote branch
-    if (cd "$tmp_clone" && git ls-remote --heads origin "$branch" 2>/dev/null | grep -q "refs/heads/$branch$"); then
-        echo "error: orphan remote branch $branch in $repo; delete it or 'gh pr' close" >&2
+
+    # Only a same-repo PR into main whose head is the verified/pushed commit may be
+    # merged, and the merge is pinned to that commit (no TOCTOU on the head).
+    pr_num=$(_pick_pr "$tmp_clone" "$branch" "$sha") || {
+        echo "error: an open PR with head name $branch is cross-repository, targets another base, or is not at the verified commit $sha (or the PR list is unreadable); refusing to merge." >&2
+        echo "$recover" >&2
         return 1
+    }
+    if [ -z "$pr_num" ]; then
+        (cd "$tmp_clone" && gh pr create --title "$title" --body "automated bump" --head "$branch" --base main >/dev/null 2>&1) \
+            || { echo "error: marketplace bump PR create failed; branch $branch kept — re-run 'gitx-marketplace bump --version v$target_v' to resume" >&2; return 1; }
+        pr_num=$(_pick_pr "$tmp_clone" "$branch" "$sha") && [ -n "$pr_num" ] || {
+            echo "error: created PR for $branch cannot be verified (same repo, base main, head $sha); refusing to merge." >&2
+            echo "$recover" >&2
+            return 1
+        }
     fi
-
-    local mfile="$tmp_clone/.claude-plugin/marketplace.json"
-    jq --arg n "$entry_name" --arg v "$target_v" \
-        '(.plugins[] | select(.name == $n) | .version) = $v' "$mfile" > "$mfile.new" \
-        && mv "$mfile.new" "$mfile"
-
-    (
-        cd "$tmp_clone"
-        git config user.name  "gitx-marketplace"
-        git config user.email "noreply@github.com"
-        git checkout -b "$branch" >/dev/null 2>&1
-        git add .claude-plugin/marketplace.json
-        git commit -m "bump($entry_name): v$current_v → v$target_v" >/dev/null 2>&1
-        git push -u origin "$branch" >/dev/null 2>&1 || exit 1
-        gh pr create --title "bump($entry_name): v$current_v → v$target_v" --body "automated bump" --head "$branch" --base main >/dev/null 2>&1 || exit 1
-        gh pr merge --squash --delete-branch >/dev/null 2>&1 || exit 1
-    ) || { echo "error: marketplace bump PR flow failed" >&2; return 1; }
+    (cd "$tmp_clone" && gh pr merge "$pr_num" --squash --delete-branch --match-head-commit "$sha" >/dev/null 2>&1) \
+        || { echo "error: marketplace bump PR #$pr_num merge failed; branch $branch kept — re-run 'gitx-marketplace bump --version v$target_v' to resume" >&2; return 1; }
 
     echo "✅ marketplace bumped: $repo → $entry_name v$target_v"
     return 0
@@ -474,7 +597,7 @@ cmd_list() {
     [ -n "$raw" ] || { echo "error: empty marketplace.json from $repo" >&2; return 1; }
 
     printf 'NAME\tVERSION\tSOURCE\n'
-    printf '%s' "$raw" | jq -r '.plugins[] | "\(.name)\t\(.version)\t\(.source.repo // .homepage // "—")"'
+    printf '%s' "$raw" | jq -r '.plugins[] | "\(.name)\t\(.version)\t\(.source.repo? // .source.url? // .homepage // "—")"'
     return 0
 }
 

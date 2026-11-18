@@ -24,7 +24,7 @@
 | 6 | 提示框 | 一行 `> 🔄 …`：说明能在哪些智能体 / CLI 中使用，或最重要的一条使用前提 | 评审 |
 | 7 | 构建指标 | 自动区块 `build-metrics`；版本与日期写在标签后：`Version **…**` · `Released **…**`（中文：`版本 **…**` · `发版日期 **…**`），由脚本填写 | H4、H6 |
 | 8 | 快捷链接栏 | `**[Documentation](#table-of-contents) · [Changelog](CHANGELOG.md) · [Report a bug](…/issues) · [Security](SECURITY.md)**` | H10 |
-| 9 | 安装块 | 紧接链接栏、不加标题（`**Install**` / `**安装**`）：每种安装方式一段可直接复制的命令——有插件时先列 `/plugin marketplace add <市场仓库>` 与 `/plugin install <名称>@<市场名>`，再列不依赖插件的安装命令；最后一行写各智能体的调用方式，并链接到快速开始。读者打开项目页就能装，不必翻到第 4 节 | 评审、H10、H12 |
+| 9 | 安装块 | 紧接链接栏、不加标题（`**Install**` / `**安装**`）：按智能体分段，每段一组可直接复制的命令，并在段内写一行该方式的升级命令。有插件时依次为：Claude Code（`/plugin marketplace add <市场仓库>` + `/plugin install <名称>@<市场名>`）、Codex（`codex plugin marketplace add <市场仓库>` + `codex plugin add <名称>@<市场名>`）、OpenCode（有 npm 包时 `opencode plugin add <npm 包名>`，不写版本号，否则不会检查更新）；最后一段是不依赖插件的安装命令（多 CLI 机器）。没有插件或 npm 包的项目省略对应段。块后写一行"同一个智能体只选一种安装方式"（两种方式会加载两份），再写一行各智能体的调用方式，并链接到快速开始。读者打开项目页就能装，不必翻到第 4 节 | 评审、H10、H12 |
 
 ## 2. 正文章节（编号与顺序）
 
@@ -87,10 +87,10 @@
 
 1. `Release/CHANGELOG.md` 与 `_CN.md` 顶部是本版本的真实条目，**日期 = 实际发版日**（长期未发的版本发布前要改到当天）。【changelog gate、H5】
 2. `/gitx-release` 全部通过：测试、双源、密钥扫描、docs-audit、Deep Audit。【流水线】
-3. GitHub：按 `.gitx/GITHUB_RELEASE_SOP.md` 发布；每个 tag 都有 Release，附件为 `.skill`、`checksums.txt`、`sbom.cyclonedx.json`；先草稿、再由负责人确认公开。【SOP 8.4】
+3. GitHub：按 `.gitx/GITHUB_RELEASE_SOP.md` 推 main + tag、建草稿；每个 tag 都有 Release，附件为 `.skill`、`checksums.txt`、`sbom.cyclonedx.json`；负责人确认草稿后运行 `gitx-publish.sh --version vX.Y.Z` 公开（同一条命令里 bump 中央市场、发 npm 包）。【SOP 7.4、8.4】
 4. 仓库元数据：About 描述准确、无错别字；设置 topics。【评审】
 5. 社区文件齐全：`LICENSE`、`SECURITY.md`、`CODE_OF_CONDUCT.md`、`CONTRIBUTING.md` + `CONTRIBUTING_CN.md`、`INSTALL.md`、`.github/ISSUE_TEMPLATE/`（缺陷、功能、选择页）、`.github/PULL_REQUEST_TEMPLATE.md`。【H10 管 README 链接到的文件；其余评审】
-6. 可选：中央 marketplace 版本更新（`.gitx/marketplace-target`）；私有 Gitea 发布仓（`.gitx/gitea-release-target`）；"推送并发布"话术见 SKILL.md。【发版后步骤】
+6. 可选：私有 Gitea 发布仓（`.gitx/gitea-release-target`，发版后步骤）；中央 marketplace 版本更新（`.gitx/marketplace-target`）与 npm 发布（`.gitx/npm-target`）在公开时由 `gitx-publish.sh` 执行；"推送并发布""公开发布"话术见 SKILL.md。npm 同一版本只能发一次。【发版后步骤、gitx-publish】
 
 ## 8. 已有 README 如何迁移
 

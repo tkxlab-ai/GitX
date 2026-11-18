@@ -7,8 +7,8 @@
 
 <!-- gitx:managed:badges -->
 [![License](https://img.shields.io/badge/license-MIT-yellow.svg?style=for-the-badge)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-121%20suites%20%2F%200%20fail-brightgreen.svg?style=for-the-badge&logo=githubactions&logoColor=white)](tests/run_all.sh)
-[![Deep Audit](https://img.shields.io/badge/deep%20audit-257%2F0%2F1-brightgreen.svg?style=for-the-badge&logo=shieldsdotio&logoColor=white)](scripts/release-audit.sh)
+[![Tests](https://img.shields.io/badge/tests-125%20suites%20%2F%200%20fail-brightgreen.svg?style=for-the-badge&logo=githubactions&logoColor=white)](tests/run_all.sh)
+[![Deep Audit](https://img.shields.io/badge/deep%20audit-260%2F0%2F1-brightgreen.svg?style=for-the-badge&logo=shieldsdotio&logoColor=white)](scripts/release-audit.sh)
 [![CLIs](https://img.shields.io/badge/CLI-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20OpenCode%20%C2%B7%20Gemini-6366f1.svg?style=for-the-badge&logo=anthropic&logoColor=white)](#4-快速开始)
 [![Shell](https://img.shields.io/badge/bash-3.2%2B%20POSIX-06b6d4.svg?style=for-the-badge&logo=gnubash&logoColor=white)](SKILL.md)
 [![Release](https://img.shields.io/github/v/release/tkxlab-ai/GitX?sort=semver&style=for-the-badge&logo=github&logoColor=white&color=gold)](https://github.com/tkxlab-ai/GitX/releases)
@@ -26,7 +26,7 @@
 > 🔄 **一次安装，覆盖四个智能体 CLI。** GitX 可在 Claude Code、Codex、OpenCode 与 Gemini 中运行，能发布任何 `skills/<name>/SKILL.md` 结构的项目。大多数发版事故并不是代码缺陷，而是：版本号改了一处漏了另一处、README 和代码对不上、令牌混进公开归档、tarball 谁也重建不出来。GitX 把这张清单变成一条本地命令，GitX 自己也用 GitX 发布。
 
 <!-- gitx:managed:build-metrics -->
-> 🛠 **构建指标** — 版本 **v1.15.1** · 发版日期 **2026-11-17** · 由 **Claude（Opus/Sonnet）· Codex · Gemini** 跨数百会话打造 · 自首个原型（v0.9.4，2026-04-22）起累计 AI token 估算：**≈ 3 亿+ 输入/输出 + ≈ 30 亿+ 缓存**
+> 🛠 **构建指标** — 版本 **v1.16.0** · 发版日期 **2026-11-18** · 由 **Claude（Opus/Sonnet）· Codex · Gemini** 跨数百会话打造 · 自首个原型（v0.9.4，2026-04-22）起累计 AI token 估算：**≈ 3 亿+ 输入/输出 + ≈ 30 亿+ 缓存**
 <!-- /gitx:managed:build-metrics -->
 
 **[文档](#目录) · [更新日志](CHANGELOG_CN.md) · [报告缺陷](https://github.com/tkxlab-ai/GitX/issues) · [安全](SECURITY.md)**
@@ -37,25 +37,45 @@
 # Claude Code —— 插件市场
 /plugin marketplace add tkxlab-ai/marketplace
 /plugin install gitx@tkxlab
+# 升级：在 /plugin 里打开自动更新，或 claude plugin update gitx@tkxlab
 ```
 
 ```bash
-# Codex · OpenCode · Gemini CLI（以及不用插件的 Claude Code）—— 一个安装脚本
-git clone --depth 1 https://github.com/tkxlab-ai/GitX.git && bash GitX/install.sh
-# 已经装过？加 --force 原地升级
+# Codex —— 插件市场
+codex plugin marketplace add tkxlab-ai/marketplace
+codex plugin add gitx@tkxlab
+# 升级：先 codex plugin marketplace upgrade，再执行一次 codex plugin add gitx@tkxlab
 ```
 
-装好后调用：`Claude Code` 用 `/gitx-release`（插件版 `/gitx:release`）；`Codex` 用 `$gitx-release`；`OpenCode` 用 `@gitx-release`；`Gemini CLI` 直接说"gitx release"。详见[快速开始](#4-快速开始)。
+```bash
+# OpenCode —— npm 插件（不写版本号，才会检查更新）
+opencode plugin add @tkxlabai/gitx-opencode
+# 升级（在项目目录里执行）：opencode plugin update
+```
+
+```bash
+# 其他智能体，或一台机器装给多个 CLI —— Codex、OpenCode、Gemini CLI 也会读 ~/.agents/skills
+git clone --depth 1 https://github.com/tkxlab-ai/GitX.git && bash GitX/install.sh
+# 升级：加 --force
+```
+
+同一个智能体只选一种安装方式——装两种会加载两份技能。
+
+装好后调用：`Claude Code` 用 `/gitx-release`（插件版 `/gitx:release`）；`Codex` 用 `$gitx-release`（插件里显示为 `gitx:gitx-release`）；`OpenCode` 用 `@gitx-release`；`Gemini CLI` 直接说"gitx release"。详见[快速开始](#4-快速开始)。
 
 ---
 
 ## 更新摘要
 
 <!-- gitx:managed:whats-new -->
-**v1.15.1 — 2026-11-17**
+**v1.16.0 — 2026-11-18**
 
-- README 在链接栏下方加了可直接复制的安装块：`Claude Code` 的两条插件市场命令、`Codex`、`OpenCode`、`Gemini CLI` 共用的一条安装命令，以及在各智能体里的调用方式。
-- 发版页面标准新增这一块（第 9 项），README 模板也会生成它，用 GitX 发版的项目都会在页面顶部写明安装方法。
+- `Codex` 插件：`codex plugin marketplace add tkxlab-ai/marketplace`，再 `codex plugin add gitx@tkxlab`；升级先 `codex plugin marketplace upgrade`，再执行一次 `codex plugin add gitx@tkxlab`。
+- `OpenCode` 插件：`opencode plugin add @tkxlabai/gitx-opencode`（不写版本号，才会检查更新）；升级在项目目录里执行 `opencode plugin update`。npm 包内容是固定白名单：`opencode/` 与 `skills/gitx-release/`。
+- `scripts/gitx-publish.sh --version vX.Y.Z`：GitHub 草稿确认后运行。先做全部核对（草稿附件与 `Release/` 逐字节比对、`GitHub` 上 `main` 分支的 `VERSION`、`npm` 包的名称、版本与内容），再公开 `GitHub Release` 并让 `Latest` 保持在最高版本、更新中央市场（`.gitx/marketplace-target`）、发布 `npm` 包（`.gitx/npm-target`）。任一步失败就停在那一步，重跑同一命令会跳过已完成的步骤；`--dry-run` 只核对不写。`npm` 同一版本只能发一次：`npm` 发布之后再重切同一版本，需要换新的版本号。
+- README 安装块列出 `Claude Code`、`Codex`、`OpenCode` 与 `install.sh` 四段，各附升级命令，并写明同一个智能体只选一种安装方式（装两种会加载两份）。发版页面标准第 9 项与 README 模板同步。
+- 中央市场版本更新从 `gitx-release` 移到 `gitx-publish.sh`。这是通用行为变更：所有带 `.gitx/marketplace-target` 的项目，都改为在发布公开时更新市场，不再提前。`gitx-release --skip-marketplace` 仍可使用，但不做任何事。
+- 中央市场条目改用 `url` 来源（`https://github.com/<owner>/<repo>.git`），`Claude Code` 与 `Codex` 都能据此安装；`gitx-marketplace bump` 会把旧的 `github` 条目迁过来。
 <!-- /gitx:managed:whats-new -->
 
 完整历史 → [`CHANGELOG_CN.md`](CHANGELOG_CN.md)。
@@ -104,9 +124,9 @@ git clone --depth 1 https://github.com/tkxlab-ai/GitX.git && bash GitX/install.s
 <!-- gitx:managed:metrics -->
 | 指标 | 数值 |
 |---|---|
-| 已发布版本 | 68 |
-| 首次发版 → 最新发版 | 2026-04-22 → 2026-11-17 |
-| 测试套件 | 121 |
+| 已发布版本 | 69 |
+| 首次发版 → 最新发版 | 2026-04-22 → 2026-11-18 |
+| 测试套件 | 125 |
 <!-- /gitx:managed:metrics -->
 
 <sub>[↑ 回到顶部](#目录)</sub>
@@ -162,7 +182,7 @@ README 里描述代码事实的区块（命令表、测试数、版本、发版�
 由此得出三条工作规则：
 
 - **通用安全。** GitX 也为别的项目发版。如果某个项目缺少某项检查需要的文件或工具，这项检查会跳过，而不是让项目因为它从未启用的东西失败。
-- **默认不写上游。** 核心流水线从不推送、打 tag 或发布。发布到 GitHub 由人执行，或由智能体在人明确指示后执行，依据是生成好的操作手册。下文两个可选的发版后步骤，只有在存在对应开关文件的机器上才会写远端。
+- **默认不写上游。** 核心流水线从不推送、打 tag 或发布。发布到 GitHub 由人执行，或由智能体在人明确指示后执行：按生成好的操作手册推送代码并建草稿，人确认草稿后，再用一条命令（`gitx-publish.sh`）公开。下文可选的发版后步骤，只有在存在对应开关文件的机器上才会写远端。
 - **用自己发布自己。** GitX 用自己的流水线发版，所以它对别的项目提出的每条规则，都先在自己身上跑过。
 
 <sub>[↑ 回到顶部](#目录)</sub>
@@ -187,8 +207,8 @@ flowchart LR
   G --> H{Deep Audit}
   H -->|全部通过| I[更新 Release/latest]
   H -->|任一失败| X[中止]
-  I -.可选.-> M[marketplace 版本更新]
   I -.可选.-> N[私有 Gitea 发布仓]
+  I -.确认草稿后.-> P[gitx-publish<br/>公开 GitHub · 市场 · npm]
 ```
 
 ### 一次发版包含什么
@@ -230,12 +250,20 @@ Deep Audit 分为 `§0`–`§0m` 和 `§1`–`§11` 各节。代表性关卡：
 
 ### 可选的发版后步骤
 
-只有当本机 `.gitx/` 里存在对应的开关文件时，发版成功后才会执行这两步。两者都是尽力而为：失败只打印警告，不改变发版结果。只有这两步会写远端。
+只有当本机 `.gitx/` 里存在对应的开关文件时，发版成功后才会执行这一步。它是尽力而为：失败只打印警告，不改变发版结果。
 
 | 开关文件 | 步骤 |
 |---|---|
-| `.gitx/marketplace-target` | 在中央插件 marketplace 里更新本技能的版本（建分支、提 PR、合并） |
 | `.gitx/gitea-release-target` | 把发版目录发布到私有 Gitea 发布仓（`main` + tag + 带附件的 Release） |
+
+### 对外公开
+
+发版本身从不碰 `GitHub`、插件市场和 `npm`。按操作手册建好 `GitHub` 草稿、并由人确认之后，`scripts/gitx-publish.sh --version vX.Y.Z` 先做全部核对——草稿附件与 `Release/` 逐字节比对、`GitHub` 上 `main` 分支的 `VERSION`、`npm` 包的名称、版本与内容——全部通过后才依次：公开 `GitHub Release`（并让 `Latest` 保持在最高版本）、更新中央市场、发布 `npm` 包。任一步失败就停在那一步；重跑同一命令会跳过已完成的步骤。`npm` 同一版本只能发一次，所以 `npm` 发布之后再重切同一版本，需要换新的版本号。
+
+| 开关文件 | `gitx-publish.sh` 中的步骤 |
+|---|---|
+| `.gitx/marketplace-target` | 在中央插件 marketplace 里更新本技能的版本（建分支、提 PR、合并） |
+| `.gitx/npm-target` | 发布文件里写的 npm 包（一次性验证码由 npm 自己询问） |
 
 内部实现——文件布局、双源规则、每个阶段怎么实现——见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)（英文）。
 
@@ -247,17 +275,30 @@ Deep Audit 分为 `§0`–`§0m` 和 `§1`–`§11` 各节。代表性关卡：
 
 ### 1 · 前置条件
 
-Bash 3.2+（macOS 自带的 bash 即可）、git 2.x，以及常用工具 `rsync`、`tar`、`gzip`、`unzip` 和 `shasum`（或 `sha256sum`）。可选：带 `venv` 的 `python3`（技能校验会自动准备自己的副本）；marketplace 步骤需要 `jq` 和 `gh`。
+Bash 3.2+（macOS 自带的 bash 即可）、git 2.x，以及常用工具 `rsync`、`tar`、`gzip`、`unzip` 和 `shasum`（或 `sha256sum`）。可选：带 `venv` 的 `python3`（技能校验会自动准备自己的副本）；`gitx-publish.sh` 与 marketplace 步骤需要 `jq` 和 `gh`；npm 步骤需要 `npm`。
 
-### 2 · 安装——两种方式
+### 2 · 安装——四种方式
 
-*方式 A——插件 marketplace（Claude Code 插件用户）：*
+同一个智能体只选一种：装两种会加载两份技能。
+
+*方式 A——Claude Code 插件市场：*
 ```text
 /plugin marketplace add tkxlab-ai/marketplace
 /plugin install gitx@tkxlab
 ```
 
-*方式 B——`install.sh`（一条命令覆盖四个 CLI，不需要插件系统）：*
+*方式 B——Codex 插件市场：*
+```bash
+codex plugin marketplace add tkxlab-ai/marketplace
+codex plugin add gitx@tkxlab
+```
+
+*方式 C——OpenCode npm 插件（不写版本号，才会检查更新）：*
+```bash
+opencode plugin add @tkxlabai/gitx-opencode
+```
+
+*方式 D——`install.sh`（一条命令装给本机所有 CLI，不需要插件系统）：*
 ```bash
 git clone https://github.com/tkxlab-ai/GitX.git && cd GitX
 bash install.sh             # 安装到 ~/.agents/skills/gitx-release，并为 Claude Code 和 OpenCode 建链接；
@@ -298,8 +339,12 @@ RELEASE READY · nothing pushed
 
 ### 升级
 
-- **插件用户：** 在 `/plugin` 菜单里更新 `tkxlab` marketplace，然后重新安装 `gitx@tkxlab`。
-- **`install.sh` 用户：** 在 GitX 的检出目录里执行 `git pull && bash install.sh --force`，然后在每个项目里跑一次 `/gitx-release --dry-run`，看看新版本有没有新的检查项。
+- **Claude Code 插件：** 在 `/plugin` 菜单里为 `tkxlab` 市场打开自动更新，或执行 `claude plugin update gitx@tkxlab`。
+- **Codex 插件：** 先 `codex plugin marketplace upgrade`，再执行一次 `codex plugin add gitx@tkxlab`。
+- **OpenCode 插件：** 在项目目录里执行 `opencode plugin update`。
+- **`install.sh` 用户：** 在 GitX 的检出目录里执行 `git pull && bash install.sh --force`。
+
+然后在每个项目里跑一次 `/gitx-release --dry-run`，看看新版本有没有新的检查项。
 
 ### 卸载
 
@@ -355,7 +400,7 @@ rm -f  ~/.claude/skills/gitx-release ~/.config/opencode/skills/gitx-release
 
 | 脚本 | 接口 | 用途 |
 |---|---|---|
-| `scripts/gitx-release.sh` | `[--dry-run] [--version vX.Y.Z] [--skip-marketplace] [--skip-gitea-release]` | 入口：准备日志、跑流水线，再执行可选的发版后步骤 |
+| `scripts/gitx-release.sh` | `[--dry-run] [--version vX.Y.Z] [--skip-marketplace] [--skip-gitea-release]` | 入口：准备日志、跑流水线，再执行可选的发版后步骤（`--skip-marketplace` 为兼容保留，不做任何事） |
 | `scripts/release.sh` | `PROJECT_ROOT=<dir> … <version> [--dry-run]` | 流水线各阶段本身 |
 | `scripts/release-audit.sh` | `<version>` | 对已有的发版目录跑 Deep Audit |
 | `scripts/release-sanitize.sh` | `[--label <name>] <dir>` | 扫描目录中的密钥和个人信息 |
@@ -365,6 +410,7 @@ rm -f  ~/.claude/skills/gitx-release ~/.config/opencode/skills/gitx-release
 | `scripts/sync-dual-source.sh` | `[--dry-run]` | 把 `scripts/` 同步到包内的技能副本 |
 | `scripts/gitx-marketplace.sh` | `register\|bump\|list` | 管理本技能在中央 marketplace 里的条目 |
 | `scripts/gitx-gitea-release.sh` | `[--dry-run] [--force] [--version vX.Y.Z]` | 把发版发布到私有 Gitea 发布仓 |
+| `scripts/gitx-publish.sh` | `--version vX.Y.Z [--repo OWNER/REPO] [--dry-run]` | GitHub 草稿确认后：先全部核对，再公开、更新市场、发布到 npm |
 
 </details>
 
@@ -402,7 +448,7 @@ bash ~/.agents/skills/gitx-release/scripts/release-sanitize.sh ./dist
 | `Release/CHANGELOG.md` · `Release/CHANGELOG_CN.md` | 发版历史；关卡读取最上面一条，中文文件与英文保持相同结构 |
 | `.sanitize-ignore` | 密钥扫描可以跳过的文件（有意设计的测试夹具） |
 | `references/docs-contract/manifest.txt` | `docs-audit` 强制执行的 README 章节契约 |
-| `.gitx/*` | 本机专用的发版后步骤开关（从不提交） |
+| `.gitx/*` | 本机专用的发版后步骤与 `gitx-publish.sh` 开关（从不提交） |
 
 <sub>[↑ 回到顶部](#目录)</sub>
 
@@ -415,7 +461,7 @@ bash ~/.agents/skills/gitx-release/scripts/release-sanitize.sh ./dist
 仓库中的测试套件数（机器统计）：
 
 <!-- gitx:managed:suite-count -->
-121
+125
 <!-- /gitx:managed:suite-count -->
 
 | 范围 | 这些套件锁定什么 |
@@ -439,7 +485,7 @@ bash ~/.agents/skills/gitx-release/scripts/release-sanitize.sh ./dist
 GitX 作为发版工具，威胁模型是两件事：**泄露本应私有的东西**，以及**发出没有验证过的东西**。
 
 - **私有工作文件绝不进入公开产物。** 它们被排除在 git 之外、扫描范围之外、打包副本之外，打包后还会被审计再查一次。
-- **默认不写上游。** 推送、打 tag、发布 GitHub Release 都由人执行，或由智能体在人明确指示后执行，依据是生成的操作手册。可选的发版后步骤只在存在开关文件的地方才写远端。
+- **默认不写上游。** 推送、打 tag、建 GitHub 草稿都由人执行，或由智能体在人明确指示后执行，依据是生成的操作手册；公开（`gitx-publish.sh`）只在人确认草稿后运行。可选的发版后步骤只在存在开关文件的地方才写远端。
 - **密钥扫描默认失败关闭。** 它遵守明确的忽略清单，因此不会被自己的测试夹具误判失败，但遇到任何真实凭证都会中止；并且会对即将公开的那份目录再扫一次。
 - **下载可验证。** 可复现的源码 tarball、CycloneDX SBOM，以及 `install.sh` 在信任下载的安装包之前必先校验的 `checksums.txt`。
 
@@ -466,7 +512,7 @@ GitX 作为发版工具，威胁模型是两件事：**泄露本应私有的东�
 
 <details><summary><b>GitX 会替我推送到 GitHub 或打 tag 吗？</b></summary>
 
-不会。核心流水线从不推送或打 tag，发布到 GitHub 按政策保持手动。GitX 负责构建和验证发版；`/gitx-sop` 生成操作手册，由人（或人明确指示的智能体）照着发布。
+不会。核心流水线从不推送或打 tag，发布到 GitHub 按政策保持手动。GitX 负责构建和验证发版；`/gitx-sop` 生成操作手册，由人（或人明确指示的智能体）照着推送并建草稿；人确认草稿后，`gitx-publish.sh` 才把它公开。
 </details>
 
 <details><summary><b>需要 CI 吗？</b></summary>

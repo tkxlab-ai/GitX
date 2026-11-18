@@ -9,11 +9,11 @@
     {
       "name": "gitx",
       "source": {
-        "source": "github",
-        "repo": "tkxlab-ai/GitX"
+        "source": "url",
+        "url": "https://github.com/tkxlab-ai/GitX.git"
       },
       "description": "GitX — cross-project release pipeline.",
-      "version": "1.15.1",
+      "version": "1.16.0",
       "author": {
         "name": "TKXLAB.AI"
       },
@@ -26,5 +26,5 @@
       ]
     }
   ],
-  "version": "1.15.1"
+  "version": "1.16.0"
 }

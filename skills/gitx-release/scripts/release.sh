@@ -1,0 +1,1495 @@
+#!/bin/bash
+# release.sh — TKX generic release pipeline (skill-packaged)
+# usage:
+#   cd <project-root>
+#   PROJECT_ROOT=$(pwd) bash <skill-path>/scripts/release.sh <version> [--dry-run]
+#
+# Or via thin wrapper in project root (see skill docs).
+#
+# Env vars:
+#   PROJECT_ROOT   default: $(pwd)                — 项目仓根
+#   PROJECT_NAME   default: basename($PROJECT_ROOT), lowercased — artifact 命名用
+#   SKILL_NAME     default: auto-detect from $PROJECT_ROOT/skills/*/SKILL.md  — 打包目标
+#   .sanitize-ignore  — 白名单文件（项目根），代替已删除的 FORCE=1 绕过（S3-1）
+#
+# Flags:
+#   --dry-run       Validate everything but skip filesystem-mutating steps
+#
+# Produces (under $PROJECT_ROOT/Release/<version>/):
+#   <project>-<version>.skill            — 单文件分发
+#   <project>-<version>-source.tar.gz    — 完整源码
+#   README.md / INSTALL.md / CHANGELOG.md / ...  — 平摊文档
+#   RELEASE_NOTES.md                      — 本版本说明（自动生成）
+#   install.sh                            — 平摊安装脚本
+
+set -euo pipefail
+
+# P1-6: Propagate trap across subshells and function calls for robust cleanup
+set -o errtrace
+
+# --- Resolve self location ---
+SKILL_ROOT="$(cd "$(dirname "$0")" && pwd)"   # scripts/ 目录 — audit/sanitize 就在这里
+
+# --- Version arg + flags ---
+DRY_RUN=0
+VERSION=""
+for arg in "$@"; do
+    case "$arg" in
+        --dry-run) DRY_RUN=1 ;;
+        *)
+            if [ -z "$VERSION" ]; then
+                VERSION="$arg"
+            fi
+            ;;
+    esac
+done
+VERSION="${VERSION:?Usage: PROJECT_ROOT=<dir> bash $0 <version> [--dry-run]}"
+if ! echo "$VERSION" | grep -qE '^v[0-9]+\.[0-9]+(\.[0-9]+)?(-(alpha|beta|rc)\.?[0-9]*)?$'; then
+    echo "❌ Invalid version: $VERSION (expected vX.Y[.Z][-alpha|beta|rc[.N]])"
+    exit 1
+fi
+
+# --- Project context ---
+PROJECT_ROOT="${PROJECT_ROOT:-$(pwd)}"
+[ -d "$PROJECT_ROOT" ] || { echo "❌ PROJECT_ROOT 不存在: $PROJECT_ROOT"; exit 1; }
+PROJECT_ROOT="$(cd "$PROJECT_ROOT" && pwd)"   # normalize
+
+# Auto-detect PROJECT_NAME + SKILL_NAME via shared lib
+source "$SKILL_ROOT/lib/detect-project.sh"
+
+# v0.9.10: versioned dir includes PROJECT_NAME prefix so monorepos and
+# multi-project review surfaces can tell what's in Release/ at a glance.
+RELEASE_DIR="$PROJECT_ROOT/Release/${PROJECT_NAME}-${VERSION}"
+
+# --- Helper: safe_version (escape regex meta-chars for awk/grep contexts) ---
+# v1.0.8 hardening (Sec Minor #1): VERSION is already pre-validated to a
+# safe charset by the regex at line 47, so today only `.` matters. Escape
+# the broader set defensively in case the validation regex is ever loosened
+# (e.g., to allow build-metadata `+` or pre-release `~` characters).
+safe_version() {
+    printf '%s' "$1" | sed 's/[.[*+?(){}\\^$|]/\\&/g'
+}
+
+# --- Dry-run wrapper ---
+run() {
+    if [ "$DRY_RUN" = "1" ]; then
+        echo "  [dry-run] $*"
+    else
+        "$@"
+    fi
+}
+
+# --- Consolidated cleanup trap ---
+# Keep the wrapper allowlist a plain shell variable here (preflight + the scrub
+# overlay still read it) but stop it reaching children — tests/run_all.sh or a
+# nested release.sh during a self-release must not inherit an excuse.
+export -n _GITX_WRAPPER_DIRTY_OK 2>/dev/null || true
+CLEANUP_EXTRAS=()
+RELEASE_DIR_CREATED=0
+cleanup_on_fail() {
+    if [ "$RELEASE_DIR_CREATED" = "1" ] && [ -d "$RELEASE_DIR" ] && [ "${RELEASE_SUCCESS:-0}" != "1" ]; then
+        echo "🧹 Cleaning up failed release: $RELEASE_DIR"
+        rm -rf "$RELEASE_DIR"
+    fi
+    if [ -n "${SKILL_CREATOR_ERR:-}" ]; then rm -f "$SKILL_CREATOR_ERR"; fi
+    if [ -n "${STAGE:-}" ]; then rm -rf "$STAGE"; fi
+    if [ -n "${SKILL_STAGE:-}" ]; then rm -rf "$SKILL_STAGE"; fi
+    if [ "${#CLEANUP_EXTRAS[@]}" -gt 0 ]; then rm -rf "${CLEANUP_EXTRAS[@]}"; fi
+}
+trap 'cleanup_on_fail' EXIT
+
+# ============================================================
+# Function definitions
+# ============================================================
+
+preflight_external_tools() {
+    # v1.0.8 hardening (Arch #3): README claims "pure Bash, no external deps"
+    # but the pipeline relies on these system tools. Probe each up front so
+    # missing ones produce a clear actionable message instead of a cryptic
+    # mid-flight failure. SHA tools probed separately at checksums step.
+    local missing=()
+    for t in rsync tar gzip unzip awk sed grep find diff; do
+        if ! command -v "$t" >/dev/null 2>&1; then
+            missing+=("$t")
+        fi
+    done
+    if ! command -v shasum >/dev/null 2>&1 && ! command -v sha256sum >/dev/null 2>&1; then
+        missing+=("shasum or sha256sum")
+    fi
+    if [ "${#missing[@]}" -gt 0 ]; then
+        echo "❌ Missing required external tools: ${missing[*]}" >&2
+        echo "   This pipeline depends on POSIX-ish coreutils plus tar/gzip/zip/rsync." >&2
+        echo "   Install the missing tools and rerun." >&2
+        exit 1
+    fi
+}
+
+preflight_checks() {
+    # --- Pre-flight: clean working tree (Codex v1.12.3 round-12 [high]) ---
+    # Trust boundary: build_source_tarball extracts HEAD via scrub-tarball.sh
+    # and run_sanity_scans covers the staging tree (= HEAD content). But
+    # flatten_top_docs + flatten_docs cp README and other top-level docs
+    # from PROJECT_ROOT (live working tree). A dirty working tree means
+    # the flattened artifact + full tarball ship CONTENT that the scan
+    # never saw. Fail-close here so the published artifact always matches
+    # the scanned source. Generic-safe: skipped when PROJECT_ROOT is not
+    # a git repo (downstream fixtures / non-git workflows). The contract
+    # is: commit (or stash) before release; this matches the standard
+    # commit-then-release discipline GitX itself already follows.
+    if git -C "$PROJECT_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+        # Two-part check (Codex round-12 [high] + round-13 [high]):
+        #   (1) tracked dirty   — diff-index --name-only HEAD, minus the
+        #       wrapper allowlist below; anything left aborts
+        #   (2) untracked-but-not-gitignored — ls-files --others --exclude-standard
+        # gitignored files are intentionally allowed (HANDOFF.md, .gitx/,
+        # docs/superpowers/, etc.); they never enter the release artifact
+        # because release.sh / scrub-tarball.sh / git-archive all skip them.
+        # Catches the round-13 attack: an untracked `.release-flatten` or
+        # untracked top-level doc that would later be flattened into the
+        # release dir AFTER the source-tarball sanitize pass.
+        # Wrapper allowlist: gitx-release.sh bumps VERSION sidecars (plus
+        # .claude-plugin/*.json and the npm-target package.json) and
+        # Release/CHANGELOG.md BEFORE calling release.sh by design (so it can
+        # roll them back on failure — Gotcha #17). The round-12 check rejected
+        # exactly those files, breaking one-command release in every git repo.
+        # Only the exact paths the wrapper exported are excused; any other
+        # tracked edit still aborts. The env is also clamped to the shapes
+        # the wrapper writes, so a hand-set value cannot excuse e.g. a dirty
+        # README (flattened from the working tree, never scanned on the
+        # scrub path — the round-12 hole).
+        git -C "$PROJECT_ROOT" update-index -q --refresh 2>/dev/null || true
+        # Fail closed: a git error (unborn HEAD, corrupt index) must not read
+        # as "nothing dirty" — the old `! diff-index --quiet` aborted there.
+        if ! _dirty=$(git -C "$PROJECT_ROOT" diff-index --name-only HEAD -- 2>/dev/null); then
+            echo "❌ release.sh: cannot verify clean working tree (git diff-index failed — unborn HEAD?)"
+            exit 1
+        fi
+        if [ -n "$_dirty" ] && [ -n "${_GITX_WRAPPER_DIRTY_OK:-}" ]; then
+            _dirty_ok_file=$(mktemp)
+            CLEANUP_EXTRAS+=("$_dirty_ok_file")
+            printf '%s\n' "$_GITX_WRAPPER_DIRTY_OK" \
+                | grep -xE 'VERSION|skills/[A-Za-z0-9._-]+/VERSION|\.claude-plugin/(plugin|marketplace)\.json|package\.json|Release/CHANGELOG\.md' \
+                > "$_dirty_ok_file" || true
+            [ -s "$_dirty_ok_file" ] \
+                && _dirty=$(printf '%s\n' "$_dirty" | grep -vxF -f "$_dirty_ok_file" || true)
+        fi
+        if [ -n "$_dirty" ]; then
+            echo "❌ release.sh: working tree has uncommitted tracked changes — release aborted"
+            echo "   The sanitize pass covers HEAD content (via scrub-tarball.sh / git-archive)."
+            echo "   Releasing with a dirty tree would ship un-scanned README / doc content."
+            echo ""
+            echo "   Inspect:  git -C $PROJECT_ROOT status --short"
+            echo "   Resolve:  commit (preferred) or stash, then re-run release.sh"
+            exit 1
+        fi
+        # Release/ holds the pipeline's own output (wrapper logs, version dirs)
+        # and is excluded from staging (rsync --exclude / export-ignore); the
+        # only Release/ inputs (CHANGELOG{,_CN}.md) are injected into the
+        # stage BEFORE the sanitize pass, so they cannot bypass the scan.
+        # Fail closed like diff-index above: a piped ls-files error would read
+        # as "no untracked files" and skip the trust-boundary check.
+        if ! _untracked_all=$(git -C "$PROJECT_ROOT" ls-files --others --exclude-standard 2>/dev/null); then
+            echo "❌ release.sh: cannot list untracked files (git ls-files failed) — release aborted"
+            exit 1
+        fi
+        _untracked=$(printf '%s\n' "$_untracked_all" | grep -v '^Release/' | head -20 || true)
+        if [ -n "$_untracked" ]; then
+            echo "❌ release.sh: untracked-not-gitignored files present — release aborted"
+            echo "   The sanitize/scan pass and source tarball derive from HEAD; any"
+            echo "   untracked file (e.g. an unintended .release-flatten or top-level"
+            echo "   doc) could be flattened into the release artifact after that scan,"
+            echo "   bypassing the trust boundary (Codex v1.12.3 round-13 [high])."
+            echo ""
+            echo "   Untracked (first 20):"
+            printf '%s\n' "$_untracked" | sed 's/^/     /'
+            echo ""
+            echo "   Resolve:  commit, delete, or add to .gitignore — then re-run."
+            exit 1
+        fi
+    fi
+
+    # --- Pre-flight: VERSION sidecar consistency (S3-3) ---
+    SKILL_MD_PATH="$PROJECT_ROOT/skills/$SKILL_NAME/SKILL.md"
+    VERSION_FILE="$PROJECT_ROOT/skills/$SKILL_NAME/VERSION"
+    if [ -f "$SKILL_MD_PATH" ]; then
+        if awk '/^---$/{c++; next} c==1 && /^metadata:[[:space:]]*$/{found=1} END{exit found ? 0 : 1}' "$SKILL_MD_PATH"; then
+            echo "❌ $SKILL_MD_PATH 含 Codex 不兼容的 frontmatter metadata: 块"
+            echo "   修正：删除 SKILL.md metadata，版本号写入 $VERSION_FILE"
+            exit 1
+        fi
+    fi
+    if [ -f "$VERSION_FILE" ]; then
+        SKILL_VERSION=$(tr -d '[:space:]' < "$VERSION_FILE")
+        if [ -z "$SKILL_VERSION" ]; then
+            echo "❌ $VERSION_FILE 为空（S3-3 契约）"
+            echo "   请写入版本号，例如：$VERSION"
+            exit 1
+        fi
+        if [ "$SKILL_VERSION" != "$VERSION" ]; then
+            echo "❌ VERSION 不一致：VERSION=$SKILL_VERSION, 传入=$VERSION"
+            echo "   修正：将 $VERSION_FILE 改为 $VERSION 再重试"
+            exit 1
+        fi
+        echo "✅ VERSION 一致：$SKILL_VERSION"
+    else
+        echo "❌ 缺少 VERSION sidecar：$VERSION_FILE"
+        echo "   Codex 不接受 SKILL.md metadata.version；版本号必须放在 VERSION 文件"
+        exit 1
+    fi
+
+    echo "🎯 Project: $PROJECT_ROOT"
+    echo "   Name:    $PROJECT_NAME"
+    echo "   Skill:   $SKILL_NAME"
+    echo "   Version: $VERSION"
+    echo "   Pipeline: $SKILL_ROOT"
+    echo ""
+
+    # --- Pre-flight 0: CHANGELOG gate (§4 #5 — fail-fast before any artifact is created) ---
+    # Derive release date from the SOURCE-OF-TRUTH changelog
+    # (Release/CHANGELOG.md — the hand-authored accumulated history the §4
+    # gate below validates). Priority: Release/CHANGELOG.md → SOURCE_DATE_EPOCH
+    # → wall-clock. v1.12.1 fix (Gotcha #81): previously read root
+    # /CHANGELOG.md, now a generated mirror (historically a STALE stub) that
+    # lacked the version entry, so RELEASE_DATE silently wall-clock-fell-back
+    # for ~11 releases (non-byte-reproducible RELEASE_NOTES). The version
+    # entry is authored & gated in Release/CHANGELOG.md — read it there.
+    # v1.0.8 hardening (Arch #4): wall-clock is LAST RESORT + stderr warning.
+    RELEASE_DATE=$(grep -m1 "^## ${VERSION} " "$PROJECT_ROOT/Release/CHANGELOG.md" 2>/dev/null \
+                   | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' || true)
+    if [ -z "$RELEASE_DATE" ] && [ -n "${SOURCE_DATE_EPOCH:-}" ]; then
+        RELEASE_DATE=$(date -u -r "$SOURCE_DATE_EPOCH" "+%Y-%m-%d" 2>/dev/null \
+                       || date -u -d "@$SOURCE_DATE_EPOCH" "+%Y-%m-%d" 2>/dev/null \
+                       || echo "")
+    fi
+    if [ -z "$RELEASE_DATE" ]; then
+        echo "⚠️  RELEASE_DATE: no parseable YYYY-MM-DD in CHANGELOG and no SOURCE_DATE_EPOCH set." >&2
+        echo "    Falling back to wall-clock — RELEASE_NOTES.md will NOT be byte-reproducible." >&2
+        echo "    To fix: ensure '## ${VERSION} — YYYY-MM-DD' header in CHANGELOG, or export SOURCE_DATE_EPOCH." >&2
+        RELEASE_DATE=$(date +%Y-%m-%d)
+    fi
+    PROJECT_TITLE="$(echo "$PROJECT_NAME" | awk '{print toupper(substr($0,1,1)) substr($0,2)}')"
+    ACCUM_CHANGELOG="$PROJECT_ROOT/Release/CHANGELOG.md"
+    if [ "$DRY_RUN" = "1" ]; then
+        if [ ! -f "$ACCUM_CHANGELOG" ]; then
+            echo "  [dry-run] Would create Release/CHANGELOG.md (not yet exists)"
+            echo ""
+            echo "⛔ [dry-run] CHANGELOG gate: Release/CHANGELOG.md 不存在"
+            echo "   请先运行一次非 dry-run 模式创建 CHANGELOG 结构"
+            exit 1
+        fi
+    else
+        mkdir -p "$PROJECT_ROOT/Release"
+        if [ ! -f "$ACCUM_CHANGELOG" ]; then
+            cat > "$ACCUM_CHANGELOG" <<EOF
+# $PROJECT_TITLE — Release History
+
+记录各版本的关键变化。最新版本在最上面。
+
+EOF
+        fi
+    fi
+    if ! grep -qF "## $VERSION " "$ACCUM_CHANGELOG"; then
+        # No entry — create scaffold and abort before any packaging
+        if [ "$DRY_RUN" = "1" ]; then
+            echo ""
+            echo "⛔ [dry-run] CHANGELOG gate（§4 #5）：$VERSION 无条目"
+            echo "   [dry-run] 会创建占位条目，但跳过文件写入"
+            echo "   填完后重新运行 release.sh $VERSION"
+            exit 1
+        fi
+        TMP_CHANGELOG=$(mktemp)
+        CLEANUP_EXTRAS+=("$TMP_CHANGELOG")
+        # Anchor on the first `## ` entry (same as gitx-release.sh): a fixed
+        # head -4 split put the new entry BELOW the current top entry whenever
+        # the header was not exactly 4 lines, so audit §4 saw the wrong top
+        # version. awk exits 0 on no match (set -e safe); empty = append.
+        _anchor_line=$(awk '/^## / { print NR; exit }' "$ACCUM_CHANGELOG")
+        if [ -n "$_anchor_line" ]; then
+            head -n $((_anchor_line - 1)) "$ACCUM_CHANGELOG" > "$TMP_CHANGELOG"
+        else
+            cp "$ACCUM_CHANGELOG" "$TMP_CHANGELOG"
+        fi
+        cat >> "$TMP_CHANGELOG" <<EOF
+## $VERSION — $RELEASE_DATE
+
+<!-- TODO: 在此填写本版本要点，建议包括：新增 / 修复 / 破坏性变更 -->
+
+Artifacts: \`Release/${PROJECT_NAME}-$VERSION/\`
+
+---
+
+EOF
+        if [ -n "$_anchor_line" ]; then
+            tail -n +"$_anchor_line" "$ACCUM_CHANGELOG" >> "$TMP_CHANGELOG"
+        fi
+        mv "$TMP_CHANGELOG" "$ACCUM_CHANGELOG"
+        echo ""
+        echo "⛔ CHANGELOG gate（§4 #5）：已为 $VERSION 创建占位条目"
+        echo "   请在 Release/CHANGELOG.md 的 $VERSION 节填写真实说明（删掉 TODO 注释）"
+        echo "   填完后重新运行 release.sh $VERSION"
+        exit 1
+    else
+        SAFE_VERSION=$(safe_version "$VERSION")
+        entry_section=$(awk "/^## $SAFE_VERSION /,/^---$/" "$ACCUM_CHANGELOG")
+        if echo "$entry_section" | grep -q "<!-- TODO"; then
+            if [ "$DRY_RUN" = "1" ]; then
+                echo ""
+                echo "⛔ [dry-run] CHANGELOG gate（§4 #5）：$VERSION 条目仍含 TODO 占位"
+                echo "   [dry-run] 拒绝 TODO 占位（与正常模式一致）"
+                exit 1
+            fi
+            echo ""
+            echo "⛔ CHANGELOG gate（§4 #5）：$VERSION 条目仍含 TODO 占位"
+            echo "   请在 Release/CHANGELOG.md 的 $VERSION 节填写真实说明（删掉 TODO 注释）"
+            echo "   填完后重新运行 release.sh $VERSION"
+            exit 1
+        fi
+        echo "✅ CHANGELOG gate：$VERSION 条目真实"
+    fi
+
+    # --- §2.1 triad: scan for FIXME/HACK markers in source scripts (warn) ---
+    FIXME_HITS=$({ grep -rE 'FIXME|HACK' "$PROJECT_ROOT" \
+                   --include="*.sh" \
+                   --exclude-dir=Release --exclude-dir=.git \
+                   --exclude-dir=".1by1" --exclude-dir=scripts \
+                   --exclude-dir=tests \
+                   2>/dev/null || true; } | wc -l | tr -d ' ')
+    if [ "$FIXME_HITS" -gt 0 ]; then
+        echo "⚠️  §2.1 triad: $FIXME_HITS FIXME/HACK marker(s) in source scripts"
+        grep -rE 'FIXME|HACK' "$PROJECT_ROOT" --include="*.sh" \
+             --exclude-dir=Release --exclude-dir=.git \
+             --exclude-dir=".1by1" --exclude-dir=scripts \
+             --exclude-dir=tests \
+             2>/dev/null | head -5 || true
+        echo "   Review and resolve (or defer to a tracked issue) before shipping."
+    else
+        echo "✅ §2.1 triad: no FIXME/HACK markers in source scripts"
+    fi
+}
+
+run_tests() {
+    if [ "$DRY_RUN" = "1" ]; then
+        echo "  [dry-run] Skipping regression tests (dry-run mode)"
+        return 0
+    fi
+    echo "🧪 Running regression..."
+    if [ ! -f "$PROJECT_ROOT/tests/run_all.sh" ]; then
+        echo "❌ 找不到 $PROJECT_ROOT/tests/run_all.sh —— 项目必须有测试入口"
+        exit 1
+    fi
+    TEST_LOG=$(mktemp "/tmp/tkx-release-test-XXXXXXXX")
+    if ! bash "$PROJECT_ROOT/tests/run_all.sh" 2>&1 | tee "$TEST_LOG"; then
+        echo ""
+        echo "❌ Tests failed — release aborted"
+        echo "   Full log: $TEST_LOG"
+        exit 1
+    fi
+    rm -f "$TEST_LOG"
+    echo "✅ Tests passed"
+}
+
+# Filter allowed root-only drift from `diff -rq` output before flagging.
+# Allowed root-only: release-* (protected pipeline scripts, Gotcha #22) and
+# scrub-tarball.sh (optional project tooling, Gotcha #33). $1 = root scripts dir
+# (the "Only in <dir>:" prefix). Defined as a FUNCTION — not an inline `case`
+# inside $(…) — because bash 3.2 mis-parses a `case` nested in command
+# substitution (the pattern's `)` is read as the closing `)` of $(…)); a function
+# body is parsed separately, keeping this 3.2-portable (dev = macOS /bin/bash 3.2).
+_filter_dual_source_drift() {
+    local _root="$1" _ln
+    while IFS= read -r _ln; do
+        case "$_ln" in
+            "Only in ${_root}: release-"*) ;;
+            "Only in ${_root}: scrub-tarball.sh") ;;
+            *) printf '%s\n' "$_ln" ;;
+        esac
+    done
+}
+
+check_dual_source() {
+    if [ ! -d "$PROJECT_ROOT/scripts" ]; then
+        echo "❌ Missing root scripts directory: $PROJECT_ROOT/scripts"
+        exit 1
+    fi
+    if [ ! -d "$PROJECT_ROOT/skills/$SKILL_NAME/scripts" ]; then
+        echo "❌ Missing bundled scripts directory: $PROJECT_ROOT/skills/$SKILL_NAME/scripts"
+        exit 1
+    fi
+
+    _SCRIPTS_ROOT="$PROJECT_ROOT/scripts"
+    drift=$(diff -rq "$PROJECT_ROOT/scripts/" "$PROJECT_ROOT/skills/$SKILL_NAME/scripts/" 2>&1 \
+            | _filter_dual_source_drift "$_SCRIPTS_ROOT" || true)
+    if [ -n "$drift" ]; then
+        echo "❌ 双源脚本漂移（v2.2 §4 #11）："
+        echo "$drift"
+        echo ""
+        echo "   修复后再 release。禁止 FORCE 绕过（silent ghost release 护城河）"
+        exit 1
+    fi
+    echo "✅ 双源脚本 byte-identical"
+}
+
+_discover_skill_creator() {
+    # v1.2.1 fix: prior SKILL_CREATOR path put a placeholder literal as the
+    # plugin hash dir segment but never implemented glob expansion. Claude
+    # Code plugin marketplace assigns a real hash dir name (e.g. a 12-char
+    # hex), so the old hardcoded path never matched even when skill-creator
+    # was installed — every self-bake printed the misleading "不在" warning.
+    #
+    # Discovery order: (1) plugin marketplace cache glob, (2) legacy ~/.claude/
+    # skills/ slot, (3) ~/.agents/skills/ canonical slot. Each candidate must
+    # contain scripts/package_skill.py to be accepted (rejects stale empty dirs).
+    SKILL_CREATOR=""
+    for cand in "$HOME/.claude/plugins/cache/claude-plugins-official/skill-creator"/*/skills/skill-creator \
+                "$HOME/.claude/skills/skill-creator" \
+                "$HOME/.agents/skills/skill-creator"; do
+        if [ -d "$cand" ] && [ -f "$cand/scripts/package_skill.py" ]; then
+            SKILL_CREATOR="$cand"
+            return 0
+        fi
+    done
+    return 1
+}
+
+build_skill_package() {
+    # v1.3.0: full system-vs-vendored skill-creator detection + interactive
+    # version selection via lib helper. Replaces v1.2.1's _discover_skill_creator
+    # call (kept below as backwards-compat thin wrapper for test coverage).
+    # shellcheck source=lib/skill-creator-version.sh
+    source "$SKILL_ROOT/lib/skill-creator-version.sh"
+    skill_creator_status "$SKILL_ROOT"
+
+    SKILL_CREATOR=""
+    case "$SKC_VERDICT" in
+        same|system_newer)
+            # System is at least as fresh → silent use of system (no prompt)
+            SKILL_CREATOR="$SKC_SYSTEM_PATH"
+            ;;
+        vendored_newer)
+            # System exists but is older than vendored pinning. Prompt if TTY,
+            # otherwise default to vendored (fresh + reproducible in CI).
+            if [ -t 0 ] && [ -z "${CI:-}" ] && [ "$DRY_RUN" != "1" ]; then
+                echo ""
+                echo "🔍 skill-creator version comparison:"
+                echo "   System ($SKC_SYSTEM_PATH): $SKC_SYSTEM_DATE"
+                echo "   Vendored ($SKC_VENDORED_PATH): $SKC_VENDORED_DATE (newer, commit ${SKC_VENDORED_COMMIT:0:8})"
+                echo ""
+                printf "Use [v]endored (recommended) or [s]ystem? [v]: "
+                read -r _skc_answer
+                case "${_skc_answer:-v}" in
+                    s|S|system) SKILL_CREATOR="$SKC_SYSTEM_PATH" ;;
+                    *) SKILL_CREATOR="$SKC_VENDORED_PATH" ;;
+                esac
+            else
+                SKILL_CREATOR="$SKC_VENDORED_PATH"
+            fi
+            ;;
+        system_absent)
+            # System missing → silent use of vendored
+            SKILL_CREATOR="$SKC_VENDORED_PATH"
+            ;;
+        vendored_absent|both_absent)
+            # Neither (defensive; vendored_absent shouldn't happen post-v1.3.0)
+            SKILL_CREATOR=""
+            ;;
+    esac
+
+    # v1.4.0: best-effort PyYAML enablement. skill-creator quick_validate.py
+    # imports PyYAML; macOS Python 3 ships without it and PEP 668 blocks
+    # system pip. Try creating a temporary venv with PyYAML — if that works,
+    # the official packager path is enabled. Falls back to zip if no Python
+    # or venv/pip fails (less surprising than aborting release).
+    if [ -n "$SKILL_CREATOR" ] && [ "$SKC_PYYAML_OK" != "1" ]; then
+        if ensure_pyyaml_via_venv; then
+            echo "🐍 PyYAML enabled via temporary venv ($SKC_VENV_DIR)"
+            CLEANUP_EXTRAS+=("$SKC_VENV_DIR")
+        else
+            echo "⚠️  skill-creator 探测到（${SKILL_CREATOR}）但 PyYAML venv 创建失败，回退 zip fallback"
+            echo "    手工启用: pip3 install pyyaml --break-system-packages（或先确保 python3 + venv 可用）"
+            SKILL_CREATOR=""
+        fi
+    fi
+    # Choose Python binary: venv's if we just created one, else system python
+    PYTHON_BIN="${SKC_VENV_PYTHON:-python}"
+
+    SKILL_OUT="$RELEASE_DIR/${PROJECT_NAME}-${VERSION}.skill"
+    SKILL_SRC_DIR="$PROJECT_ROOT/skills/$SKILL_NAME"
+
+    if [ "$DRY_RUN" = "1" ]; then
+        echo "  [dry-run] Would build .skill from $SKILL_SRC_DIR → $SKILL_OUT"
+        return 0
+    fi
+
+    if [ -n "$SKILL_CREATOR" ] && [ -d "$SKILL_CREATOR" ]; then
+        echo "📦 Building .skill via skill-creator (discovered at $SKILL_CREATOR)..."
+        run rm -f "$SKILL_CREATOR/${SKILL_NAME}.skill" "$PROJECT_ROOT/${SKILL_NAME}.skill"
+        SKILL_CREATOR_ERR=$(mktemp)
+        # v1.4.0: PYTHONDONTWRITEBYTECODE=1 prevents __pycache__/ side-effect
+        # in scripts/vendored/skill-creator/scripts/ (would break dual-source
+        # diff with skills/gitx-release/scripts/vendored/...)
+        if (cd "$SKILL_CREATOR" && PYTHONDONTWRITEBYTECODE=1 "$PYTHON_BIN" -m scripts.package_skill "$SKILL_SRC_DIR" > /dev/null 2>"$SKILL_CREATOR_ERR"); then
+            run mv "$SKILL_CREATOR/${SKILL_NAME}.skill" "$SKILL_OUT"
+            echo "   → $SKILL_OUT ($(du -h "$SKILL_OUT" 2>/dev/null | cut -f1 || echo "dry-run"))"
+        else
+            echo "❌ skill-creator failed. Output:"
+            cat "$SKILL_CREATOR_ERR" >&2
+            exit 1
+        fi
+        rm -f "$SKILL_CREATOR_ERR"
+    else
+        echo "⚠️  skill-creator 不在，改用 zip 直接打包"
+        if [ "$DRY_RUN" = "1" ]; then
+            echo "  [dry-run] zip -qX (sorted, mtime-normalized staging) → $SKILL_OUT"
+        else
+            # Stage + mtime-normalize to produce byte-identical zips across builds.
+            # Reading live source directly embeds developer mtimes → non-deterministic.
+            _ZIP_STAGE=$(mktemp -d)
+            CLEANUP_EXTRAS+=("$_ZIP_STAGE")
+            rsync -a --exclude='evals/' \
+                  "$PROJECT_ROOT/skills/$SKILL_NAME/" "$_ZIP_STAGE/$SKILL_NAME/"
+            _SDE_ZIP="200001010000.00"
+            if [ -n "${SOURCE_DATE_EPOCH:-}" ]; then
+                _SDE_ZIP=$(date -u -r "$SOURCE_DATE_EPOCH" "+%Y%m%d%H%M.%S" 2>/dev/null \
+                           || date -u -d "@$SOURCE_DATE_EPOCH" "+%Y%m%d%H%M.%S" 2>/dev/null \
+                           || echo "200001010000.00")
+            fi
+            find "$_ZIP_STAGE" -exec touch -t "$_SDE_ZIP" {} + || true
+            (cd "$_ZIP_STAGE" && find "$SKILL_NAME" | LC_ALL=C sort | zip -qX "$SKILL_OUT" -@)
+        fi
+        echo "   → $SKILL_OUT ($(du -h "$SKILL_OUT" 2>/dev/null | cut -f1 || echo "dry-run"))"
+    fi
+}
+
+# v1.12.1 (Gotcha #80/#81; Codex round-2 [high]): the public GitHub mirror is
+# built from the source tarball. Release/ is stripped from that tarball, and
+# README links are flat (`CHANGELOG.md`, `CHANGELOG_CN.md`) — so the tarball
+# MUST carry flat full-history changelogs or the public links 404 (P0/P0-2).
+#
+# The earlier approach `cp`'d Release/CHANGELOG*.md over the downstream
+# project's WORKING-TREE root CHANGELOG — a destructive, no-rollback generic
+# write: this script is a cross-project pipeline whose contract limits writes
+# to Release/ + a root CHANGELOG *append*; a full overwrite can nuke a
+# hand-authored root changelog, and on a later gate failure the mutation
+# persists (cleanup only reaps the release dir / staging temps). Codex
+# round-2 no-ship.
+#
+# Fix: inject into the tarball STAGING tree ONLY — STAGE_SUB is a mktemp
+# temp dir, NEVER $PROJECT_ROOT. The rsync path calls this after rsync and
+# before the deterministic touch+tar (so reproducibility holds). The scrub
+# path (`git archive HEAD`) cannot inject non-destructively; there the
+# committed root mirror must already be current, enforced fail-closed by
+# assert_changelog_tarball_parity (below) — never by a silent overwrite.
+# CN parallel is generic-safe (only injected when the source exists).
+inject_root_changelog_into_stage() {
+    if [ "$DRY_RUN" = "1" ]; then
+        echo "  [dry-run] Would inject Release/CHANGELOG{,_CN}.md → staging root (working tree untouched)"
+        return 0
+    fi
+    local pair src dest
+    for pair in "Release/CHANGELOG.md:CHANGELOG.md" "Release/CHANGELOG_CN.md:CHANGELOG_CN.md"; do
+        src="$PROJECT_ROOT/${pair%%:*}"
+        if [ ! -f "$src" ]; then
+            [ "$src" = "$PROJECT_ROOT/Release/CHANGELOG.md" ] \
+                && { echo "❌ inject_root_changelog_into_stage: $src missing" >&2; exit 1; }
+            continue
+        fi
+        # Codex round-3 [high]: `rsync -a` preserves a downstream root
+        # CHANGELOG symlink into STAGE_SUB; `cp` would write THROUGH it,
+        # escaping the staging sandbox into the symlink target (working-tree
+        # corruption — the exact thing this design promises never happens).
+        # Unlink the staged dest first so cp creates a fresh regular file,
+        # then assert it is not a symlink (fail-closed defense-in-depth).
+        dest="$STAGE_SUB/${pair##*:}"
+        rm -f -- "$dest"
+        # NOTE: no `cp --` — BSD/macOS cp rejects `--` (Codex round-5 [high];
+        # GitX advertises macOS/Bash 3.2). $src/$dest are fixed internal
+        # paths (not flag-injection vectors); the prior `rm -f -- "$dest"`
+        # already broke any preserved symlink, so plain cp is safe + portable.
+        cp "$src" "$dest"
+        if [ -L "$dest" ]; then
+            echo "❌ inject_root_changelog_into_stage: staged $dest is a symlink — aborting" >&2
+            exit 1
+        fi
+        echo "✅ staged ${pair##*:} from ${pair%%:*} (public tarball full history; working tree untouched)"
+    done
+}
+
+# Codex (v1.12.1 independent review, [high]): the rsync path injects flat
+# CHANGELOG{,_CN}.md into the staging tree (inject_root_changelog_into_stage,
+# above) so its tarball is current by construction. The scrub-tarball path
+# (`git archive HEAD`) CANNOT inject non-destructively — if a downstream
+# project's committed root mirror is stale, its public source tarball ships
+# the STALE CHANGELOG (Gotcha #81 class, scrub path). §0l only checks README
+# refs RESOLVE, not that changelog CONTENT is current. This gate is the
+# universal fail-closed post-condition for BOTH paths: it verifies the
+# ACTUAL built source tarball — the artifact that becomes the public GitHub
+# mirror — carries CHANGELOG{,_CN}.md byte-identical to the source-of-truth
+# Release/CHANGELOG{,_CN}.md (rsync: confirms injection; scrub: aborts with
+# an instruction to commit the regenerated mirror). CN is generic-safe.
+assert_changelog_tarball_parity() {
+    if [ "$DRY_RUN" = "1" ]; then
+        echo "  [dry-run] Would assert source tarball CHANGELOG{,_CN}.md == Release/CHANGELOG{,_CN}.md"
+        return 0
+    fi
+    local _cp_t _cp_pair _cp_src _cp_name _cp_got
+    _cp_t=$(mktemp -d)
+    CLEANUP_EXTRAS+=("$_cp_t")
+    if ! tar -xzf "$TAR_OUT" -C "$_cp_t" 2>/dev/null; then
+        echo "❌ changelog-parity: cannot extract $TAR_OUT to verify public CHANGELOG" >&2
+        exit 1
+    fi
+    for _cp_pair in "Release/CHANGELOG.md:CHANGELOG.md" "Release/CHANGELOG_CN.md:CHANGELOG_CN.md"; do
+        _cp_src="$PROJECT_ROOT/${_cp_pair%%:*}"
+        _cp_name="${_cp_pair##*:}"
+        # CN parallel is optional per the docs-contract (H5 generic-safe):
+        # only enforce when the source-of-truth file exists.
+        [ -f "$_cp_src" ] || continue
+        _cp_got=$(find "$_cp_t" -maxdepth 2 -name "$_cp_name" -type f 2>/dev/null | head -1)
+        if [ -z "$_cp_got" ]; then
+            echo "❌ changelog-parity: $_cp_name MISSING from source tarball (would 404 publicly) — aborting" >&2
+            exit 1
+        fi
+        if ! cmp -s "$_cp_src" "$_cp_got"; then
+            echo "❌ changelog-parity: source tarball $_cp_name != ${_cp_pair%%:*} (stale / scrub-uncommitted mirror would ship) — aborting" >&2
+            exit 1
+        fi
+        echo "✅ source tarball $_cp_name byte-identical to ${_cp_pair%%:*} (public changelog current)"
+    done
+}
+
+# Single deterministic source-tarball pack recipe (Gotcha #14: two builds of
+# the same staged tree → byte-identical .tar.gz; honors SOURCE_DATE_EPOCH,
+# SLSA). Codex round-4 [high]: extracted into ONE helper so BOTH the scrub
+# and rsync paths inject the source-of-truth changelog and re-pack via the
+# SAME recipe — path-agnostic, no second recipe to drift.
+# Globals: STAGE, STAGE_SUB, TAR_OUT, PROJECT_NAME, VERSION, DRY_RUN.
+pack_source_tarball_deterministic() {
+    local sde_touch
+    if [ -n "${SOURCE_DATE_EPOCH:-}" ]; then
+        sde_touch=$(date -u -r "$SOURCE_DATE_EPOCH" "+%Y%m%d%H%M.%S" 2>/dev/null \
+                    || date -u -d "@$SOURCE_DATE_EPOCH" "+%Y%m%d%H%M.%S" 2>/dev/null \
+                    || echo "200001010000.00")
+    else
+        sde_touch="200001010000.00"
+    fi
+    # Codex round-8 [high]: `touch` dereferences symlinks by default — a
+    # tracked symlink in the staged tree (scrub path: git archive preserves
+    # symlinks) would rewrite its TARGET's mtime, mutating state OUTSIDE
+    # STAGE_SUB (absolute / ../ targets) and breaking the non-destructive
+    # contract. `-h` acts on the link itself (no-dereference); portable on
+    # BSD/macOS + GNU touch. Symlinks get their own normalized mtime →
+    # still byte-reproducible, zero external mutation.
+    run find "$STAGE_SUB" -exec touch -h -t "$sde_touch" {} + || true
+    if [ "$DRY_RUN" = "1" ]; then
+        echo "  [dry-run] tar + gzip → $TAR_OUT"
+        return 0
+    fi
+    (
+        cd "$STAGE" && \
+        find "${PROJECT_NAME}-${VERSION}" -print | LC_ALL=C sort | \
+        tar --no-recursion --owner=0 --group=0 --numeric-owner -T - -cf -
+    ) 2>/dev/null | gzip -n > "$TAR_OUT"
+}
+
+# rsync honours only the explicit --exclude list, never .gitignore, so any
+# gitignored file missing from that list (e.g. .npmrc with a token) reached the
+# public tarball. Delete from the STAGE (never the working tree) every path git
+# itself considers ignored. No-op outside a git repo (non-git downstream users).
+prune_gitignored_from_stage() {
+    local root="$1" stage="$2" p
+    git -C "$root" rev-parse --git-dir >/dev/null 2>&1 || return 0
+    while IFS= read -r -d '' p; do
+        # -L too: -e follows links, so a gitignored dangling symlink (target
+        # may leak a /Users/<name>/ path) would otherwise stay staged.
+        if [ -e "$stage/$p" ] || [ -L "$stage/$p" ]; then
+            rm -rf "${stage:?}/$p"
+        fi
+    done < <(git -C "$root" ls-files -z --others --ignored --exclude-standard 2>/dev/null)
+    return 0
+}
+
+# The scrub path archives HEAD, but the one-command wrapper bumps the version
+# files (VERSION sidecars, .claude-plugin/*.json, the npm-target package.json)
+# uncommitted, so the tarball would ship the PREVIOUS version. Copy only those
+# files the wrapper declared (never Release/CHANGELOG.md — Deep
+# Audit §5 rejects any Release/ member; changelogs go via
+# inject_root_changelog_into_stage). Refuse staged symlinks (git archive
+# preserves them) so cp can never write outside the stage. Here-doc feed, not a
+# pipe, so `return` leaves the function and every mkdir/cp failure propagates.
+overlay_wrapper_versions_into_stage() {
+    local root="$1" stage="$2" p d _c
+    [ -n "${_GITX_WRAPPER_DIRTY_OK:-}" ] || return 0
+    while IFS= read -r p; do
+        # Same shape clamp as the preflight, plus no `..` / absolute path: the
+        # env is caller-controlled, and an unclamped entry could mkdir+cp
+        # outside the stage or slip an untracked VERSION into the tarball.
+        case "$p" in
+            /*|*..*) continue ;;
+        esac
+        printf '%s\n' "$p" | grep -qxE 'VERSION|skills/[A-Za-z0-9._-]+/VERSION|\.claude-plugin/(plugin|marketplace)\.json|package\.json' || continue
+        [ -f "$root/$p" ] || continue
+        # A manifest JSON is only refreshed where HEAD already staged it: one
+        # that is export-ignored or untracked must not be smuggled in here.
+        case "$p" in
+            *.json) [ -f "$stage/$p" ] || [ -L "$stage/$p" ] || continue ;;
+        esac
+        d="$(dirname "$p")"
+        _c="$d"
+        while [ "$_c" != "." ]; do
+            if [ -L "$stage/$_c" ]; then
+                echo "❌ staged $_c is a symlink — refusing to overlay $p" >&2
+                return 1
+            fi
+            _c="$(dirname "$_c")"
+        done
+        if [ -L "$stage/$p" ]; then
+            echo "❌ staged $p is a symlink — refusing to overlay" >&2
+            return 1
+        fi
+        mkdir -p "$stage/$d" || return 1
+        cp -p "$root/$p" "$stage/$p" || return 1
+    done <<EOF_OVL
+$_GITX_WRAPPER_DIRTY_OK
+EOF_OVL
+    return 0
+}
+
+build_source_tarball() {
+    TAR_OUT="$RELEASE_DIR/${PROJECT_NAME}-${VERSION}-source.tar.gz"
+
+    # v1.1.7+ Gotcha #20 long-term fix: prefer git-archive via the project's
+    # own scripts/scrub-tarball.sh when present. That path uses
+    # `git archive --worktree-attributes HEAD | gzip -n` — clean by
+    # construction (only git-tracked content, .gitattributes export-ignore
+    # honoured, no exclude list to maintain). For projects without
+    # scrub-tarball.sh, falls back to the legacy rsync staging path
+    # below (unchanged), which relies on the explicit --exclude list.
+    #
+    # History: this exact leak (.planning/, .archive/, project-internal
+    # docs leaking into source tarball because rsync ignores .gitignore
+    # and .gitattributes) bit the 1by1 skill on three consecutive releases
+    # (v0.5.3, v0.6.0, v0.6.1). The scrub-tarball.sh path eliminates the
+    # class of bug rather than playing exclude-list whack-a-mole.
+    PROJECT_SCRUB="$PROJECT_ROOT/scripts/scrub-tarball.sh"
+    if [ -x "$PROJECT_SCRUB" ] && git -C "$PROJECT_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+        echo "📦 Building source tarball via $PROJECT_SCRUB (git-tracked-only, deterministic)..."
+        if [ "$DRY_RUN" = "1" ]; then
+            echo "  [dry-run] bash $PROJECT_SCRUB $TAR_OUT ${PROJECT_NAME}-${VERSION} HEAD"
+        else
+            bash "$PROJECT_SCRUB" "$TAR_OUT" "${PROJECT_NAME}-${VERSION}" HEAD
+        fi
+        echo "   → $TAR_OUT ($(du -h "$TAR_OUT" 2>/dev/null | cut -f1 || echo "dry-run"))"
+        # v1.1.8 hot-patch: run_sanity_scans (line 490) reads $STAGE_SUB and
+        # would abort under `set -u` if we return without setting it. The
+        # legacy rsync path below sets STAGE/STAGE_SUB/SKILL_STAGE; the modern
+        # scrub-tarball path must satisfy the same downstream contract.
+        # Solution: extract the just-built tarball into STAGE so sanity scan
+        # sees the actual ship content. CLEANUP_EXTRAS reaps STAGE on exit.
+        # Self-bake of git_release_skill never hit this because the project
+        # ships no scrub-tarball.sh — but 1by1 v0.6.2 abort on this exact path.
+        STAGE=$(mktemp -d)
+        CLEANUP_EXTRAS+=("$STAGE")
+        SKILL_STAGE=""
+        STAGE_SUB="$STAGE/${PROJECT_NAME}-${VERSION}"
+        if [ "$DRY_RUN" = "1" ]; then
+            run mkdir -p "$STAGE_SUB"
+        else
+            tar -xzf "$TAR_OUT" -C "$STAGE"
+        fi
+        # Codex round-4 [high]: scrub-tarball.sh archives HEAD, so a freshly
+        # edited (uncommitted) Release/CHANGELOG{,_CN}.md would NOT ship and
+        # the parity gate would dead-end the normal scrub release flow. Inject
+        # the source-of-truth changelog into the extracted STAGE_SUB (a temp
+        # dir — $PROJECT_ROOT untouched) and re-pack TAR_OUT with the single
+        # deterministic recipe. scrub's git-tracked-only cleanliness holds:
+        # we re-pack ITS extracted clean tree plus the changelog.
+        inject_root_changelog_into_stage
+        # git archive HEAD carries the PRE-bump VERSION sidecars when the
+        # one-command wrapper ran (it bumps them uncommitted); overlay them.
+        overlay_wrapper_versions_into_stage "$PROJECT_ROOT" "$STAGE_SUB" || exit 1
+        pack_source_tarball_deterministic
+        echo "   → $TAR_OUT (re-packed with source-of-truth CHANGELOG; $(du -h "$TAR_OUT" 2>/dev/null | cut -f1 || echo "dry-run"))"
+        return 0
+    fi
+
+    # --- Legacy fallback: rsync staging mode ---
+    # Used when project does NOT provide scripts/scrub-tarball.sh.
+    # Caveat: does NOT honor .gitignore or .gitattributes export-ignore;
+    # the explicit --exclude list below must be kept current. Projects
+    # vulnerable to dev-artifact leakage (e.g. .planning/, .archive/,
+    # internal audit docs) should vendor scripts/scrub-tarball.sh to
+    # opt into the safer path above.
+    echo "📦 Staging source (rsync mode — project has no scripts/scrub-tarball.sh)..."
+    STAGE=$(mktemp -d)
+    SKILL_STAGE=""
+    STAGE_SUB="$STAGE/${PROJECT_NAME}-${VERSION}"
+    run mkdir -p "$STAGE_SUB"
+
+    # v2.3 §10.3: 通配 *.bak 而非具名
+    # Bug #7 fix: also exclude any stray extracted tarball dirs
+    # Bug #9 fix: exclude memory/ dir
+    # v1.7.1: '/commands' is NO LONGER excluded — the v1.1.0-era exclude was
+    # for a redundant /gitx-release shim, but v1.6.0+ ships real subcommand
+    # shims (/gitx-init, /gitx-sop) that MUST reach the source tarball + the
+    # public mirror + install.sh's repo-root copy path.
+    # Root-SKILL.md projects ship skills/${SKILL_NAME}/ and nothing else from
+    # skills/: Codex plugins discover skills only under a plugin's skills/
+    # dir, and this tarball becomes the public main that Codex installs from.
+    # Sibling skills/* (other skills, *-workspace) stay private. Placed after
+    # the general excludes so those (e.g. *.bak, .DS_Store) still win inside.
+    SKILL_EXCLUDE=()
+    if [ -f "$PROJECT_ROOT/SKILL.md" ]; then
+        SKILL_EXCLUDE=(--include="/skills/${SKILL_NAME}/" --exclude='/skills/*')
+    fi
+
+    # handoffx v4 (2026-11) renamed HANDOFF.md/Handoff_* to HANDOFFX.md/Handoffx_*;
+    # both generations are excluded — stale checkouts and backups still carry the old names.
+    run rsync -a \
+        --exclude='.git' \
+        --exclude='Release' \
+        --exclude='*.skill' \
+        --exclude='tests/.tmp' \
+        --exclude='.claude' \
+        --exclude='.omc' \
+        --exclude='wip/' \
+        --exclude='.serena' \
+        --exclude='.superpowers' \
+        --exclude='.1by1' \
+        --exclude='.i18n-cache' \
+        --exclude='.cache' \
+        --exclude='.gitx' \
+        --exclude='.github-publish-wt' \
+        --exclude='.env*' \
+        --exclude='.ssh' \
+        --exclude='.aws' \
+        --exclude='.python-version' \
+        --exclude='memory' \
+        --exclude='docs/superpowers' \
+        --exclude='HANDOFF.md' \
+        --exclude='HANDOFF.md.pre-v2-backup' \
+        --exclude='GOTCHAS.md' \
+        --exclude='Handoff_Logs' \
+        --exclude='Handoff_Logs.archive' \
+        --exclude='Handoff_Decisions' \
+        --exclude='HANDOFF.archive.md' \
+        --exclude='HANDOFF.md.bak' \
+        --exclude='HANDOFFX.md' \
+        --exclude='HANDOFFX.md.pre-v2-backup' \
+        --exclude='Handoffx_Logs' \
+        --exclude='Handoffx_Logs.archive' \
+        --exclude='Handoffx_Decisions' \
+        --exclude='HANDOFFX.archive.md' \
+        --exclude='HANDOFFX.md.bak' \
+        --exclude='REVIEW.md' \
+        --exclude='GitHub_STANDARD_ANALYSIS.md' \
+        --exclude='CLAUDE.md' \
+        --exclude='graphify-out' \
+        --exclude='.DS_Store' \
+        --exclude='*.bak' \
+        --exclude='*.pyc' \
+        --exclude='__pycache__' \
+        --exclude="${PROJECT_NAME}-v*" \
+        --exclude="skills/${SKILL_NAME}-workspace" \
+        "${SKILL_EXCLUDE[@]+"${SKILL_EXCLUDE[@]}"}" \
+        "$PROJECT_ROOT/" "$STAGE_SUB/" 2>/dev/null
+
+    # rsync ignores .gitignore, so gitignored secrets (.npmrc, .env.local…)
+    # not on the exclude list above were staged into the public tarball.
+    run prune_gitignored_from_stage "$PROJECT_ROOT" "$STAGE_SUB"
+
+    # Non-destructive: overwrite the staged flat CHANGELOG{,_CN}.md with the
+    # source-of-truth Release/ copies (rsync excludes Release/, so a stale
+    # committed root mirror would otherwise ship). STAGE_SUB is a temp dir —
+    # $PROJECT_ROOT is never touched. Before the deterministic touch+tar
+    # below, so tarball reproducibility holds.
+    inject_root_changelog_into_stage
+
+    echo "📦 Building source tarball..."
+    pack_source_tarball_deterministic
+    echo "   → $TAR_OUT ($(du -h "$TAR_OUT" 2>/dev/null | cut -f1 || echo "dry-run"))"
+}
+
+run_sanity_scans() {
+    if [ "$DRY_RUN" = "1" ]; then
+        echo "  [dry-run] Skipping sanity scans (no staged artifacts in dry-run)"
+        return 0
+    fi
+    SKILL_SRC_DIR="$PROJECT_ROOT/skills/$SKILL_NAME"
+    SKILL_OUT="$RELEASE_DIR/${PROJECT_NAME}-${VERSION}.skill"
+
+    echo "🔍 Running pre-release sanity scan..."
+    SANITIZE="$SKILL_ROOT/release-sanitize.sh"
+    if [ -x "$SANITIZE" ]; then
+        echo "   → 使用 $SANITIZE"
+        # Bug C fix (v1.1.5): label each pass so the operator can tell which
+        # pass succeeded/failed. release-sanitize.sh emits e.g.
+        # "✅ Release sanity clean (staging) — ..." vs "(.skill bundle)".
+        if ! bash "$SANITIZE" --label staging "$STAGE_SUB" 2>&1; then
+            echo ""
+            echo "❌ Release aborted: 发现敏感信息 (staging)"
+            echo "   修复上述文件后再跑 release；明确豁免请加到项目根的 .sanitize-ignore"
+            exit 1
+        fi
+        # 同时扫 .skill 解压内容
+        if [ -f "$SKILL_OUT" ]; then
+            SKILL_STAGE=$(mktemp -d)
+            unzip -q "$SKILL_OUT" -d "$SKILL_STAGE"
+            # v1.2 A4 fix (Gotcha #11 surface 3): the bundle scan inherits no
+            # .sanitize-ignore because .sanitize-ignore must NEVER persist into
+            # the .skill bundle (Gotcha #11 original contract — would leak the
+            # whitelist downstream). Without inheritance, fixture content like
+            # MAC-literal patterns in assets/TEST-SCENARIOS.md trips sanitize
+            # as false-positive (mac-release v0.1.0 self-bake hit this — Dev
+            # Log 2026-05-07; Gotcha #31 forbids literal bait strings here).
+            # Solution: scan SKILL_STAGE/$SKILL_NAME (the actual unzipped
+            # bundle root) instead of SKILL_STAGE — that way every file's
+            # path-relative-to-scan-root matches what the project root scan
+            # saw, so project-root .sanitize-ignore patterns work unchanged.
+            # Temporarily copy project-root .sanitize-ignore into the scan
+            # root for scan duration, rm immediately on success AND failure
+            # paths. SKILL_STAGE is a mktemp dir that gets discarded, so the
+            # temp .sanitize-ignore never reaches any persistent path.
+            # Mirrors release-audit.sh §7 (line 504-508) pattern.
+            if [ -f "$PROJECT_ROOT/.sanitize-ignore" ] && [ -d "$SKILL_STAGE/$SKILL_NAME" ]; then
+                cp "$PROJECT_ROOT/.sanitize-ignore" "$SKILL_STAGE/$SKILL_NAME/.sanitize-ignore"
+            fi
+            if ! bash "$SANITIZE" --label .skill "$SKILL_STAGE/$SKILL_NAME" 2>&1; then
+                if [ -f "$SKILL_STAGE/$SKILL_NAME/.sanitize-ignore" ]; then
+                    rm -f "$SKILL_STAGE/$SKILL_NAME/.sanitize-ignore"
+                fi
+                echo ""
+                echo "❌ .skill 文件内容有敏感信息"
+                exit 1
+            fi
+            if [ -f "$SKILL_STAGE/$SKILL_NAME/.sanitize-ignore" ]; then
+                rm -f "$SKILL_STAGE/$SKILL_NAME/.sanitize-ignore"
+            fi
+        fi
+    else
+        echo "❌ $SANITIZE 不存在（skill 不完整）"
+        exit 1
+    fi
+}
+
+flatten_docs() {
+    SKILL_SRC_DIR="$PROJECT_ROOT/skills/$SKILL_NAME"
+
+    # --- 2.6 Flatten docs + install.sh ---
+    echo "📄 Flattening top-level docs to release dir..."
+    for doc in README.md INSTALL.md TEST-SCENARIOS.md LICENSE CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md ROADMAP.md; do
+        [ -f "$PROJECT_ROOT/$doc" ] && run cp "$PROJECT_ROOT/$doc" "$RELEASE_DIR/$doc"
+    done
+
+    # v1.12.3 (Codex rounds 1, 2, 6 [medium]): README hero image is a relative
+    # repo-local path; users opening the FLATTENED release dir README — or
+    # extracting the full tarball derived from it — follow the relative path
+    # locally and need the asset(s) actually shipped at the referenced path.
+    #
+    # SYMMETRIC README-driven contract: producer (this loop) and validator
+    # (release-audit §0m) walk the SAME refs — every repo-local <img src=...>
+    # in README.md and README_CN.md — and the producer copies each referenced
+    # file to its same relative path under RELEASE_DIR. This unifies the
+    # earlier round-2 narrow (manifest-hero-only) and round-4 wide (validator
+    # walks every README img) contracts: cross-project safe (no decoy in
+    # docs/assets/ gets shipped — only what README actually references), and
+    # cannot mismatch (producer and validator derive from the same source).
+    # Absolute URLs / data: URIs / anchors are skipped (badges etc.). Defense
+    # in depth: reject `..` and absolute paths.
+    # Codex round-10 [high] trust boundary: flatten_docs runs AFTER
+    # run_sanity_scans on the staging tree, so any file pulled directly
+    # from PROJECT_ROOT now bypasses that scan and would land in the full
+    # tarball untouched. Triple containment:
+    #   (1) reject symlinks  — never follow a link out of the worktree
+    #   (2) require regular file existence
+    #   (3) require git-tracked — the file MUST already be in the
+    #       sanitize-covered source-of-truth (git ls-files); generic-safe
+    #       when PROJECT_ROOT is not a git repo (downstream fixtures).
+    _flatten_is_git_repo=0
+    if git -C "$PROJECT_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+        _flatten_is_git_repo=1
+    fi
+    for _ff_readme in "$PROJECT_ROOT/README.md" "$PROJECT_ROOT/README_CN.md"; do
+        [ -f "$_ff_readme" ] || continue
+        while IFS= read -r _ref; do
+            [ -n "$_ref" ] || continue
+            case "$_ref" in
+                /*|*..*) continue ;;
+            esac
+            _src="$PROJECT_ROOT/$_ref"
+            if [ -L "$_src" ]; then
+                echo "⚠️  flatten_docs: skipping symlink README img ref: $_ref" >&2
+                continue
+            fi
+            [ -f "$_src" ] || continue
+            if [ "$_flatten_is_git_repo" -eq 1 ]; then
+                if ! git -C "$PROJECT_ROOT" ls-files --error-unmatch -- "$_ref" >/dev/null 2>&1; then
+                    echo "⚠️  flatten_docs: skipping untracked README img ref: $_ref (would bypass sanitize)" >&2
+                    continue
+                fi
+                # Codex round-11 [high]: source tarball is built from `HEAD`
+                # (scrub-tarball.sh on the modern path) and run_sanity_scans
+                # scans THAT staging tree. A modified tracked file in the
+                # live working tree would pass ls-files yet differ from
+                # HEAD — round-10's working-tree cp would still land that
+                # dirty content in the full tarball unscanned. cat-file -p
+                # HEAD:<ref> emits the exact blob bytes that sanitize
+                # covered. Binary-safe (no locale interpretation in `>`).
+                run mkdir -p "$RELEASE_DIR/$(dirname "$_ref")"
+                if ! git -C "$PROJECT_ROOT" cat-file -p "HEAD:$_ref" > "$RELEASE_DIR/$_ref" 2>/dev/null; then
+                    echo "⚠️  flatten_docs: cat-file HEAD:$_ref failed; skipping (would publish dirty/unscanned content)" >&2
+                    rm -f "$RELEASE_DIR/$_ref"
+                    continue
+                fi
+            else
+                run mkdir -p "$RELEASE_DIR/$(dirname "$_ref")"
+                run cp "$_src" "$RELEASE_DIR/$_ref"
+            fi
+        done <<EOF_FF
+$(LC_ALL=C awk '
+  # Codex round-8 + round-9 extractor: covers both HTML and Markdown image
+  # syntaxes. \047 = single-quote (avoids shell escape hell inside this
+  # single-quoted awk program). Producer + validator MUST share this exact
+  # extractor or downstream README using non-default syntax will silently
+  # drift (round-6 / round-8 / round-9 regression class).
+  #   HTML : <[Ii][Mm][Gg] ... [Ss][Rr][Cc]=("..."|\047...\047) ...>
+  #   MD   : ![alt](path) — path may include optional "title" after a space
+  { line=$0
+    while (match(line,/<[Ii][Mm][Gg][^>]*[Ss][Rr][Cc]=("[^"]+"|\047[^\047]+\047)/)>0){
+      blk=substr(line,RSTART,RLENGTH)
+      if (match(blk,/[Ss][Rr][Cc]=("[^"]+"|\047[^\047]+\047)/)>0){
+        attr=substr(blk,RSTART,RLENGTH)
+        sub(/^[Ss][Rr][Cc]=/,"",attr)
+        sub(/^["\047]/,"",attr); sub(/["\047]$/,"",attr)
+        v=attr; sub(/#.*$/,"",v)
+        if(v!="" && v!~/^https?:\/\// && v!~/^data:/ && v!~/^#/) print v
+      }
+      line=substr(line,RSTART+RLENGTH)
+    }
+    line2=$0
+    while (match(line2,/!\[[^]]*\]\([^)]+\)/)>0){
+      blk2=substr(line2,RSTART,RLENGTH)
+      if (match(blk2,/\([^)]+\)/)>0){
+        v=substr(blk2,RSTART+1,RLENGTH-2)
+        sub(/[ \t]+[\047"][^\047"]*[\047"]$/,"",v)
+        sub(/#.*$/,"",v); sub(/^[ \t]+/,"",v); sub(/[ \t]+$/,"",v)
+        if(v!="" && v!~/^https?:\/\// && v!~/^data:/ && v!~/^#/) print v
+      }
+      line2=substr(line2,RSTART+RLENGTH)
+    }
+  }
+' "$_ff_readme" | sort -u)
+EOF_FF
+    done
+
+    # v1.1.2: optional .release-flatten manifest for project-specific files
+    # not in the standard 8-doc list. One path per line; comments (`#`) and
+    # blank lines tolerated. Paths relative to PROJECT_ROOT. Resolves the
+    # claudemex case where install.sh references project-specific docs.
+    _RF_MANIFEST="$PROJECT_ROOT/.release-flatten"
+    if [ -f "$_RF_MANIFEST" ]; then
+        echo "📝 Reading .release-flatten manifest..."
+        # Codex v1.12.3 round-14 [high] trust boundary: `.release-flatten`
+        # can list arbitrary paths, including gitignored private content
+        # (e.g. docs/superpowers/, HANDOFF.md). Without an explicit check
+        # an attacker (or honest mistake) could ship private design docs.
+        # Reject paths that are:
+        #   (a) absolute / `..` traversal
+        #   (b) symlinks
+        #   (c) gitignored (`git check-ignore` returns 0)
+        #   (d) not git-tracked (file or any file inside dir)
+        # Generic-safe: skipped when PROJECT_ROOT is not a git repo.
+        _rf_is_git_repo=0
+        if git -C "$PROJECT_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+            _rf_is_git_repo=1
+        fi
+        while IFS= read -r _rf_line || [ -n "$_rf_line" ]; do
+            _rf_line="${_rf_line%%#*}"                         # strip whole-line + trailing comments
+            _rf_line="${_rf_line#"${_rf_line%%[![:space:]]*}"}" # ltrim
+            _rf_line="${_rf_line%"${_rf_line##*[![:space:]]}"}" # rtrim
+            [ -z "$_rf_line" ] && continue
+            case "$_rf_line" in
+                /*|*..*)
+                    echo "❌ .release-flatten: unsafe path (absolute or .. traversal): $_rf_line — release aborted" >&2
+                    exit 1
+                    ;;
+            esac
+            _rf_src="$PROJECT_ROOT/$_rf_line"
+            if [ -L "$_rf_src" ]; then
+                echo "❌ .release-flatten: '$_rf_line' is a symlink — release aborted" >&2
+                exit 1
+            fi
+            if [ "$_rf_is_git_repo" -eq 1 ]; then
+                # gitignored → would publish private content. Hard fail.
+                if git -C "$PROJECT_ROOT" check-ignore -q -- "$_rf_line" 2>/dev/null; then
+                    echo "❌ .release-flatten: '$_rf_line' is gitignored — refusing to publish private content (Codex round-14 [high])" >&2
+                    exit 1
+                fi
+                # not git-tracked → bypasses sanitize HEAD coverage.
+                if [ -f "$_rf_src" ]; then
+                    if ! git -C "$PROJECT_ROOT" ls-files --error-unmatch -- "$_rf_line" >/dev/null 2>&1; then
+                        echo "❌ .release-flatten: '$_rf_line' is not git-tracked — would bypass sanitize HEAD coverage" >&2
+                        exit 1
+                    fi
+                elif [ -d "$_rf_src" ]; then
+                    # require at least one tracked file under the dir
+                    if [ -z "$(git -C "$PROJECT_ROOT" ls-files --error-unmatch -- "$_rf_line/" 2>/dev/null | head -1)" ]; then
+                        echo "❌ .release-flatten: directory '$_rf_line' has no git-tracked files — would bypass sanitize" >&2
+                        exit 1
+                    fi
+                fi
+            fi
+            if [ -f "$_rf_src" ]; then
+                run cp "$_rf_src" "$RELEASE_DIR/$(basename "$_rf_line")"
+            elif [ -d "$_rf_src" ]; then
+                # Codex round-15 [high]: dir entry + `cp -R` would copy nested
+                # gitignored/untracked content (e.g. manifest "docs" sweeps
+                # docs/superpowers/). Until per-file enumeration of tracked
+                # files is implemented, reject directory entries; require
+                # explicit file paths in `.release-flatten`.
+                echo "❌ .release-flatten: '$_rf_line' is a directory — directory entries can leak nested gitignored content; list explicit file paths instead (Codex v1.12.3 round-15 [high])" >&2
+                exit 1
+            else
+                echo "⚠️  .release-flatten: '$_rf_line' not found in PROJECT_ROOT — skipping" >&2
+            fi
+        done < "$_RF_MANIFEST"
+    fi
+    if [ -f "$PROJECT_ROOT/install.sh" ]; then
+        run cp "$PROJECT_ROOT/install.sh" "$RELEASE_DIR/install.sh"
+        run chmod +x "$RELEASE_DIR/install.sh"
+    fi
+    if [ -f "$SKILL_SRC_DIR/SKILL.md" ]; then
+        run cp "$SKILL_SRC_DIR/SKILL.md" "$RELEASE_DIR/SKILL.md"
+    fi
+    if [ -f "$SKILL_SRC_DIR/VERSION" ]; then
+        run cp "$SKILL_SRC_DIR/VERSION" "$RELEASE_DIR/VERSION"
+    fi
+    if [ -d "$SKILL_SRC_DIR/scripts" ]; then
+        run cp -R "$SKILL_SRC_DIR/scripts" "$RELEASE_DIR/scripts"
+        run chmod +x "$RELEASE_DIR/scripts/"*.sh 2>/dev/null || true
+    fi
+    # NOTE: commands/ flattening is part of the GENERIC release pipeline
+    # contract for any downstream skill that ships slash commands. As of
+    # v1.6.0 gitx-release itself ships real subcommand shims (gitx-init,
+    # gitx-sop); v1.7.1 stopped excluding them from the source tarball so
+    # they reach the public mirror + every install path.
+    if [ -d "$SKILL_SRC_DIR/commands" ]; then
+        run cp -R "$SKILL_SRC_DIR/commands" "$RELEASE_DIR/commands"
+    fi
+    if [ -d "$SKILL_SRC_DIR/agents" ]; then
+        run cp -R "$SKILL_SRC_DIR/agents" "$RELEASE_DIR/agents"
+    fi
+    if [ -d "$SKILL_SRC_DIR/references" ]; then
+        run cp -R "$SKILL_SRC_DIR/references" "$RELEASE_DIR/references"
+    fi
+    if [ -d "$SKILL_SRC_DIR/assets" ]; then
+        run cp -R "$SKILL_SRC_DIR/assets" "$RELEASE_DIR/assets"
+    fi
+    # schema/ — the JSON contracts bounding a skill's LLM boundaries. A skill
+    # that validates model output resolves them RELATIVE to its own install
+    # root (claudemex: `$SCRIPT_DIR/../schema/x.schema.json`), so a flattened
+    # bundle without schema/ installs a skill whose LLM stages then fail at
+    # their validation step. Generic-safe: copied only when present.
+    if [ -d "$SKILL_SRC_DIR/schema" ]; then
+        run cp -R "$SKILL_SRC_DIR/schema" "$RELEASE_DIR/schema"
+    fi
+    echo "   → 已拷到 $RELEASE_DIR/（顶层）"
+}
+
+generate_attestations() {
+    if [ "$DRY_RUN" = "1" ]; then
+        echo "  [dry-run] Skipping attestations (SBOM, TOKEN_USAGE)"
+        return 0
+    fi
+    SKILL_SRC_DIR="$PROJECT_ROOT/skills/$SKILL_NAME"
+
+    # --- 2.7 SBOM — via emit-sbom.sh ---
+    echo "🧾 Generating sbom.cyclonedx.json..."
+    # Helpers ship with the pipeline ($SKILL_ROOT), like audit/sanitize — a
+    # downstream project's own scripts/ need not (and usually does not) carry them.
+    run "$SKILL_ROOT/emit-sbom.sh" "$RELEASE_DIR" "$PROJECT_NAME" "$VERSION" "$SKILL_NAME"
+
+    # --- 2.7b TOKEN_USAGE.md ---
+    if [ -f "$SKILL_SRC_DIR/SKILL.md" ]; then
+        echo "🧮 Generating TOKEN_USAGE.md..."
+        if ! "$SKILL_ROOT/emit-token-usage.sh" \
+                "$SKILL_SRC_DIR" \
+                "$RELEASE_DIR/TOKEN_USAGE.md" \
+                "$VERSION"; then
+            echo "❌ emit-token-usage.sh failed" >&2
+            exit 1
+        fi
+    fi
+}
+
+generate_checksums() {
+    if [ "$DRY_RUN" = "1" ]; then
+        echo "  [dry-run] Skipping checksums.txt"
+        return 0
+    fi
+    # --- 2.8 checksums.txt (sha256 of EVERY shipped file in the release dir) ---
+    # Why every file: install.sh installs loose SKILL.md / scripts/ / references/
+    # from this dir; an allowlist of built artifacts left those unverified.
+    # Why here (after update_changelog, before build_full_tarball): CHANGELOG*.md
+    # must already be flattened in, and the full tarball must embed this
+    # manifest without its own hash (build_full_tarball appends that outside).
+    echo "🔐 Generating checksums.txt..."
+    if command -v shasum >/dev/null 2>&1; then
+        SHA_CMD="shasum -a 256"
+    elif command -v sha256sum >/dev/null 2>&1; then
+        SHA_CMD="sha256sum"
+    else
+        echo "❌ neither shasum nor sha256sum available" >&2
+        exit 1
+    fi
+    (
+        cd "$RELEASE_DIR"
+        CHK_FILES=()
+        # Process substitution (not a pipe) so the array fills in this shell;
+        # bash 3.2 has no mapfile. Exclusions are TOP-LEVEL only: install.sh
+        # copies references/ scripts/vendored/ assets/ recursively, so a nested
+        # *.log / *.sha256 ships and must be hashed.
+        while IFS= read -r f; do
+            CHK_FILES+=("$f")
+        done < <(find . -type f | sed 's|^\./||' \
+                 | { grep -vE '^(checksums\.txt|[^/]*\.log|[^/]*\.sha256|[^/]*-full\.tar\.gz)$' || true; } \
+                 | LC_ALL=C sort)
+        if [ "${#CHK_FILES[@]}" -eq 0 ]; then
+            echo "❌ no artifacts found to hash" >&2
+            exit 1
+        fi
+        $SHA_CMD "${CHK_FILES[@]}" | LC_ALL=C sort > checksums.txt
+    )
+    echo "   → $RELEASE_DIR/checksums.txt"
+}
+
+generate_release_notes() {
+    if [ "$DRY_RUN" = "1" ]; then
+        echo "  [dry-run] Skipping RELEASE_NOTES.md generation"
+        return 0
+    fi
+    SKILL_SRC_DIR="$PROJECT_ROOT/skills/$SKILL_NAME"
+    PROJECT_TITLE="$(echo "$PROJECT_NAME" | awk '{print toupper(substr($0,1,1)) substr($0,2)}')"
+
+    HAS_COMMANDS=0
+    if [ -d "$SKILL_SRC_DIR/commands" ] && [ "$(find "$SKILL_SRC_DIR/commands" -maxdepth 1 -name '*.md' -print -quit)" ]; then
+        HAS_COMMANDS=1
+    fi
+
+    if [ "$HAS_COMMANDS" = "1" ]; then
+        COMMANDS_SETUP="mkdir -p ~/.claude/skills ~/.claude/commands"
+        COMMANDS_INSTALL_LINE=$'\n# install slash command shims\ncp ~/.claude/skills/'"${SKILL_NAME}"'/commands/*.md ~/.claude/commands/'
+    else
+        COMMANDS_SETUP="mkdir -p ~/.claude/skills"
+        COMMANDS_INSTALL_LINE=""
+    fi
+
+    cat > "$RELEASE_DIR/RELEASE_NOTES.md" <<EOF
+# $PROJECT_TITLE $VERSION — Release Notes
+
+Release date: $RELEASE_DATE
+
+## What this directory contains
+
+### Distribution packages
+- \`${PROJECT_NAME}-${VERSION}.skill\` — single-file zip distribution
+- \`${PROJECT_NAME}-${VERSION}-source.tar.gz\` — full source tarball
+
+### Flattened docs & install script
+- \`README.md\` / \`README_CN.md\` / \`INSTALL.md\` / \`CHANGELOG.md\` / \`CHANGELOG_CN.md\` / \`TEST-SCENARIOS.md\` / \`SKILL.md\` / \`LICENSE\` / \`CONTRIBUTING.md\` / \`CODE_OF_CONDUCT.md\` / \`SECURITY.md\`
+- \`install.sh\` — flattened installer (self-bootstraps from a sibling .skill / source tarball)
+
+## Quick install
+
+### Option A (recommended): run install.sh in this directory
+\`\`\`bash
+./install.sh
+\`\`\`
+
+### Option B: skill only
+\`\`\`bash
+${COMMANDS_SETUP}
+unzip -o ./${PROJECT_NAME}-${VERSION}.skill -d ~/.claude/skills/
+chmod +x ~/.claude/skills/${SKILL_NAME}/scripts/*.sh${COMMANDS_INSTALL_LINE}
+\`\`\`
+
+### Option C: extract the full source tarball
+\`\`\`bash
+tar xzf ./${PROJECT_NAME}-${VERSION}-source.tar.gz
+cd ${PROJECT_NAME}-${VERSION}
+./install.sh
+\`\`\`
+
+Full command reference: \`INSTALL.md\`. This release's changes: the **$VERSION** entry in \`CHANGELOG.md\`.
+EOF
+
+    # Inject CHANGELOG entry into RELEASE_NOTES
+    SAFE_VERSION=$(safe_version "$VERSION")
+    CHLG_ENTRY=$(awk "/^## $SAFE_VERSION /,/^---$/" "$ACCUM_CHANGELOG" | sed '$d')
+    if [ -n "$CHLG_ENTRY" ]; then
+        {
+            echo ""
+            echo "## What's new in $VERSION"
+            echo ""
+            echo "$CHLG_ENTRY" | sed '1{/^## /d;}'
+        } >> "$RELEASE_DIR/RELEASE_NOTES.md"
+    fi
+    echo "   → $RELEASE_DIR/RELEASE_NOTES.md"
+}
+
+update_changelog() {
+    if [ "$DRY_RUN" = "1" ]; then
+        echo "  [dry-run] Skipping CHANGELOG flatten"
+        return 0
+    fi
+    # --- 5. Flatten Release/CHANGELOG.md (+ CN parallel) into release dir ---
+    run cp "$PROJECT_ROOT/Release/CHANGELOG.md" "$RELEASE_DIR/CHANGELOG.md"
+    echo "✅ Release/CHANGELOG.md 已平摊到 $RELEASE_DIR/（含 $VERSION 条目）"
+    # v1.12.1 (P0-2): CN parallel must ship next to CHANGELOG.md so the
+    # flattened artifact + .skill carry it and README_CN's
+    # [更新日志](CHANGELOG_CN.md) resolves. Generic-safe: only when present.
+    if [ -f "$PROJECT_ROOT/Release/CHANGELOG_CN.md" ]; then
+        run cp "$PROJECT_ROOT/Release/CHANGELOG_CN.md" "$RELEASE_DIR/CHANGELOG_CN.md"
+        echo "✅ Release/CHANGELOG_CN.md 已平摊到 $RELEASE_DIR/"
+    fi
+}
+
+run_deep_audit() {
+    if [ "$DRY_RUN" = "1" ]; then
+        echo "  [dry-run] Skipping deep audit (no artifacts to audit)"
+        return 0
+    fi
+    echo ""
+    echo "📦 Release $VERSION 产物已就绪："
+    ls -lh "$RELEASE_DIR"
+    echo ""
+
+    AUDIT="$SKILL_ROOT/release-audit.sh"
+    if [ -x "$AUDIT" ]; then
+        echo "🔍 Running post-release deep audit..."
+        echo "   → 使用 $AUDIT"
+        echo ""
+        # v1.0.8 hardening: _GITX_INTERNAL_INLINE=1 proves to release-audit.sh
+        # that --inline came from this trusted in-pipeline call (not a CLI
+        # bypass attempt). Audit refuses to honor --inline without this env.
+        if ! (cd "$PROJECT_ROOT" && \
+              PROJECT_NAME="$PROJECT_NAME" SKILL_NAME="$SKILL_NAME" \
+              _GITX_INTERNAL_INLINE=1 \
+              bash "$AUDIT" --inline "$VERSION"); then
+            echo ""
+            echo "❌ Deep audit 未通过。修复后执行："
+            echo "   rm -rf $RELEASE_DIR"
+            echo "   PROJECT_ROOT=$PROJECT_ROOT SKILL_NAME=$SKILL_NAME bash $0 $VERSION"
+            exit 1
+        fi
+    else
+        echo "❌ $AUDIT 不存在（skill 不完整）"
+        exit 1
+    fi
+}
+
+build_full_tarball() {
+    if [ "$DRY_RUN" = "1" ]; then
+        echo "  [dry-run] Would build full release tarball → ${PROJECT_NAME}-${VERSION}-full.tar.gz"
+        return 0
+    fi
+    _FULL_TAR_NAME="${PROJECT_NAME}-${VERSION}-full.tar.gz"
+    _FULL_TAR_PATH="$RELEASE_DIR/$_FULL_TAR_NAME"
+    echo "📦 Building full release tarball..."
+    _FULL_STAGE=$(mktemp -d)
+    # Single source of cleanup: EXIT trap reaps CLEANUP_EXTRAS on any exit path.
+    CLEANUP_EXTRAS+=("$_FULL_STAGE")
+    rsync -a "$RELEASE_DIR/" "$_FULL_STAGE/${PROJECT_NAME}-${VERSION}/"
+    if [ -n "${SOURCE_DATE_EPOCH:-}" ]; then
+        _SDE=$(date -u -r "$SOURCE_DATE_EPOCH" "+%Y%m%d%H%M.%S" 2>/dev/null \
+               || date -u -d "@$SOURCE_DATE_EPOCH" "+%Y%m%d%H%M.%S" 2>/dev/null \
+               || echo "200001010000.00")
+    else
+        _SDE="200001010000.00"
+    fi
+    find "$_FULL_STAGE" -exec touch -t "$_SDE" {} + || true
+    (
+        cd "$_FULL_STAGE" && \
+        find "${PROJECT_NAME}-${VERSION}" -print | LC_ALL=C sort | \
+        tar --no-recursion --owner=0 --group=0 --numeric-owner -T - -cf -
+    ) | gzip -n > "$_FULL_TAR_PATH"
+    echo "   → $_FULL_TAR_PATH ($(du -h "$_FULL_TAR_PATH" 2>/dev/null | cut -f1 || echo "unknown"))"
+    # Append full tarball hash and re-sort to preserve LC_ALL=C invariant from §2.8.
+    # Note: the checksums.txt embedded inside full.tar.gz cannot list full.tar.gz
+    # itself (a tarball cannot contain its own hash). The OUTER checksums.txt
+    # written here is authoritative — audit §11h shasum -c validates everything.
+    if [ -f "$RELEASE_DIR/checksums.txt" ]; then
+        if command -v shasum >/dev/null 2>&1; then
+            _SHA_APPEND="shasum -a 256"
+        else
+            _SHA_APPEND="sha256sum"
+        fi
+        (
+            cd "$RELEASE_DIR"
+            { cat checksums.txt; $_SHA_APPEND "$_FULL_TAR_NAME"; } \
+                | LC_ALL=C sort > checksums.txt.tmp
+            mv checksums.txt.tmp checksums.txt
+        )
+        echo "   → checksums.txt 追加 full tarball sha256（已重新排序，保持 LC_ALL=C 不变量）"
+    fi
+}
+
+update_latest_symlink() {
+    # --- Atomic latest symlink update (only after audit passes) ---
+    # v0.9.8 (Gotcha #15): previous recipe `mv -f .latest.tmp latest` breaks on
+    # BSD mv (macOS): when `latest` already points to a directory, BSD mv
+    # FOLLOWS the symlink and moves `.latest.tmp` INTO that directory instead
+    # of replacing the symlink. Result: latest stays stale + orphan .latest.tmp
+    # accumulates inside the previous release dir.
+    # `ln -sfn` is portable across BSD/GNU and atomically replaces the symlink:
+    #   -s: symbolic
+    #   -f: force (remove existing)
+    #   -n: treat existing symlink-to-directory as a regular file (don't follow)
+    run ln -sfn "${PROJECT_NAME}-${VERSION}" "$PROJECT_ROOT/Release/latest"
+    echo "✅ Release/latest → ${PROJECT_NAME}-${VERSION}（audit 通过后原子更新）"
+}
+
+# ============================================================
+# Main flow
+# ============================================================
+
+preflight_external_tools
+preflight_checks
+
+if [ -d "$RELEASE_DIR" ]; then
+    echo "❌ Release dir already exists: $RELEASE_DIR"
+    echo "   Refusing to overwrite an existing release. Move it aside or remove it manually, then rerun."
+    exit 1
+fi
+
+if [ ! -d "$RELEASE_DIR" ]; then
+    RELEASE_DIR_CREATED=1
+fi
+run mkdir -p "$RELEASE_DIR"
+
+run_tests
+check_dual_source
+build_skill_package
+build_source_tarball
+assert_changelog_tarball_parity
+run_sanity_scans
+flatten_docs
+echo "📋 Running docs-audit ......... document contract (H1–H7 + H10 + H11 + H12)"
+if ! PROJECT_ROOT="$PROJECT_ROOT" bash "$SKILL_ROOT/docs-audit.sh"; then
+    echo "❌ docs-audit failed — document contract violated. Release aborted." >&2
+    exit 1
+fi
+generate_attestations
+generate_release_notes
+update_changelog
+generate_checksums
+build_full_tarball
+run_deep_audit
+update_latest_symlink
+
+RELEASE_SUCCESS=1
+
+echo ""
+echo "下一步："
+echo "  1. 确认 CHANGELOG $VERSION 条目真实完整（非 TODO）"
+echo "  2. 如需上游发布，请人工复核产物、CHANGELOG 和仓库状态后再操作"
+echo "  3. 若要分发：把 $RELEASE_DIR/ 下文件发给同事"

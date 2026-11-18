@@ -1,0 +1,4 @@
+interface:
+  display_name: "GitX"
+  short_description: "One-command release packaging with gates, scan, attestations, and audit."
+  default_prompt: "GitX release this project"

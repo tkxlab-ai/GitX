@@ -1,0 +1,9 @@
+# Vendored skill-creator pinning metadata.
+# Read by scripts/lib/skill-creator-version.sh for system-vs-vendored comparison.
+upstream_commit=f458cee31a7577a47ba0c9a101976fa599385174
+upstream_date=2026-05-08
+upstream_source=https://github.com/anthropics/skills/tree/main/skills/skill-creator
+vendored_at=2026-05-11
+vendored_by=gitx-release v1.3.0
+license=Apache-2.0
+notes=Vendored files: scripts/{quick_validate,package_skill,utils,__init__}.py + LICENSE.txt. Sufficient for standalone .skill packaging + agentskills.io spec validation; does NOT vendor eval/scoring/iteration scripts (those require Claude LLM subprocess and are LLM-only).

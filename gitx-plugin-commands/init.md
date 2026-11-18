@@ -2,6 +2,6 @@
 description: 在当前项目根生成 .gitx/ 政策包 + RELEASE_GUIDELINE.md（auto-detect skill / mac / both / empty）
 ---
 
-激活 `gitx-release` skill 并执行 `gitx-init` 子命令（脚本入口 `${CLAUDE_PLUGIN_ROOT}/scripts/gitx-init.sh`）。
+激活 `gitx-release` skill 并执行 `gitx-init` 子命令（脚本入口 `${CLAUDE_PLUGIN_ROOT}/skills/gitx-release/scripts/gitx-init.sh`）。若 `${CLAUDE_PLUGIN_ROOT}` 未展开，脚本在本插件的 `skills/gitx-release/scripts/` 目录下。
 
 关键约束：本子命令只生成政策文件，不执行任何 git / gh 操作。

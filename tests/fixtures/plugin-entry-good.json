@@ -1,6 +1,6 @@
 {
   "name": "demo-skill-new",
-  "source": { "source": "github", "repo": "tkxlab-ai/demo-skill-new" },
+  "source": { "source": "url", "url": "https://github.com/tkxlab-ai/demo-skill-new.git" },
   "version": "0.1.0",
   "description": "Newly-created demo skill, used to test register flow.",
   "homepage": "https://github.com/tkxlab-ai/demo-skill-new",

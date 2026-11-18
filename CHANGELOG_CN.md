@@ -14,6 +14,31 @@
 
 ---
 
+## v1.16.0 — 2026-11-18
+
+GitX 在 `Claude Code`、`Codex`、`OpenCode` 里都能一条命令安装、一条命令升级；对外公开改为单独的、先核对再执行的一步。
+
+### Added
+- `Codex` 插件：`codex plugin marketplace add tkxlab-ai/marketplace`，再 `codex plugin add gitx@tkxlab`；升级先 `codex plugin marketplace upgrade`，再执行一次 `codex plugin add gitx@tkxlab`。
+- `OpenCode` 插件：`opencode plugin add @tkxlabai/gitx-opencode`（不写版本号，才会检查更新）；升级在项目目录里执行 `opencode plugin update`。npm 包内容是固定白名单：`opencode/` 与 `skills/gitx-release/`。
+- `scripts/gitx-publish.sh --version vX.Y.Z`：GitHub 草稿确认后运行。先做全部核对（草稿附件与 `Release/` 逐字节比对、`GitHub` 上 `main` 分支的 `VERSION`、`npm` 包的名称、版本与内容），再公开 `GitHub Release` 并让 `Latest` 保持在最高版本、更新中央市场（`.gitx/marketplace-target`）、发布 `npm` 包（`.gitx/npm-target`）。任一步失败就停在那一步，重跑同一命令会跳过已完成的步骤；`--dry-run` 只核对不写。`npm` 同一版本只能发一次：`npm` 发布之后再重切同一版本，需要换新的版本号。
+- README 安装块列出 `Claude Code`、`Codex`、`OpenCode` 与 `install.sh` 四段，各附升级命令，并写明同一个智能体只选一种安装方式（装两种会加载两份）。发版页面标准第 9 项与 README 模板同步。
+
+### Changed
+- 中央市场版本更新从 `gitx-release` 移到 `gitx-publish.sh`。这是通用行为变更：所有带 `.gitx/marketplace-target` 的项目，都改为在发布公开时更新市场，不再提前。`gitx-release --skip-marketplace` 仍可使用，但不做任何事。
+- 中央市场条目改用 `url` 来源（`https://github.com/<owner>/<repo>.git`），`Claude Code` 与 `Codex` 都能据此安装；`gitx-marketplace bump` 会把旧的 `github` 条目迁过来。
+- 根目录有 `SKILL.md` 的项目，源码包现在保留 `skills/<name>/`（其他 `skills/*` 仍排除），各插件渠道共用这一份技能目录；这类项目的公开包会相应变大。
+- 插件命令改从 `${CLAUDE_PLUGIN_ROOT}/skills/gitx-release/scripts/` 运行脚本。
+- 升版本时同时更新 `.claude-plugin/plugin.json`，以及名称等于 `.gitx/npm-target` 的 `package.json`。
+- GitHub 发布操作手册做到草稿为止；公开与 Latest 保护由 `gitx-publish.sh` 执行。
+- 公开 CI 只在开发树（以 `Release/CHANGELOG.md` 为标记）里跑完整测试，因为公开树现在也带 `skills/gitx-release/`。
+- 不可撤销的公开步骤只由 `公开发布` 或 `go public` 触发；单说 `publish` 不再单独触发任何步骤，`推 GitHub` 按操作手册做到草稿为止。
+- 中央市场条目缺失时不再自动重新登记：`gitx-publish.sh` 在核对阶段就停下，任何内容都还没公开。先手动运行 `gitx-marketplace register`，再重跑同一命令。
+- 根目录有 `SKILL.md` 的项目，用 v1.16.0 重新审计 v1.16.0 之前切出的产物，会在新增的 `skills/<name>/` 检查上失败；请用 v1.16.0 重新切版本。
+- 在其他项目里公开：从项目根运行已安装的 GitX 里的 `gitx-publish.sh`（例如 `~/.agents/skills/gitx-release/scripts/gitx-publish.sh`），它不在项目自己的 `scripts/` 里。GitHub 仓库依次取 `--repo OWNER/REPO`、`.claude-plugin/plugin.json` 的 `repository`（`gitx-init` 现在会写入）、github.com 的 `origin`。
+
+---
+
 ## v1.15.1 — 2026-11-17
 
 ### Added

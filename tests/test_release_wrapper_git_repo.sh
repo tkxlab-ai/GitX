@@ -248,13 +248,14 @@ EOF
 }
 
 # Runs the wrapper exactly as an operator would (names auto-detected). Output
-# lands in "$1.out"; returns the wrapper's exit code.
+# lands in "$1.out"; returns the wrapper's exit code. Extra args pass through.
 run_wrapper() {
     local fix="$1" rc
+    shift
     set +e
     ( cd "$TMPROOT" && env -u PROJECT_NAME -u SKILL_NAME -u _GITX_WRAPPER_DIRTY_OK \
         HOME="$FAKE_HOME" PROJECT_ROOT="$fix" \
-        bash "$fix/scripts/gitx-release.sh" --skip-marketplace ) > "$fix.out" 2>&1
+        bash "$fix/scripts/gitx-release.sh" --skip-marketplace "$@" ) > "$fix.out" 2>&1
     rc=$?
     set -e
     return "$rc"
@@ -514,6 +515,63 @@ node_modules/p/VERSION" overlay_wrapper_versions_into_stage "$ROOT_O" "$ST" ) >/
     else
         fail "C1b-f: overlay honoured a traversal/non-sidecar entry: $(find "$O/deep" "$ST" -mindepth 1 | head -5 | tr '\n' ' ')"
     fi
+fi
+
+# ── C2: version manifests (plugin.json / marketplace.json / npm package.json)
+# Committed manifests at 0.0.1, CHANGELOG has no v9.9.9 entry yet; the wrapper
+# must bump them and the SOURCE TARBALL must carry 9.9.9 on both stage paths
+# (rsync copies the working tree; scrub archives HEAD + overlays).
+add_manifests() {
+    local fix="$1" pkg_name="$2"
+    mkdir -p "$fix/.claude-plugin" "$fix/.gitx"
+    printf '{\n  "name": "my-skill",\n  "version": "0.0.1"\n}\n' > "$fix/.claude-plugin/plugin.json"
+    printf '{\n  "name": "fixmkt",\n  "plugins": [\n    { "name": "my-skill", "source": "./", "version": "0.0.1" }\n  ],\n  "version": "0.0.1"\n}\n' \
+        > "$fix/.claude-plugin/marketplace.json"
+    printf '{\n  "name": "%s",\n  "version": "0.0.1"\n}\n' "$pkg_name" > "$fix/package.json"
+    printf '@fix/pkg\n' > "$fix/.gitx/npm-target"
+    printf '.gitx/\n' > "$fix/.gitignore"
+    # A plugin.json opts the project into Deep Audit §0h (central install ad).
+    printf '\n## Plugin install\n\n`/plugin marketplace add tkxlab-ai/marketplace` then `/plugin install my-skill@tkxlab`.\n' \
+        >> "$fix/README.md"
+    ( cd "$fix" && _git add -A && _git commit -qm manifests )
+}
+
+for mode in rsync scrub; do
+    FIX="$TMPROOT/c2-$mode/$PROJ"; mkdir -p "$(dirname "$FIX")"
+    if [ "$mode" = "scrub" ]; then build_git_fixture "$FIX" 1; else build_git_fixture "$FIX"; fi
+    add_manifests "$FIX" "@fix/pkg"
+    rc=0; run_wrapper "$FIX" --version v9.9.9 || rc=$?
+    TARBALL="$FIX/Release/$PROJ-v9.9.9/$PROJ-v9.9.9-source.tar.gz"
+    if [ "$rc" -eq 0 ] && [ -f "$TARBALL" ]; then
+        ok "C2-$mode: wrapper --version v9.9.9 with committed manifests exits 0"
+        X="$TMPROOT/c2-$mode-x"; mkdir -p "$X"
+        tar -xzf "$TARBALL" -C "$X"
+        S="$X/$PROJ-v9.9.9"
+        got="$(jq -r .version "$S/.claude-plugin/plugin.json" 2>/dev/null || true) $(jq -r '.version, .plugins[0].version' "$S/.claude-plugin/marketplace.json" 2>/dev/null | tr '\n' ' ')$(jq -r .version "$S/package.json" 2>/dev/null || true)"
+        [ "$got" = "9.9.9 9.9.9 9.9.9 9.9.9" ] \
+            && ok "C2-$mode: tarball plugin.json / marketplace.json (top + entry) / package.json = 9.9.9" \
+            || fail "C2-$mode: tarball manifest versions = '$got'"
+    else
+        fail "C2-$mode: wrapper exited $rc (tarball present: $([ -f "$TARBALL" ] && echo yes || echo no))"
+        show_tail "$FIX.out"
+        note_provisional "$FIX.out"
+    fi
+done
+
+# A package.json that is NOT the npm-target package is not wrapper-managed, so
+# an uncommitted edit to it must still trip the dirty-tree preflight.
+FIX="$TMPROOT/c2-dirty/$PROJ"; mkdir -p "$(dirname "$FIX")"
+build_git_fixture "$FIX"
+add_manifests "$FIX" "@fix/other"
+printf '{\n  "name": "@fix/other",\n  "version": "0.0.2"\n}\n' > "$FIX/package.json"
+sum0=$(_sum "$FIX/package.json")
+rc=0; run_wrapper "$FIX" --version v9.9.9 || rc=$?
+if [ "$rc" -ne 0 ] && grep -q 'uncommitted tracked changes' "$FIX.out" && [ "$(_sum "$FIX/package.json")" = "$sum0" ] \
+    && [ "$(jq -r .version "$FIX/.claude-plugin/plugin.json")" = "0.0.1" ]; then
+    ok "C2-dirty: dirty non-target package.json aborts the preflight; plugin.json rolled back"
+else
+    fail "C2-dirty: rc=$rc (expected the dirty-tree abort + rollback)"
+    show_tail "$FIX.out"
 fi
 
 echo ""

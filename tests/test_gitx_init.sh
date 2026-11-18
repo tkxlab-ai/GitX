@@ -297,8 +297,11 @@ if [ -x "$WRAPPER" ]; then
             fail "plugin.json name='$pj_name', expected kebab+lowercase 'foo-bar'"
         elif [ "$pj_ver" != "0.2.0" ]; then
             fail "plugin.json version='$pj_ver', expected semver-normalized '0.2.0' (v stripped)"
+        elif [ "$(jq -r '.repository // ""' "$pj")" != "https://github.com/tkxlab-ai/foo" ]; then
+            # gitx-publish.sh resolves the GitHub repo from .repository first.
+            fail "plugin.json repository='$(jq -r '.repository // ""' "$pj")', expected https://github.com/tkxlab-ai/foo"
         else
-            ok "plugin.json valid: name=foo-bar version=0.2.0"
+            ok "plugin.json valid: name=foo-bar version=0.2.0 repository=tkxlab-ai/foo"
         fi
     fi
 

@@ -7,8 +7,8 @@
 
 <!-- gitx:managed:badges -->
 [![License](https://img.shields.io/badge/license-MIT-yellow.svg?style=for-the-badge)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-121%20suites%20%2F%200%20fail-brightgreen.svg?style=for-the-badge&logo=githubactions&logoColor=white)](tests/run_all.sh)
-[![Deep Audit](https://img.shields.io/badge/deep%20audit-257%2F0%2F1-brightgreen.svg?style=for-the-badge&logo=shieldsdotio&logoColor=white)](scripts/release-audit.sh)
+[![Tests](https://img.shields.io/badge/tests-125%20suites%20%2F%200%20fail-brightgreen.svg?style=for-the-badge&logo=githubactions&logoColor=white)](tests/run_all.sh)
+[![Deep Audit](https://img.shields.io/badge/deep%20audit-260%2F0%2F1-brightgreen.svg?style=for-the-badge&logo=shieldsdotio&logoColor=white)](scripts/release-audit.sh)
 [![CLIs](https://img.shields.io/badge/CLI-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20OpenCode%20%C2%B7%20Gemini-6366f1.svg?style=for-the-badge&logo=anthropic&logoColor=white)](#4-quick-start)
 [![Shell](https://img.shields.io/badge/bash-3.2%2B%20POSIX-06b6d4.svg?style=for-the-badge&logo=gnubash&logoColor=white)](SKILL.md)
 [![Release](https://img.shields.io/github/v/release/tkxlab-ai/GitX?sort=semver&style=for-the-badge&logo=github&logoColor=white&color=gold)](https://github.com/tkxlab-ai/GitX/releases)
@@ -26,7 +26,7 @@
 > 🔄 **One install, four agent CLIs.** GitX runs inside Claude Code, Codex, OpenCode and Gemini, and releases any project laid out as `skills/<name>/SKILL.md`. Most release incidents are not code bugs — a version bumped in one file but not another, a README that no longer matches the code, a token in a public archive, a tarball nobody can rebuild. GitX turns that checklist into one local command, and GitX itself is released with GitX.
 
 <!-- gitx:managed:build-metrics -->
-> 🛠 **Build metrics** — Version **v1.15.1** · Released **2026-11-17** · Engineered with **Claude (Opus/Sonnet) · Codex · Gemini** across hundreds of sessions · Cumulative AI tokens since the first prototype (v0.9.4, 2026-04-22), estimated: **≈ 300M+ input/output + ≈ 3B+ cached**
+> 🛠 **Build metrics** — Version **v1.16.0** · Released **2026-11-18** · Engineered with **Claude (Opus/Sonnet) · Codex · Gemini** across hundreds of sessions · Cumulative AI tokens since the first prototype (v0.9.4, 2026-04-22), estimated: **≈ 300M+ input/output + ≈ 3B+ cached**
 <!-- /gitx:managed:build-metrics -->
 
 **[Documentation](#table-of-contents) · [Changelog](CHANGELOG.md) · [Report a bug](https://github.com/tkxlab-ai/GitX/issues) · [Security](SECURITY.md)**
@@ -37,25 +37,45 @@
 # Claude Code — plugin marketplace
 /plugin marketplace add tkxlab-ai/marketplace
 /plugin install gitx@tkxlab
+# upgrade: /plugin → enable auto-update, or `claude plugin update gitx@tkxlab`
 ```
 
 ```bash
-# Codex · OpenCode · Gemini CLI (and Claude Code without plugins) — one installer
-git clone --depth 1 https://github.com/tkxlab-ai/GitX.git && bash GitX/install.sh
-# already installed? add --force to upgrade in place
+# Codex — plugin marketplace
+codex plugin marketplace add tkxlab-ai/marketplace
+codex plugin add gitx@tkxlab
+# upgrade: codex plugin marketplace upgrade, then codex plugin add gitx@tkxlab again
 ```
 
-Then run it: Claude Code `/gitx-release` (plugin: `/gitx:release`) · Codex `$gitx-release` · OpenCode `@gitx-release` · Gemini CLI: ask for "gitx release". Details in [Quick Start](#4-quick-start).
+```bash
+# OpenCode — npm plugin (install without a version so update checks work)
+opencode plugin add @tkxlabai/gitx-opencode
+# upgrade (inside a project directory): opencode plugin update
+```
+
+```bash
+# Everything else, or one install for several CLIs — Codex, OpenCode and Gemini CLI also read ~/.agents/skills
+git clone --depth 1 https://github.com/tkxlab-ai/GitX.git && bash GitX/install.sh
+# upgrade: add --force
+```
+
+Pick one install method per agent — two methods load two copies of the skill.
+
+Then run it: Claude Code `/gitx-release` (plugin: `/gitx:release`) · Codex `$gitx-release` (the plugin lists it as `gitx:gitx-release`) · OpenCode `@gitx-release` · Gemini CLI: ask for "gitx release". Details in [Quick Start](#4-quick-start).
 
 ---
 
 ## What's New
 
 <!-- gitx:managed:whats-new -->
-**v1.15.1 — 2026-11-17**
+**v1.16.0 — 2026-11-18**
 
-- The README opens with a copyable install block right under the links bar: the two plugin-marketplace commands for Claude Code, one installer command for Codex, OpenCode and Gemini CLI, and how to invoke GitX in each.
-- The release page standard requires that block (row 9) and the README templates scaffold it, so every project released with GitX shows how to install it at the top of its page.
+- Codex plugin: `codex plugin marketplace add tkxlab-ai/marketplace`, then `codex plugin add gitx@tkxlab`; upgrade with `codex plugin marketplace upgrade` and `codex plugin add gitx@tkxlab` again.
+- OpenCode plugin: `opencode plugin add @tkxlabai/gitx-opencode` (no version pin, so update checks work); upgrade with `opencode plugin update`, run inside a project directory. The npm package contents are a fixed whitelist: `opencode/` and `skills/gitx-release/`.
+- `scripts/gitx-publish.sh --version vX.Y.Z`, run after the GitHub draft is approved: it checks everything first (the draft's assets byte-for-byte against `Release/`, GitHub `main`'s `VERSION`, the npm package's name, version and contents), then makes the GitHub Release public and keeps Latest on the highest version, bumps the central marketplace (`.gitx/marketplace-target`) and publishes the npm package (`.gitx/npm-target`). A failure stops at that step; rerunning the same command skips the steps already done. `--dry-run` checks without writing. npm accepts each version only once: a version re-cut after its npm publish needs a new version number.
+- The README install block lists Claude Code, Codex, OpenCode and `install.sh`, each with its upgrade command, and says to pick one install method per agent (two methods load two copies). The release page standard (row 9) and the README templates carry the same blocks.
+- The central marketplace bump moved out of `gitx-release` into `gitx-publish.sh`. This applies to every project with `.gitx/marketplace-target`: the marketplace is bumped when the release goes public, never before. `gitx-release --skip-marketplace` is still accepted and does nothing.
+- Central marketplace entries use a `url` source (`https://github.com/<owner>/<repo>.git`), which both Claude Code and Codex install from; `gitx-marketplace bump` migrates an old `github` entry.
 <!-- /gitx:managed:whats-new -->
 
 Full history → [`CHANGELOG.md`](CHANGELOG.md).
@@ -104,9 +124,9 @@ A release is a checklist, and every item on it can be skipped by accident. Each 
 <!-- gitx:managed:metrics -->
 | Measure | Value |
 |---|---|
-| Releases shipped | 68 |
-| First release → latest | 2026-04-22 → 2026-11-17 |
-| Test suites | 121 |
+| Releases shipped | 69 |
+| First release → latest | 2026-04-22 → 2026-11-18 |
+| Test suites | 125 |
 <!-- /gitx:managed:metrics -->
 
 <sub>[↑ back to top](#table-of-contents)</sub>
@@ -162,7 +182,7 @@ Every gate has a test that proves it fires, using deliberately hostile fixtures.
 Three working rules follow from these:
 
 - **Generic-safe.** GitX releases other projects too. When a project lacks a file or tool that a check needs, the check skips instead of failing a project for something it never opted into.
-- **No automatic upstream writes by default.** The core pipeline never pushes, tags or publishes. Publishing to GitHub is done by a person, or by an agent on that person's explicit instruction, following a generated runbook. The two optional post-release steps below write to a remote only on a machine where their switch file exists.
+- **No automatic upstream writes by default.** The core pipeline never pushes, tags or publishes. Publishing to GitHub is done by a person, or by an agent on that person's explicit instruction: a generated runbook pushes the code and creates a draft release, and once the person approves the draft, one command (`gitx-publish.sh`) makes it public. The optional post-release step below writes to a remote only on a machine where its switch file exists.
 - **Self-hosting.** GitX is released through its own pipeline, so every rule it imposes on other projects is exercised on itself first.
 
 <sub>[↑ back to top](#table-of-contents)</sub>
@@ -187,8 +207,8 @@ flowchart LR
   G --> H{Deep Audit}
   H -->|all pass| I[Release/latest updated]
   H -->|any fail| X[abort]
-  I -.optional.-> M[marketplace bump]
   I -.optional.-> N[private Gitea release repo]
+  I -.after draft approval.-> P[gitx-publish<br/>GitHub public · marketplace · npm]
 ```
 
 ### What a release contains
@@ -228,14 +248,22 @@ Every audit check reports one of five states, each with a fixed meaning:
 
 `TOTAL = PASS + FAIL + SKIP` is itself checked, so adding a gate can never silently change the headline number.
 
-### Optional post-release steps
+### Optional post-release step
 
-Two steps run after a successful release only when a per-machine switch file exists in `.gitx/`. Both are best-effort: a failure prints a warning and never changes the release result. They are the only steps that write to a remote.
+One step runs after a successful release only when its per-machine switch file exists in `.gitx/`. It is best-effort: a failure prints a warning and never changes the release result.
 
 | Switch file | Step |
 |---|---|
-| `.gitx/marketplace-target` | bump this skill's version in the central plugin marketplace (branch, PR, merge) |
 | `.gitx/gitea-release-target` | publish the release directory to a private Gitea release repository (`main` + tag + Release with assets) |
+
+### Going public
+
+The release run itself never touches GitHub, the plugin marketplace or npm. After the GitHub draft has been created by the runbook and approved by a person, `scripts/gitx-publish.sh --version vX.Y.Z` checks everything first — the draft's assets byte-for-byte against `Release/`, GitHub `main`'s `VERSION`, the npm package's name, version and contents — and only then, in order: makes the GitHub Release public (and keeps Latest on the highest version), bumps the central marketplace, and publishes the npm package. A failure stops at that step; rerunning the same command skips the steps already done. npm accepts each version only once, so a version re-cut after its npm publish needs a new version number.
+
+| Switch file | Step in `gitx-publish.sh` |
+|---|---|
+| `.gitx/marketplace-target` | bump this skill's version in the central plugin marketplace (branch, PR, merge) |
+| `.gitx/npm-target` | publish the npm package named in the file (npm asks for a one-time password itself) |
 
 The internals — file layout, the dual-source rule, how each stage is implemented — are in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
@@ -247,17 +275,30 @@ The internals — file layout, the dual-source rule, how each stage is implement
 
 ### 1 · Prerequisites
 
-Bash 3.2+ (the macOS system bash works), git 2.x, and the standard tools `rsync`, `tar`, `gzip`, `unzip` and `shasum` (or `sha256sum`). Optional: `python3` with `venv` (skill validation bootstraps its own copy); `jq` and `gh` for the marketplace step.
+Bash 3.2+ (the macOS system bash works), git 2.x, and the standard tools `rsync`, `tar`, `gzip`, `unzip` and `shasum` (or `sha256sum`). Optional: `python3` with `venv` (skill validation bootstraps its own copy); `jq` and `gh` for `gitx-publish.sh` and the marketplace step; `npm` for the npm step.
 
-### 2 · Install — two ways
+### 2 · Install — four ways
 
-*Option A — plugin marketplace (Claude Code plugin users):*
+Pick one per agent: two methods load two copies of the skill.
+
+*Option A — Claude Code plugin marketplace:*
 ```text
 /plugin marketplace add tkxlab-ai/marketplace
 /plugin install gitx@tkxlab
 ```
 
-*Option B — `install.sh` (one command covers all four CLIs, no plugin system needed):*
+*Option B — Codex plugin marketplace:*
+```bash
+codex plugin marketplace add tkxlab-ai/marketplace
+codex plugin add gitx@tkxlab
+```
+
+*Option C — OpenCode npm plugin (no version pin, so update checks work):*
+```bash
+opencode plugin add @tkxlabai/gitx-opencode
+```
+
+*Option D — `install.sh` (one command for every CLI on the machine, no plugin system needed):*
 ```bash
 git clone https://github.com/tkxlab-ai/GitX.git && cd GitX
 bash install.sh             # installs to ~/.agents/skills/gitx-release, links Claude Code and OpenCode;
@@ -298,8 +339,12 @@ RELEASE READY · nothing pushed
 
 ### Upgrade
 
-- **Plugin users:** update the `tkxlab` marketplace from the `/plugin` menu, then reinstall `gitx@tkxlab`.
-- **`install.sh` users:** in your GitX checkout, `git pull && bash install.sh --force`. Then run `/gitx-release --dry-run` once in each project to surface anything the new version checks differently.
+- **Claude Code plugin:** turn on auto-update for the `tkxlab` marketplace in the `/plugin` menu, or run `claude plugin update gitx@tkxlab`.
+- **Codex plugin:** `codex plugin marketplace upgrade`, then `codex plugin add gitx@tkxlab` again.
+- **OpenCode plugin:** `opencode plugin update`, run inside a project directory.
+- **`install.sh` users:** in your GitX checkout, `git pull && bash install.sh --force`.
+
+Then run `/gitx-release --dry-run` once in each project to surface anything the new version checks differently.
 
 ### Uninstall
 
@@ -355,7 +400,7 @@ Slash commands are thin wrappers over these scripts:
 
 | Script | Interface | Purpose |
 |---|---|---|
-| `scripts/gitx-release.sh` | `[--dry-run] [--version vX.Y.Z] [--skip-marketplace] [--skip-gitea-release]` | entry point: sets up the log, runs the pipeline, then the optional post-release steps |
+| `scripts/gitx-release.sh` | `[--dry-run] [--version vX.Y.Z] [--skip-marketplace] [--skip-gitea-release]` | entry point: sets up the log, runs the pipeline, then the optional post-release step (`--skip-marketplace` is a no-op kept for compatibility) |
 | `scripts/release.sh` | `PROJECT_ROOT=<dir> … <version> [--dry-run]` | the pipeline stages themselves |
 | `scripts/release-audit.sh` | `<version>` | run the Deep Audit on an existing release |
 | `scripts/release-sanitize.sh` | `[--label <name>] <dir>` | scan a directory for secrets and personal data |
@@ -365,6 +410,7 @@ Slash commands are thin wrappers over these scripts:
 | `scripts/sync-dual-source.sh` | `[--dry-run]` | copy `scripts/` into the bundled skill copy |
 | `scripts/gitx-marketplace.sh` | `register\|bump\|list` | manage this skill's entry in the central marketplace |
 | `scripts/gitx-gitea-release.sh` | `[--dry-run] [--force] [--version vX.Y.Z]` | publish a release to a private Gitea release repository |
+| `scripts/gitx-publish.sh` | `--version vX.Y.Z [--repo OWNER/REPO] [--dry-run]` | after the GitHub draft is approved: check everything, then make it public, bump the marketplace, publish to npm |
 
 </details>
 
@@ -402,7 +448,7 @@ No configuration is required: names and paths are derived from the project layou
 | `Release/CHANGELOG.md` · `Release/CHANGELOG_CN.md` | release history; the gate reads the top entry, the Chinese file mirrors its structure |
 | `.sanitize-ignore` | files the secret scanner may skip (intentional test fixtures) |
 | `references/docs-contract/manifest.txt` | the README section contract that `docs-audit` enforces |
-| `.gitx/*` | per-machine switches for the optional post-release steps (never committed) |
+| `.gitx/*` | per-machine switches for the optional post-release step and `gitx-publish.sh` (never committed) |
 
 <sub>[↑ back to top](#table-of-contents)</sub>
 
@@ -415,7 +461,7 @@ Pure-bash test harness with no external test framework. `bash tests/run_all.sh` 
 Suites in the tree (machine-counted):
 
 <!-- gitx:managed:suite-count -->
-121
+125
 <!-- /gitx:managed:suite-count -->
 
 | Area | What the suites lock down |
@@ -439,7 +485,7 @@ New behavior ships with a failing test first. The full suite runs in the develop
 GitX's threat model is a release tool's: **leaking what should stay private** and **shipping what was not verified**.
 
 - **Private working files never reach a public artifact.** They are excluded from git, from the scanner's scope, from the packaging copy, and checked again by the audit after packaging.
-- **No automatic upstream writes by default.** Pushing, tagging and publishing a GitHub Release are done by a person, or by an agent on that person's explicit instruction, following a generated runbook. The optional post-release steps write to a remote only where their switch file exists.
+- **No automatic upstream writes by default.** Pushing, tagging and creating the GitHub draft are done by a person, or by an agent on that person's explicit instruction, following a generated runbook; making it public (`gitx-publish.sh`) runs only after the person approves the draft. The optional post-release step writes to a remote only where its switch file exists.
 - **The secret scan fails closed.** It honors the explicit ignore list, so it cannot fail on its own test fixtures, yet it aborts on any real credential. It runs again on the exact tree that will be published.
 - **Verifiable downloads.** Reproducible source tarball, CycloneDX SBOM, and `checksums.txt` that `install.sh` verifies before it trusts a downloaded bundle.
 
@@ -466,7 +512,7 @@ Report vulnerabilities privately as described in [`SECURITY.md`](SECURITY.md), n
 
 <details><summary><b>Does GitX push to GitHub or create tags for me?</b></summary>
 
-No. The core pipeline never pushes or tags, and publishing to GitHub stays manual by policy. GitX builds and verifies the release; `/gitx-sop` renders the runbook a person (or an agent on their instruction) follows to publish it.
+No. The core pipeline never pushes or tags, and publishing to GitHub stays manual by policy. GitX builds and verifies the release; `/gitx-sop` renders the runbook a person (or an agent on their instruction) follows to push it and create a draft; `gitx-publish.sh` makes the draft public only after the person approves it.
 </details>
 
 <details><summary><b>Do I need CI?</b></summary>

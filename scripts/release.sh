@@ -147,7 +147,8 @@ preflight_checks() {
         # Catches the round-13 attack: an untracked `.release-flatten` or
         # untracked top-level doc that would later be flattened into the
         # release dir AFTER the source-tarball sanitize pass.
-        # Wrapper allowlist: gitx-release.sh bumps VERSION sidecars +
+        # Wrapper allowlist: gitx-release.sh bumps VERSION sidecars (plus
+        # .claude-plugin/*.json and the npm-target package.json) and
         # Release/CHANGELOG.md BEFORE calling release.sh by design (so it can
         # roll them back on failure — Gotcha #17). The round-12 check rejected
         # exactly those files, breaking one-command release in every git repo.
@@ -167,7 +168,7 @@ preflight_checks() {
             _dirty_ok_file=$(mktemp)
             CLEANUP_EXTRAS+=("$_dirty_ok_file")
             printf '%s\n' "$_GITX_WRAPPER_DIRTY_OK" \
-                | grep -xE 'VERSION|skills/[A-Za-z0-9._-]+/VERSION|Release/CHANGELOG\.md' \
+                | grep -xE 'VERSION|skills/[A-Za-z0-9._-]+/VERSION|\.claude-plugin/(plugin|marketplace)\.json|package\.json|Release/CHANGELOG\.md' \
                 > "$_dirty_ok_file" || true
             [ -s "$_dirty_ok_file" ] \
                 && _dirty=$(printf '%s\n' "$_dirty" | grep -vxF -f "$_dirty_ok_file" || true)
@@ -707,9 +708,10 @@ prune_gitignored_from_stage() {
     return 0
 }
 
-# The scrub path archives HEAD, but the one-command wrapper bumps VERSION
-# sidecars uncommitted, so the tarball would ship the PREVIOUS version. Copy
-# only VERSION files the wrapper declared (never Release/CHANGELOG.md — Deep
+# The scrub path archives HEAD, but the one-command wrapper bumps the version
+# files (VERSION sidecars, .claude-plugin/*.json, the npm-target package.json)
+# uncommitted, so the tarball would ship the PREVIOUS version. Copy only those
+# files the wrapper declared (never Release/CHANGELOG.md — Deep
 # Audit §5 rejects any Release/ member; changelogs go via
 # inject_root_changelog_into_stage). Refuse staged symlinks (git archive
 # preserves them) so cp can never write outside the stage. Here-doc feed, not a
@@ -724,8 +726,13 @@ overlay_wrapper_versions_into_stage() {
         case "$p" in
             /*|*..*) continue ;;
         esac
-        printf '%s\n' "$p" | grep -qxE 'VERSION|skills/[A-Za-z0-9._-]+/VERSION' || continue
+        printf '%s\n' "$p" | grep -qxE 'VERSION|skills/[A-Za-z0-9._-]+/VERSION|\.claude-plugin/(plugin|marketplace)\.json|package\.json' || continue
         [ -f "$root/$p" ] || continue
+        # A manifest JSON is only refreshed where HEAD already staged it: one
+        # that is export-ignored or untracked must not be smuggled in here.
+        case "$p" in
+            *.json) [ -f "$stage/$p" ] || [ -L "$stage/$p" ] || continue ;;
+        esac
         d="$(dirname "$p")"
         _c="$d"
         while [ "$_c" != "." ]; do
@@ -825,9 +832,14 @@ build_source_tarball() {
     # for a redundant /gitx-release shim, but v1.6.0+ ships real subcommand
     # shims (/gitx-init, /gitx-sop) that MUST reach the source tarball + the
     # public mirror + install.sh's repo-root copy path.
+    # Root-SKILL.md projects ship skills/${SKILL_NAME}/ and nothing else from
+    # skills/: Codex plugins discover skills only under a plugin's skills/
+    # dir, and this tarball becomes the public main that Codex installs from.
+    # Sibling skills/* (other skills, *-workspace) stay private. Placed after
+    # the general excludes so those (e.g. *.bak, .DS_Store) still win inside.
     SKILL_EXCLUDE=()
     if [ -f "$PROJECT_ROOT/SKILL.md" ]; then
-        SKILL_EXCLUDE=(--exclude='/skills')
+        SKILL_EXCLUDE=(--include="/skills/${SKILL_NAME}/" --exclude='/skills/*')
     fi
 
     # handoffx v4 (2026-11) renamed HANDOFF.md/Handoff_* to HANDOFFX.md/Handoffx_*;

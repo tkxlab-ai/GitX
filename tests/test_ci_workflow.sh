@@ -44,6 +44,17 @@ else
     fail "ci.yml does NOT invoke tests/run_all.sh"
 fi
 
+# ── Test 3b: test-suite gated on the private dev tree (v1.16.0) ───────
+# The public mirror now ships skills/gitx-release/scripts (Codex/OpenCode
+# plugins) but no Release/ or dev fixtures, so gating the full suite on the
+# skills dir would run it — and fail it — on public CI.
+if grep -qF '[ ! -f "Release/CHANGELOG.md" ]' "$CI" \
+    && ! grep -qF 'no skills/ dev tree' "$CI"; then
+    ok "test-suite runs only when Release/CHANGELOG.md exists (private dev tree)"
+else
+    fail "test-suite gate is not Release/CHANGELOG.md — public CI would run dev-only fixtures"
+fi
+
 # ── Test 4: runs shellcheck ───────────────────────────────────────────
 if grep -qi 'shellcheck' "$CI"; then
     ok "ci.yml runs shellcheck"

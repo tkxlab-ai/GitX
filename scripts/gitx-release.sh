@@ -1,8 +1,9 @@
 #!/bin/bash
 # gitx-release.sh — one-command GitX release wrapper
 # usage: gitx-release.sh [--dry-run] [--version vX.Y.Z]
-# exit:  0 release completed, 1 release failed, 2 usage / unsupported version,
-#        5 refusing to write through a symlinked VERSION / CHANGELOG path
+# exit:  0 release completed, 1 release failed, 2 usage / unsupported version /
+#        unusable version manifest (bad JSON, no jq),
+#        5 refusing to write through a symlinked version / CHANGELOG path
 
 set -euo pipefail
 
@@ -12,12 +13,17 @@ PROJECT_ROOT="$(cd "$PROJECT_ROOT" && pwd)"
 
 DRY_RUN=0
 REQUESTED_VERSION=""
-SKIP_MARKETPLACE=0
 SKIP_GITEA_RELEASE=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --dry-run) DRY_RUN=1 ;;
-        --skip-marketplace) SKIP_MARKETPLACE=1 ;;
+        # Kept so existing invocations do not break: the internal release no
+        # longer touches the central marketplace (design D5 — every
+        # outward-facing step runs together in gitx-publish.sh after the
+        # GitHub draft is approved), so there is nothing left to skip.
+        --skip-marketplace)
+            echo "ℹ️  --skip-marketplace is a no-op: the central-marketplace bump moved to scripts/gitx-publish.sh (run after approving the GitHub draft)." >&2
+            ;;
         --skip-gitea-release) SKIP_GITEA_RELEASE=1 ;;
         --version)
             shift
@@ -30,18 +36,17 @@ Usage: gitx-release [--dry-run] [--version vX.Y.Z] [--skip-marketplace] [--skip-
 
   --dry-run            Preview release without writing artifacts.
   --version vX.Y.Z     Override auto-bump (default: patch bump).
-  --skip-marketplace   Skip post-release marketplace sync this run only.
-                       Marker is NOT removed; next 'gitx-release' resumes auto-sync.
-                       To persistently opt out: rm .gitx/marketplace-target.
+  --skip-marketplace   No-op, accepted for compatibility. This internal release never
+                       bumps the central marketplace; that happens in
+                       scripts/gitx-publish.sh, after the GitHub draft is approved.
   --skip-gitea-release Skip the post-release Gitea release-repo publish this run only.
                        Marker is NOT removed; next 'gitx-release' publishes again.
                        To persistently opt out: rm .gitx/gitea-release-target.
 
 Examples:
-  gitx-release                          # Standard release + auto marketplace sync
-  gitx-release --skip-marketplace       # Release only, no marketplace this run
+  gitx-release                          # Standard release + Gitea publish (if opted in)
   gitx-release --skip-gitea-release     # Release without the Gitea publish this run
-  gitx-release --dry-run                # Preview both release and marketplace step
+  gitx-release --dry-run                # Preview the release
 EOF
             exit 0
             ;;
@@ -54,7 +59,7 @@ EOF
     shift
 done
 
-# ---- v1.13.0: marketplace sync helpers (Section 4) ------------------------
+# ---- logging helper (stderr + RELEASE_LOG) ---------------------------------
 
 log_warn() {
     local msg="$1"
@@ -65,136 +70,14 @@ log_warn() {
     fi
 }
 
-log_info() {
-    local msg="$1"
-    printf '✅ %s\n' "$msg"
-    if [ -n "${RELEASE_LOG:-}" ]; then
-        mkdir -p "$(dirname "$RELEASE_LOG")" 2>/dev/null || true
-        printf '[%s] INFO %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$msg" >> "$RELEASE_LOG" 2>/dev/null || true
-    fi
-}
-
-interpret_marketplace_exit() {
-    local s=$1 R=$2 V=$3
-    case "$s" in
-        0)  log_info "marketplace synced: $R → v$V" ;;
-        1)  log_warn "marketplace step failed (generic: network/git/jq/branch-protection): exit 1.
-                     Retry: 'gitx-marketplace bump' after diagnosing." ;;
-        2)  log_warn "marketplace step usage error: exit 2. Wrapper bug — file an issue." ;;
-        3)  log_warn "marketplace state inconsistent: exit 3 (already-registered OR not-registered mismatch).
-                     Verify: 'gitx-marketplace list'." ;;
-        4)  log_warn "marketplace deferred — gh auth missing.
-                     Run 'gh auth login --hostname github.com' then 'gitx-marketplace bump'." ;;
-        *)  log_warn "marketplace step unexpected exit $s. Retry or file issue." ;;
-    esac
-}
-
-# ---- v1.13.0: marketplace sync orchestrator (Section 4) -------------------
-
-MARKETPLACE_BIN="$SCRIPT_DIR/gitx-marketplace.sh"
 # Env override is a test seam (the one-command suite points it at a recorder).
 GITEA_RELEASE_BIN="${GITEA_RELEASE_BIN:-$SCRIPT_DIR/gitx-gitea-release.sh}"
-
-# Source helpers from gitx-marketplace.sh (idempotent — the sourcing guard at
-# the bottom of gitx-marketplace.sh runs main() only when invoked as the script
-# entry point; here BASH_SOURCE[0] != $0 so we get the helpers without exec).
-if [ -f "$MARKETPLACE_BIN" ]; then
-    # shellcheck disable=SC1090
-    . "$MARKETPLACE_BIN" >/dev/null 2>&1 || true
-fi
-
-invoke_marketplace_sync() {
-    # The wrapper honours PROJECT_ROOT=… from any cwd, but every path below is
-    # project-relative — run in a subshell cd'd to the project so an
-    # out-of-tree invocation does not silently skip the sync. `:-.` keeps the
-    # extracted-function tests (no PROJECT_ROOT, cwd = project) nounset-safe.
-    (
-    cd "${PROJECT_ROOT:-.}" || exit 0
-    [ "${SKIP_MARKETPLACE:-0}" -eq 1 ] && return 0
-
-    [ -f .gitx/marketplace-target ] || return 0
-    [ -f .claude-plugin/marketplace.json ] || {
-        log_warn "no .claude-plugin/marketplace.json — skipping marketplace step.
-                 Run 'gitx-init --type=skill --force' to generate, or hand-create the file."
-        return 0
-    }
-    [ -f VERSION ] || {
-        log_warn "no VERSION file — skipping marketplace step."
-        return 0
-    }
-
-    local R N V
-    R=$(read_marker) || return 0
-    validate_marker_content "$R" || {
-        log_warn "marker content invalid ($R) — skipping marketplace step.
-                 Fix .gitx/marketplace-target (expected OWNER/REPO)."
-        return 0
-    }
-    N=$(jq -r '.plugins[0].name // ""' .claude-plugin/marketplace.json 2>/dev/null)
-    [ -n "$N" ] || {
-        log_warn "no plugins[0].name in .claude-plugin/marketplace.json — skipping marketplace step."
-        return 0
-    }
-    V=$(tr -d '[:space:]' < VERSION | sed 's/^v//')
-
-    printf '→ syncing marketplace %s (post-release best-effort)…\n' "$R" >&2
-
-    # Probe — 2-step: first decode + validate JSON shape, then check entry presence.
-    # Codex round-5 [medium] — malformed JSON must be distinguished from absent.
-    local probe_status="absent" probe_reason="" _decoded
-    _decoded=$(fetch_marketplace_json "$R")
-    if [ -n "$_decoded" ]; then
-        if ! printf '%s' "$_decoded" | jq -e '.plugins | type == "array"' >/dev/null 2>&1; then
-            probe_status="corrupt"
-            probe_reason="marketplace file appears corrupt (not valid JSON)"
-        elif printf '%s' "$_decoded" | jq -e --arg n "$N" '.plugins[] | select(.name == $n)' >/dev/null 2>&1; then
-            probe_status="present"
-        else
-            probe_reason="entry actually absent in marketplace"
-        fi
-    else
-        if gh api "/repos/$R/contents/.claude-plugin/marketplace.json" >/dev/null 2>&1; then
-            probe_status="absent"
-            probe_reason="entry actually absent in marketplace"
-        else
-            probe_status="absent"
-            probe_reason="marketplace probe failed (network/auth/404)"
-        fi
-    fi
-
-    local -a args
-    local sub_status=0
-    case "$probe_status" in
-        present)
-            args=(bump --version "v$V")
-            [ "${DRY_RUN:-0}" -eq 1 ] && args+=(--dry-run)
-            bash "$MARKETPLACE_BIN" "${args[@]}"
-            sub_status=$?
-            ;;
-        corrupt)
-            log_warn "marketplace: $probe_reason — skipping (fix corruption and retry manually)."
-            ;;
-        absent)
-            log_warn "marketplace: $probe_reason → falling back to register.
-                     (To opt out, ALSO 'rm .gitx/marketplace-target' before next release.)"
-            args=(register --repo "$R")
-            [ "${DRY_RUN:-0}" -eq 1 ] && args+=(--dry-run)
-            bash "$MARKETPLACE_BIN" "${args[@]}"
-            sub_status=$?
-            ;;
-    esac
-
-    interpret_marketplace_exit "$sub_status" "$R" "$V"
-    return 0
-    )
-}
 
 # ---- v1.13.0: Gitea release-repo publish hook (post-release, opt-in) -------
 
 invoke_gitea_release() {
-    # Same contract as invoke_marketplace_sync: opt-in via a marker, runs in the
-    # project root, best-effort — the local release already succeeded, so a
-    # publish failure only warns. gitx-gitea-release.sh itself is strict
+    # Opt-in via a marker, runs in the project root, best-effort — the local
+    # release already succeeded, so a publish failure only warns. gitx-gitea-release.sh itself is strict
     # (exit 1/2); `|| rc=$?` keeps that status from aborting a `set -e` caller.
     (
     cd "${PROJECT_ROOT:-.}" || exit 0
@@ -331,10 +214,96 @@ write_version_file() {
     printf '%s\n' "$version" > "$file"
 }
 
+_managed_json_error() { printf '❌ %s\n' "$1" | tee -a "${LOG_FILE:-/dev/null}" >&2; }
+
+# Every file that carries the release version, project-relative, fixed order.
+# Codex reads plugin.json, the marketplace reads marketplace.json and npm reads
+# package.json — bumping only VERSION would ship them stale. package.json is
+# managed only when it IS the npm-target package; any other package.json stays
+# untouched (and stays dirty-tree-guarded). Each managed JSON is parsed here,
+# before any write, so a broken one fails the release instead of being skipped.
+version_managed_files() {
+    local f target name jq_needed=0
+    echo VERSION
+    echo "skills/$SKILL_NAME/VERSION"
+    for f in .claude-plugin/plugin.json .claude-plugin/marketplace.json; do
+        if [ -f "$PROJECT_ROOT/$f" ]; then jq_needed=1; fi
+    done
+    if [ -f "$PROJECT_ROOT/.gitx/npm-target" ] && [ -f "$PROJECT_ROOT/package.json" ]; then jq_needed=1; fi
+    if [ "$jq_needed" = "1" ] && ! command -v jq >/dev/null 2>&1; then
+        _managed_json_error "jq is required to bump the version in .claude-plugin/*.json / package.json — install jq"
+        return 1
+    fi
+    if [ -f "$PROJECT_ROOT/.claude-plugin/plugin.json" ]; then
+        jq -e 'type == "object" and (.name | type == "string")' "$PROJECT_ROOT/.claude-plugin/plugin.json" >/dev/null 2>&1 || {
+            _managed_json_error ".claude-plugin/plugin.json is not a JSON object with a string .name"
+            return 1
+        }
+        echo .claude-plugin/plugin.json
+    fi
+    if [ -f "$PROJECT_ROOT/.claude-plugin/marketplace.json" ]; then
+        jq -e 'type == "object" and ((.plugins // []) | type == "array")' "$PROJECT_ROOT/.claude-plugin/marketplace.json" >/dev/null 2>&1 || {
+            _managed_json_error ".claude-plugin/marketplace.json is not a JSON object with a .plugins array"
+            return 1
+        }
+        echo .claude-plugin/marketplace.json
+    fi
+    if [ -f "$PROJECT_ROOT/.gitx/npm-target" ] && [ -f "$PROJECT_ROOT/package.json" ]; then
+        target="$(tr -d '[:space:]' < "$PROJECT_ROOT/.gitx/npm-target")"
+        if [ -z "$target" ]; then
+            _managed_json_error ".gitx/npm-target is empty — expected the npm package name"
+            return 1
+        fi
+        if ! name="$(jq -er 'if type == "object" then (.name // "") else error("not an object") end' "$PROJECT_ROOT/package.json" 2>/dev/null)"; then
+            _managed_json_error "package.json is not a JSON object — cannot tell whether it is the npm-target package"
+            return 1
+        fi
+        if [ "$name" = "$target" ]; then echo package.json; fi
+    fi
+    return 0
+}
+
+# What the wrapper writes before release.sh: the version files plus the
+# CHANGELOG entry from ensure_changelog_entry. Backup/rollback, the symlink
+# guard and release.sh's dirty-tree allowance all use exactly this list.
+wrapper_mutated_files() {
+    version_managed_files || return 1
+    echo Release/CHANGELOG.md
+}
+
+# jq into a same-dir temp that started as a `cp -p` of the target, so the
+# rename keeps the file's mode (a bare mktemp is 0600 and would ship that way).
+_write_json_version() {
+    local f="$1" filter="$2" tmp
+    shift 2
+    tmp="$(mktemp "$(dirname "$f")/.gitx-version.XXXXXX")" || return 1
+    if cp -p "$f" "$tmp" && jq "$@" "$filter" "$f" > "$tmp" && mv "$tmp" "$f"; then
+        return 0
+    fi
+    rm -f "$tmp"
+    return 1
+}
+
 update_skill_versions() {
-    local version="$1"
-    write_version_file "$VERSION_FILE" "$version"
-    write_version_file "$PROJECT_ROOT/VERSION" "$version"
+    local version="$1" bare="${1#v}" p plugin_name=""
+    while IFS= read -r p; do
+        case "$p" in
+            VERSION|skills/*/VERSION)
+                write_version_file "$PROJECT_ROOT/$p" "$version" ;;
+            .claude-plugin/plugin.json|package.json)
+                _write_json_version "$PROJECT_ROOT/$p" '.version = $v' --arg v "$bare" || return 1 ;;
+            .claude-plugin/marketplace.json)
+                if [ -f "$PROJECT_ROOT/.claude-plugin/plugin.json" ]; then
+                    plugin_name="$(jq -r '.name' "$PROJECT_ROOT/.claude-plugin/plugin.json")" || return 1
+                fi
+                _write_json_version "$PROJECT_ROOT/$p" \
+                    '.version = $v | (.plugins[]? | select(.name == $n) | .version) = $v' \
+                    --arg v "$bare" --arg n "$plugin_name" || return 1 ;;
+        esac
+    done <<EOF_VMF
+$VERSION_MANAGED_FILES
+EOF_VMF
+    return 0
 }
 
 ensure_changelog_entry() {
@@ -432,28 +401,39 @@ guard_duplicate_release() {
 
 BACKUP_DIR=""
 RELEASE_OK=0
+VERSION_MANAGED_FILES=""
+WRAPPER_MUTATED_FILES=""
+# A file absent at backup time has no copy, so rollback deletes it — a
+# wrapper-created root VERSION / CHANGELOG must not survive a failed release.
 backup_release_state() {
+    local p
     BACKUP_DIR="$(mktemp -d)"
-    [ -f "$VERSION_FILE" ] && cp "$VERSION_FILE" "$BACKUP_DIR/skill.VERSION"
-    [ -f "$PROJECT_ROOT/VERSION" ] && cp "$PROJECT_ROOT/VERSION" "$BACKUP_DIR/root.VERSION"
-    [ -f "$PROJECT_ROOT/Release/CHANGELOG.md" ] && cp "$PROJECT_ROOT/Release/CHANGELOG.md" "$BACKUP_DIR/CHANGELOG.md"
+    while IFS= read -r p; do
+        [ -n "$p" ] || continue
+        if [ -f "$PROJECT_ROOT/$p" ]; then
+            mkdir -p "$BACKUP_DIR/files/$(dirname "$p")"
+            cp -p "$PROJECT_ROOT/$p" "$BACKUP_DIR/files/$p"
+        fi
+    done <<EOF_BK
+$WRAPPER_MUTATED_FILES
+EOF_BK
     return 0
 }
 
 restore_release_state() {
+    local p
     [ -n "${BACKUP_DIR:-}" ] && [ -d "$BACKUP_DIR" ] || return 0
-    [ -f "$BACKUP_DIR/skill.VERSION" ] && cp "$BACKUP_DIR/skill.VERSION" "$VERSION_FILE"
-    if [ -f "$BACKUP_DIR/root.VERSION" ]; then
-        cp "$BACKUP_DIR/root.VERSION" "$PROJECT_ROOT/VERSION"
-    else
-        rm -f "$PROJECT_ROOT/VERSION"
-    fi
-    if [ -f "$BACKUP_DIR/CHANGELOG.md" ]; then
-        mkdir -p "$PROJECT_ROOT/Release"
-        cp "$BACKUP_DIR/CHANGELOG.md" "$PROJECT_ROOT/Release/CHANGELOG.md"
-    else
-        rm -f "$PROJECT_ROOT/Release/CHANGELOG.md"
-    fi
+    while IFS= read -r p; do
+        [ -n "$p" ] || continue
+        if [ -f "$BACKUP_DIR/files/$p" ]; then
+            mkdir -p "$PROJECT_ROOT/$(dirname "$p")" || true
+            cp -p "$BACKUP_DIR/files/$p" "$PROJECT_ROOT/$p" || true
+        else
+            rm -f "$PROJECT_ROOT/$p" || true
+        fi
+    done <<EOF_RS
+$WRAPPER_MUTATED_FILES
+EOF_RS
     return 0
 }
 
@@ -480,9 +460,7 @@ run_release_with_log() {
     # release.sh's clean-tree preflight must excuse exactly the files bumped
     # by update_skill_versions + ensure_changelog_entry (uncommitted by design
     # until release). Inline, not exported: only release.sh may see it.
-    dirty_ok="VERSION
-skills/$SKILL_NAME/VERSION
-Release/CHANGELOG.md"
+    dirty_ok="$WRAPPER_MUTATED_FILES"
     set +e
     _GITX_WRAPPER_DIRTY_OK="$dirty_ok" \
     PROJECT_ROOT="$PROJECT_ROOT" PROJECT_NAME="$PROJECT_NAME" SKILL_NAME="$SKILL_NAME" \
@@ -562,12 +540,18 @@ fi
 # A committed symlink at (or above) a file the wrapper bumps would make both
 # the bump AND the failure rollback write through it into the link target.
 # Refuse before backup/update so not a single byte (or mtime) escapes.
-for _wp in VERSION "skills/$SKILL_NAME/VERSION" Release/CHANGELOG.md; do
+# The lists are resolved first: they parse every managed JSON, so a broken
+# one stops the release here, before anything is written.
+VERSION_MANAGED_FILES="$(version_managed_files)" || fail_with_log 2
+WRAPPER_MUTATED_FILES="$(wrapper_mutated_files)" || fail_with_log 2
+while IFS= read -r _wp; do
     if ! _sym_err=$(cd "$PROJECT_ROOT" && _refuse_symlink_path "$_wp" 2>&1); then
         echo "$_sym_err" | tee -a "$LOG_FILE" >&2
         fail_with_log 5
     fi
-done
+done <<EOF_SYM
+$WRAPPER_MUTATED_FILES
+EOF_SYM
 
 backup_release_state
 update_skill_versions "$VERSION"
@@ -578,7 +562,6 @@ run_release_with_log
 release_status=$?
 
 if [ "$release_status" -eq 0 ]; then
-    invoke_marketplace_sync || true     # Q1 best-effort; never propagates
     invoke_gitea_release || true        # opt-in, best-effort; never propagates
 fi
 exit "$release_status"

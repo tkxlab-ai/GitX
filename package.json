@@ -1,0 +1,32 @@
+{
+  "name": "@tkxlabai/gitx-opencode",
+  "version": "1.16.0",
+  "description": "GitX release pipeline skill (gitx-release) packaged as an OpenCode plugin.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./opencode/index.ts",
+    "./server": "./opencode/index.ts"
+  },
+  "files": [
+    "opencode",
+    "skills/gitx-release"
+  ],
+  "peerDependencies": {
+    "@opencode/plugin": ">=2.3.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tkxlab-ai/GitX.git"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "release",
+    "skill"
+  ]
+}

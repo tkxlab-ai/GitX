@@ -4,7 +4,9 @@
 # The central repo lets users run ONE:
 #   /plugin marketplace add tkxlab-ai/marketplace
 # then /plugin install <skill>@tkxlab for any TKX skill. Each plugin's
-# source is a github object pointing at that skill's OWN repo.
+# source is a url object pointing at that skill's OWN repo's .git URL — the
+# only entry type both Claude Code and Codex marketplaces install from
+# (Codex does not recognise {"source":"github"}).
 # This validates the checked-in template the controller renders + pushes.
 #
 # exit: 0=all pass, 1=any fail
@@ -41,7 +43,7 @@ else
     fail "name not kebab-case / != tkxlab"
 fi
 
-# 3: every plugins[] entry has kebab name + github-object source w/ valid repo
+# 3: every plugins[] entry has kebab name + url-object source w/ github .git url
 if python3 -c "
 import json,re
 m=json.load(open('$TPL'))
@@ -51,25 +53,26 @@ for p in ps:
     assert re.fullmatch(r'[a-z0-9]+(-[a-z0-9]+)*', p['name']), 'plugin name not kebab: '+p['name']
     s=p['source']
     assert isinstance(s,dict), 'source not object: '+repr(s)
-    assert s.get('source')=='github', 'source.source != github: '+repr(s)
-    assert re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', s.get('repo','')), 'bad repo: '+repr(s)
+    assert s.get('source')=='url', 'source.source != url: '+repr(s)
+    u=s.get('url','')
+    assert re.fullmatch(r'https://github\.com/[A-Za-z0-9-]+/[A-Za-z0-9._-]+\.git', u) and '..' not in u, 'bad url: '+repr(s)
 " 2>/dev/null; then
-    ok "every plugins[] entry kebab name + github-object source + valid repo"
+    ok "every plugins[] entry kebab name + url-object source + github .git url"
 else
-    fail "a plugins[] entry has bad name/source/repo"
+    fail "a plugins[] entry has bad name/source/url"
 fi
 
-# 4: gitx plugin present + source.repo == tkxlab-ai/GitX
+# 4: gitx plugin present + source.url == https://github.com/tkxlab-ai/GitX.git
 if python3 -c "
 import json
 m=json.load(open('$TPL'))
 g=[p for p in m['plugins'] if p['name']=='gitx']
 assert g, 'gitx plugin missing'
-assert g[0]['source']['repo']=='tkxlab-ai/GitX', g[0]['source']
+assert g[0]['source']=={'source':'url','url':'https://github.com/tkxlab-ai/GitX.git'}, g[0]['source']
 " 2>/dev/null; then
-    ok "gitx plugin present + source.repo == tkxlab-ai/GitX"
+    ok "gitx plugin present + source.url == https://github.com/tkxlab-ai/GitX.git"
 else
-    fail "gitx plugin missing or wrong source.repo"
+    fail "gitx plugin missing or wrong source.url"
 fi
 
 # 4b: gitx plugin version == repo VERSION with leading 'v' stripped

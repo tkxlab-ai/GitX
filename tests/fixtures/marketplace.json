@@ -6,19 +6,19 @@
   "plugins": [
     {
       "name": "demo-skill-one",
-      "source": { "source": "github", "repo": "tkxlab-ai/demo-skill-one" },
+      "source": { "source": "url", "url": "https://github.com/tkxlab-ai/demo-skill-one.git" },
       "version": "0.2.0",
       "description": "First demo skill for marketplace fixture tests."
     },
     {
       "name": "demo-skill-two",
-      "source": { "source": "github", "repo": "tkxlab-ai/demo-skill-two" },
+      "source": { "source": "url", "url": "https://github.com/tkxlab-ai/demo-skill-two.git" },
       "version": "1.4.0",
       "description": "Second demo skill for marketplace fixture tests."
     },
     {
       "name": "gitx",
-      "source": { "source": "github", "repo": "tkxlab-ai/GitX" },
+      "source": { "source": "url", "url": "https://github.com/tkxlab-ai/GitX.git" },
       "version": "1.12.3",
       "description": "TKX universal release automation (used by fixture probe tests)."
     }

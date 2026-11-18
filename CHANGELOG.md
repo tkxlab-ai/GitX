@@ -2,6 +2,72 @@
 
 All notable changes per release, newest first. Chinese parallel: [`CHANGELOG_CN.md`](CHANGELOG_CN.md).
 
+## v1.16.0 — 2026-11-18
+
+GitX installs with one command in each of Claude Code, Codex and OpenCode, and
+upgrades with one command too. Going public is now a separate, checked step.
+
+### Added
+- Codex plugin: `codex plugin marketplace add tkxlab-ai/marketplace`, then
+  `codex plugin add gitx@tkxlab`; upgrade with
+  `codex plugin marketplace upgrade` and `codex plugin add gitx@tkxlab` again.
+- OpenCode plugin: `opencode plugin add @tkxlabai/gitx-opencode` (no version
+  pin, so update checks work); upgrade with `opencode plugin update`, run
+  inside a project directory. The npm package contents are a fixed
+  whitelist: `opencode/` and `skills/gitx-release/`.
+- `scripts/gitx-publish.sh --version vX.Y.Z`, run after the GitHub draft is
+  approved: it checks everything first (the draft's assets byte-for-byte
+  against `Release/`, GitHub `main`'s `VERSION`, the npm package's name,
+  version and contents), then makes the GitHub Release public and keeps
+  Latest on the highest version, bumps the central marketplace
+  (`.gitx/marketplace-target`) and publishes the npm package
+  (`.gitx/npm-target`). A failure stops at that step; rerunning the same
+  command skips the steps already done. `--dry-run` checks without writing.
+  npm accepts each version only once: a version re-cut after its npm publish
+  needs a new version number.
+- The README install block lists Claude Code, Codex, OpenCode and
+  `install.sh`, each with its upgrade command, and says to pick one install
+  method per agent (two methods load two copies). The release page standard
+  (row 9) and the README templates carry the same blocks.
+
+### Changed
+- The central marketplace bump moved out of `gitx-release` into
+  `gitx-publish.sh`. This applies to every project with
+  `.gitx/marketplace-target`: the marketplace is bumped when the release goes
+  public, never before. `gitx-release --skip-marketplace` is still accepted
+  and does nothing.
+- Central marketplace entries use a `url` source
+  (`https://github.com/<owner>/<repo>.git`), which both Claude Code and Codex
+  install from; `gitx-marketplace bump` migrates an old `github` entry.
+- For projects with a root `SKILL.md`, the source tarball now keeps
+  `skills/<name>/` (other `skills/*` stay excluded), so the plugin channels
+  read one shared skill directory. Public packages of such projects grow
+  accordingly.
+- Plugin commands run scripts from
+  `${CLAUDE_PLUGIN_ROOT}/skills/gitx-release/scripts/`.
+- A version bump also updates `.claude-plugin/plugin.json` and, when its name
+  equals `.gitx/npm-target`, `package.json`.
+- The GitHub release runbook stops at the draft; promotion and the Latest
+  safeguard run in `gitx-publish.sh`.
+- Public CI runs the full test suite only in the development tree (marked by
+  `Release/CHANGELOG.md`), since the public tree now ships
+  `skills/gitx-release/`.
+- The irreversible go-public step is triggered only by `公开发布` or
+  `go public`; a bare `publish` no longer triggers anything on its own, and
+  `推 GitHub` runs the runbook up to the draft.
+- A central marketplace entry that is missing is no longer re-registered
+  automatically: `gitx-publish.sh` stops in its checks, before anything goes
+  public. Run `gitx-marketplace register` by hand, then rerun the command.
+- Re-auditing a release built before v1.16.0 by a project with a root
+  `SKILL.md` now fails the new `skills/<name>/` checks; re-cut it with
+  v1.16.0 instead.
+- Going public from another project: run `gitx-publish.sh` from the project
+  root via the installed GitX (for example
+  `~/.agents/skills/gitx-release/scripts/gitx-publish.sh`); it is not in the
+  project's own `scripts/`. The GitHub repo comes from `--repo OWNER/REPO`,
+  else `.claude-plugin/plugin.json` `repository` (which `gitx-init` now
+  writes), else a github.com `origin` remote.
+
 ## v1.15.1 — 2026-11-17
 
 ### Added

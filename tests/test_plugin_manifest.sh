@@ -54,6 +54,27 @@ if [ -f "$PJ" ]; then
     fi
 fi
 
+# 2c: command shims point at the one shared skill script dir. The plugin root
+# is the repo root (commands: ./gitx-plugin-commands/, source ./), so both
+# scripts/ and skills/gitx-release/scripts/ ship — the point is NOT a missing
+# path but a single canonical location every channel resolves to. Codex
+# migrates these commands into skills and leaves ${CLAUDE_PLUGIN_ROOT}
+# unexpanded, so each shim also carries a plain-language location sentence as
+# its fallback.
+for c in release sop init audit scan; do
+    f="$ROOT/gitx-plugin-commands/$c.md"
+    [ -f "$f" ] || { fail "$c.md missing"; continue; }
+    if grep -qF '${CLAUDE_PLUGIN_ROOT}/scripts/' "$f"; then
+        fail "$c.md points at the root scripts/ dir, not the shared skills/gitx-release/scripts/"
+    elif ! grep -qF '${CLAUDE_PLUGIN_ROOT}/skills/gitx-release/scripts/' "$f"; then
+        fail "$c.md lacks \${CLAUDE_PLUGIN_ROOT}/skills/gitx-release/scripts/"
+    elif ! grep -qF '脚本在本插件的 `skills/gitx-release/scripts/`' "$f"; then
+        fail "$c.md lacks the Codex fallback sentence (脚本在本插件的 skills/gitx-release/scripts/)"
+    else
+        ok "$c.md → \${CLAUDE_PLUGIN_ROOT}/skills/gitx-release/scripts/ + Codex fallback"
+    fi
+done
+
 # 3: plugin.json version tracks VERSION sidecar (no doc-rot)
 if [ -f "$PJ" ]; then
     want="$(tr -d 'v\n' < "$ROOT/VERSION")"

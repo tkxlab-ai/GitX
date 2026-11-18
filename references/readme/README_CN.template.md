@@ -29,12 +29,29 @@
 # TODO: Claude Code 插件市场（没有插件就删掉这一段）
 /plugin marketplace add OWNER/MARKETPLACE-REPO
 /plugin install PLUGIN-NAME@MARKETPLACE-NAME
+# 升级：在 /plugin 里打开自动更新，或 claude plugin update PLUGIN-NAME@MARKETPLACE-NAME
+```
+
+```bash
+# TODO: Codex 插件市场（没有插件就删掉这一段）
+codex plugin marketplace add OWNER/MARKETPLACE-REPO
+codex plugin add PLUGIN-NAME@MARKETPLACE-NAME
+# 升级：先 codex plugin marketplace upgrade，再执行一次 codex plugin add PLUGIN-NAME@MARKETPLACE-NAME
+```
+
+```bash
+# TODO: OpenCode npm 插件（没有 npm 包就删掉这一段）
+opencode plugin add NPM-PACKAGE   # 不写版本号，才会检查更新
+# 升级（在项目目录里执行）：opencode plugin update
 ```
 
 ```bash
 # TODO: 给没有插件机制的智能体用的安装命令
 git clone --depth 1 https://github.com/OWNER/REPO.git && bash REPO/install.sh
+# 升级：加 --force
 ```
+
+同一个智能体只选一种安装方式——装两种会加载两份。
 
 TODO：写明各智能体里的调用方式。详见[快速开始](#4-快速开始)。
 

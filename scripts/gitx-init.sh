@@ -282,7 +282,8 @@ esac
 render_template "$REFS_DIR/RELEASE_GUIDELINE.template.md" > RELEASE_GUIDELINE.md
 
 # Claude Code plugin manifest + marketplace entry. Author carries no email on
-# purpose — an email in a shipped JSON trips secret/PII scanners.
+# purpose — an email in a shipped JSON trips secret/PII scanners. repository
+# matches the marketplace entry's repo; gitx-publish.sh reads it first.
 PLUGIN_NAME="$(plugin_name)"
 REPO_NAME="$(plugin_repo_name)"
 if [ -f VERSION ]; then
@@ -299,6 +300,7 @@ cat > .claude-plugin/plugin.json <<EOF
   "version": "$PLUGIN_VERSION",
   "description": "$PLUGIN_DESC",
   "author": { "name": "TKXLAB.AI" },
+  "repository": "https://github.com/tkxlab-ai/$REPO_NAME",
   "license": "MIT"
 }
 EOF
